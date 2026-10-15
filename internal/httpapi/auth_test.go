@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
 )
 
@@ -29,6 +31,7 @@ type apiFixture struct {
 	t     *testing.T
 	h     http.Handler
 	svc   *auth.Service
+	game  *game.Service
 	db    *sql.DB
 	clock time.Time
 	logs  *bytes.Buffer
@@ -53,11 +56,13 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	f.game = game.NewService(f.db, game.Options{Now: now})
 	f.h = NewRouter(Deps{
 		Logger:  slog.New(slog.NewTextHandler(f.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Version: "test",
 		SPA:     fstest.MapFS{},
 		Auth:    f.svc,
+		Game:    f.game,
 		Now:     now,
 	})
 	return f
@@ -481,5 +486,156 @@ func TestSecretsAreNotLogged(t *testing.T) {
 		if strings.Contains(logs, secret) {
 			t.Errorf("logs contain a secret: %q", secret)
 		}
+	}
+}
+
+var colorPattern = regexp.MustCompile(`^#[0-9a-f]{6}$`)
+
+func TestGameLinkCheck(t *testing.T) {
+	f := newAPIFixture(t)
+	gm := f.gmCookie()
+	_, link := f.startGame(gm, f.createCampaign(gm, "Моя кампания"))
+
+	rec := f.do(http.MethodGet, "/api/game-links/"+tokenFromLink(link), "")
+	var body struct {
+		CampaignName string `json:"campaignName"`
+	}
+	decodeBody(t, rec, &body)
+	if rec.Code != http.StatusOK || body.CampaignName != "Моя кампания" {
+		t.Errorf("valid link = %d %+v", rec.Code, body)
+	}
+
+	rec = f.do(http.MethodGet, "/api/game-links/garbage", "")
+	if rec.Code != http.StatusForbidden || errorCode(t, rec) != "no_active_game" {
+		t.Errorf("garbage link = %d, want 403 no_active_game", rec.Code)
+	}
+	for range 19 { // one failure is already recorded above
+		f.do(http.MethodGet, "/api/game-links/garbage", "")
+	}
+	if rec := f.do(http.MethodGet, "/api/game-links/garbage", ""); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("21st failure = %d, want 429", rec.Code)
+	}
+}
+
+func TestRegister(t *testing.T) {
+	f := newAPIFixture(t)
+	gm := f.gmCookie()
+	gsID, link := f.startGame(gm, f.createCampaign(gm, "Camp"))
+
+	rec := f.registerPlayer(link, "bob")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register = %d %s", rec.Code, rec.Body.String())
+	}
+	sessionCookie(t, rec)
+	var me meResponse
+	decodeBody(t, rec, &me)
+	if me.IsGM || me.Player == nil || me.Player.Role != "player" || me.Player.DisplayName != "Player bob" ||
+		!colorPattern.MatchString(me.Player.Color) {
+		t.Errorf("me = %+v, player = %+v", me, me.Player)
+	}
+
+	if rec := f.registerPlayer(link, "bob"); rec.Code != http.StatusConflict || errorCode(t, rec) != "conflict" {
+		t.Errorf("taken login = %d, want 409 conflict", rec.Code)
+	}
+	invalid := func(body map[string]string) *httptest.ResponseRecorder {
+		body["gameLink"] = tokenFromLink(link)
+		return f.do(http.MethodPost, "/api/auth/register", jsonBody(t, body))
+	}
+	if rec := invalid(map[string]string{"login": "carol", "password": "short", "displayName": "Carol"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("short password = %d, want 400", rec.Code)
+	}
+	if rec := invalid(map[string]string{"login": "carol", "password": playerPassword, "displayName": " "}); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty display name = %d, want 400", rec.Code)
+	}
+
+	if rec := f.do(http.MethodPost, "/api/game-sessions/"+gsID+"/end", "", withCookie(gm)); rec.Code != http.StatusNoContent {
+		t.Fatalf("end = %d", rec.Code)
+	}
+	if rec := f.registerPlayer(link, "dave"); rec.Code != http.StatusForbidden || errorCode(t, rec) != "no_active_game" {
+		t.Errorf("register in an ended game = %d, want 403 no_active_game", rec.Code)
+	}
+}
+
+func TestLoginWithGameLink(t *testing.T) {
+	f := newAPIFixture(t)
+	gm := f.gmCookie()
+	_, link := f.startGame(gm, f.createCampaign(gm, "Camp"))
+	_, registered := f.playerSession(link, "bob")
+	token := tokenFromLink(link)
+	login := func(user, password, gameLink string) *httptest.ResponseRecorder {
+		return f.do(http.MethodPost, "/api/auth/login", jsonBody(t, map[string]string{
+			"login": user, "password": password, "gameLink": gameLink,
+		}))
+	}
+
+	rec := login("bob", playerPassword, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("player login = %d %s", rec.Code, rec.Body.String())
+	}
+	sessionCookie(t, rec)
+	var me meResponse
+	decodeBody(t, rec, &me)
+	if me.Player == nil || me.Player.ID != registered.Player.ID {
+		t.Errorf("Me.player = %+v, want the participant from registration %s", me.Player, registered.Player.ID)
+	}
+
+	if rec := login("bob", "wrong-password", token); rec.Code != http.StatusUnauthorized || errorCode(t, rec) != "invalid_credentials" {
+		t.Errorf("wrong password = %d, want 401 invalid_credentials", rec.Code)
+	}
+
+	rec = login(gmLogin, gmPassword, token)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"isGm":true`) {
+		t.Errorf("GM with a valid link = %d %s", rec.Code, rec.Body.String())
+	}
+
+	// The link is checked before the password, so a bad link tells nothing about passwords.
+	rec = login("bob", "wrong-password", "garbage")
+	if rec.Code != http.StatusForbidden || errorCode(t, rec) != "no_active_game" {
+		t.Errorf("invalid link with a wrong password = %d, want 403 no_active_game", rec.Code)
+	}
+
+	// Removed by the GM.
+	if rec := f.do(http.MethodPost, "/api/players/"+registered.Player.ID+"/remove", "", withCookie(gm)); rec.Code != http.StatusNoContent {
+		t.Fatalf("remove = %d", rec.Code)
+	}
+	if rec := login("bob", playerPassword, token); rec.Code != http.StatusForbidden || errorCode(t, rec) != "removed" {
+		t.Errorf("removed player = %d %s, want 403 removed", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPlayerSessionEndsWithGame(t *testing.T) {
+	f := newAPIFixture(t)
+	gm := f.gmCookie()
+	gsID, link := f.startGame(gm, f.createCampaign(gm, "Camp"))
+	player, _ := f.playerSession(link, "bob")
+
+	if rec := f.do(http.MethodGet, "/api/auth/me", "", withCookie(player)); rec.Code != http.StatusOK {
+		t.Fatalf("player me before the end = %d", rec.Code)
+	}
+	if rec := f.do(http.MethodPost, "/api/game-sessions/"+gsID+"/end", "", withCookie(gm)); rec.Code != http.StatusNoContent {
+		t.Fatalf("end = %d", rec.Code)
+	}
+	if rec := f.do(http.MethodGet, "/api/auth/me", "", withCookie(player)); rec.Code != http.StatusUnauthorized || errorCode(t, rec) != "unauthorized" {
+		t.Errorf("player me after the end = %d, want 401 unauthorized", rec.Code)
+	}
+	if rec := f.do(http.MethodGet, "/api/auth/me", "", withCookie(gm)); rec.Code != http.StatusOK {
+		t.Errorf("GM me after the end = %d, want 200", rec.Code)
+	}
+}
+
+func TestMePlayerOfGM(t *testing.T) {
+	f := newAPIFixture(t)
+	gm := f.gmCookie()
+
+	var me meResponse
+	decodeBody(t, f.do(http.MethodGet, "/api/auth/me", "", withCookie(gm)), &me)
+	if me.Player != nil {
+		t.Errorf("Me.player without a game = %+v, want null", me.Player)
+	}
+
+	f.startGame(gm, f.createCampaign(gm, "Camp"))
+	decodeBody(t, f.do(http.MethodGet, "/api/auth/me", "", withCookie(gm)), &me)
+	if me.Player == nil || me.Player.Role != "gm" || me.Player.DisplayName != gmLogin {
+		t.Errorf("Me.player of the GM = %+v, want role gm", me.Player)
 	}
 }
