@@ -1,0 +1,10 @@
+{
+  "app": {
+    "title": "DnD VTT",
+    "health": {
+      "loading": "Checking the server connection…",
+      "ok": "Server is online, version {{version}}",
+      "error": "Server is unavailable"
+    }
+  }
+}

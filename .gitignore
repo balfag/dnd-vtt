@@ -13,7 +13,8 @@ coverage.*
 
 # Node / client
 node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 .vite/
 *.tsbuildinfo
 
