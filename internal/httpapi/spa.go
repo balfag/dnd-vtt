@@ -26,7 +26,8 @@ func spaHandler(fsys fs.FS) http.Handler {
 				} else {
 					w.Header().Set("Cache-Control", "no-cache")
 				}
-				http.ServeFileFS(w, r, fsys, name)
+				// fs.FS rejects ".." and absolute paths, and fsys is the embedded client.
+				http.ServeFileFS(w, r, fsys, name) //nolint:gosec // G703: not a path on disk
 				return
 			}
 			if path.Ext(name) != "" {

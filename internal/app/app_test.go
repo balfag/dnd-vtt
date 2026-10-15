@@ -28,7 +28,7 @@ func TestRunServesAndStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -40,7 +40,7 @@ func TestRunServesAndStops(t *testing.T) {
 			t.Fatalf("Run returned %v, want nil", err)
 		}
 		if conn, err := net.DialTimeout("tcp", ln.Addr().String(), 500*time.Millisecond); err == nil {
-			conn.Close()
+			_ = conn.Close()
 			t.Fatal("server still accepts connections after Run returned")
 		}
 	case <-time.After(2 * time.Second):
