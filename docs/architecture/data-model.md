@@ -8,7 +8,11 @@
 - Файлы: `<data>/campaigns/<campaign_id>/assets/<sha256>.<ext>`, дедупликация по хешу.
 - Идентификаторы: ULID (строка, сортируется по времени), генерирует сервер.
 - Время: UTC, `INTEGER` unix-миллисекунды.
-- Гибкие структуры (свойства базы, данные листа, блоки страницы): колонка `JSON` (TEXT) со схемой, версионируемой полем `schema_version`.
+- Гибкие структуры (свойства базы, данные листа, блоки страницы): колонка `JSON` (TEXT) со схемой, версионируемой полем `schema_version`, с проверкой `CHECK (json_valid(...))`.
+- Таблицы объявляются `STRICT`: SQLite проверяет типы колонок.
+- Имена таблиц и колонок — `snake_case`, таблицы в единственном числе (`campaign`, `player`).
+- Булевы значения — `INTEGER` `0`/`1` с `CHECK`.
+- Соединение открывается с `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`, `synchronous=NORMAL`; запись в транзакциях `BEGIN IMMEDIATE`.
 
 ## Сущности
 
@@ -26,10 +30,12 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 ```
 
 ### Campaign
-`id, name, created_at, active_scene_id, settings JSON`
+`id, name, created_at, active_scene_id?, settings JSON`
+`name` — от 1 до 200 символов.
 
 ### Player
-`id, campaign_id, display_name, color, role (gm|player|spectator), actor_id?, last_seen_at`
+`id, campaign_id, display_name, color, role (gm|player|spectator), actor_id?, last_seen_at?, created_at`
+`display_name` — от 1 до 64 символов; `color` — `#rrggbb` в нижнем регистре.
 Игрок привязан к кампании и идентифицируется токеном сессии (см. [security.md](security.md)).
 
 ### Scene
@@ -66,10 +72,17 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 `id, campaign_id, sha256, mime, size, original_name, kind (map|token|portrait|handout|audio|other), created_at`
 
 ### Invite
-`id, campaign_id, token_hash, role, expires_at?, max_uses?, uses, revoked`
+`id, campaign_id, token_hash, role (player|spectator), expires_at?, max_uses?, uses, revoked, created_at`
+`token_hash` — sha256 токена в hex (64 символа), уникален. Инвайта с ролью `gm` нет: мастер входит с loopback (см. [security.md](security.md)).
 
 ## Миграции
 
-- Файлы `internal/store/migrations/NNNN_description.sql`, только вперёд.
+- Файлы `internal/store/migrations/NNNN_description.sql` (`NNNN` — четыре цифры, описание — `[a-z0-9_]+`), встроены в бинарник, только вперёд.
+- Номера идут подряд с `0001`, без пропусков и повторов; иначе приложение не стартует.
+- Применённые миграции записываются в таблицу `schema_migrations (version, name, applied_at)`.
+- Каждая миграция применяется в своей транзакции вместе с записью в `schema_migrations`: при ошибке не остаётся ни частичной схемы, ни записи.
+- Если в БД есть версия новее, чем знает бинарник, или имя применённой миграции не совпадает с файлом, приложение не стартует (защита от запуска старой версии на новой БД и от переименования миграций).
 - Любое изменение схемы — новая миграция; старые не редактируются после мерджа.
+- Колонки со ссылкой на таблицу из более позднего майлстоуна (`campaign.active_scene_id`, `player.actor_id`) добавляет миграция, создающая эту таблицу: `ALTER TABLE ... ADD COLUMN ... REFERENCES ...`.
+- Внутри миграции нельзя менять `PRAGMA foreign_keys`: в транзакции эта прагма игнорируется.
 - JSON-поля: при изменении формата повышается `schema_version` и пишется функция апгрейда в Go.
