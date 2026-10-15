@@ -1,0 +1,36 @@
+# Build output
+/dist/
+/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Node / client
+node_modules/
+web/dist/
+.vite/
+*.tsbuildinfo
+
+# Runtime data of a local server (campaigns, assets, sqlite)
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
