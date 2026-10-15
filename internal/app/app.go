@@ -12,6 +12,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
+	"github.com/balfag/dnd-vtt/web"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -33,7 +34,7 @@ func New(cfg config.Config, logger *slog.Logger, version string) *App {
 func (a *App) Run(ctx context.Context, ln net.Listener) error {
 	// No Read/WriteTimeout: long-lived WebSocket connections will live here.
 	srv := &http.Server{
-		Handler:           httpapi.NewRouter(a.logger, a.version),
+		Handler:           httpapi.NewRouter(a.logger, a.version, web.Dist()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

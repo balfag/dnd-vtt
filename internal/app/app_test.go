@@ -39,6 +39,10 @@ func TestRunServesAndStops(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run returned %v, want nil", err)
 		}
+		if conn, err := net.DialTimeout("tcp", ln.Addr().String(), 500*time.Millisecond); err == nil {
+			conn.Close()
+			t.Fatal("server still accepts connections after Run returned")
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return within 2s after cancel")
 	}

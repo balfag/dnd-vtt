@@ -8,10 +8,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func newTestRouter() http.Handler {
-	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test", fstest.MapFS{})
 }
 
 func TestHealth(t *testing.T) {

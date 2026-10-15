@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 )
@@ -13,7 +14,8 @@ type healthResponse struct {
 }
 
 // NewRouter returns the handler for all HTTP routes of the application.
-func NewRouter(logger *slog.Logger, version string) http.Handler {
+// spa is the built web client (see web.Dist).
+func NewRouter(logger *slog.Logger, version string, spa fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -21,5 +23,9 @@ func NewRouter(logger *slog.Logger, version string) http.Handler {
 			logger.Error("write health response", "err", err)
 		}
 	})
+	// Unknown API paths must be 404, not the SPA fallback. The method in the
+	// pattern avoids a conflict with "GET /".
+	mux.Handle("GET /api/", http.NotFoundHandler())
+	mux.Handle("GET /", spaHandler(spa))
 	return mux
 }
