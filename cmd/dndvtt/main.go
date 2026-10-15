@@ -10,10 +10,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/balfag/dnd-vtt/internal/app"
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/store"
 )
 
 // version is set at build time: -ldflags "-X main.version=1.2.3".
@@ -46,6 +48,24 @@ func run() int {
 	slog.SetDefault(logger)
 
 	logger.Info("starting", "version", version, "dataDir", cfg.DataDir, "dev", cfg.Dev)
+
+	dbPath := filepath.Join(cfg.DataDir, "dndvtt.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		logger.Error("open database", "path", dbPath, "err", err)
+		return 1
+	}
+	defer func() {
+		if err := st.Close(); err != nil {
+			logger.Error("close database", "err", err)
+		}
+	}()
+	schemaVersion, err := st.SchemaVersion(ctx)
+	if err != nil {
+		logger.Error("read schema version", "err", err)
+		return 1
+	}
+	logger.Info("database ready", "path", dbPath, "schemaVersion", schemaVersion)
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
