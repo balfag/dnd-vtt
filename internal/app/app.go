@@ -15,6 +15,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
 	"github.com/balfag/dnd-vtt/web"
 )
@@ -27,6 +28,7 @@ type App struct {
 	logger  *slog.Logger
 	version string
 	auth    *auth.Service
+	game    *game.Service
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -39,11 +41,22 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 	if err != nil {
 		return nil, fmt.Errorf("create auth service: %w", err)
 	}
+	gameSvc := game.NewService(db, game.Options{})
+	if cfg.Dev {
+		created, err := gameSvc.EnsureDevCampaign(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("ensure dev campaign: %w", err)
+		}
+		if created {
+			logger.Info("dev campaign created")
+		}
+	}
 	return &App{
 		cfg:         cfg,
 		logger:      logger,
 		version:     version,
 		auth:        authSvc,
+		game:        gameSvc,
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -59,6 +72,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			Version: a.version,
 			SPA:     web.Dist(),
 			Auth:    a.auth,
+			Game:    a.game,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
