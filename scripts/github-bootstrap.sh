@@ -4,7 +4,15 @@
 # Labels are upserted (--force); milestones and issues are created only if missing.
 set -euo pipefail
 
-command -v gh >/dev/null || { echo "gh CLI is required: https://cli.github.com" >&2; exit 1; }
+# On Windows `bash` may be WSL or Git Bash, which do not see the Windows gh on PATH.
+GH=""
+for c in gh gh.exe "/c/Program Files/GitHub CLI/gh.exe" "/mnt/c/Program Files/GitHub CLI/gh.exe"; do
+  if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then GH="$c"; break; fi
+done
+[ -n "$GH" ] || { echo "gh CLI is required: https://cli.github.com" >&2; exit 1; }
+# gh.exe called from WSL prints CRLF; strip CR so titles compare exactly.
+gh() { "$GH" "$@" | tr -d '\r'; }
+
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 echo "Bootstrapping $repo"
 
