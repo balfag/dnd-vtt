@@ -60,6 +60,19 @@ func (a *api) requireSession(w http.ResponseWriter, r *http.Request) (auth.Accou
 	return acc, sess, true
 }
 
+// requireGM is requireSession plus: a non-GM account gets 403 forbidden.
+func (a *api) requireGM(w http.ResponseWriter, r *http.Request) (auth.Account, auth.Session, bool) {
+	acc, sess, ok := a.requireSession(w, r)
+	if !ok {
+		return auth.Account{}, auth.Session{}, false
+	}
+	if !acc.IsGM {
+		writeError(w, http.StatusForbidden, "forbidden", "only the gm can do this")
+		return auth.Account{}, auth.Session{}, false
+	}
+	return acc, sess, true
+}
+
 // internalError logs err and answers 500 without leaking details.
 func (a *api) internalError(w http.ResponseWriter, action string, err error) {
 	a.d.Logger.Error(action, "err", err)

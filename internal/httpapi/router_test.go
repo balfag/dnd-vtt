@@ -14,6 +14,7 @@ import (
 	"testing/fstest"
 
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
 )
 
@@ -39,6 +40,7 @@ func newTestDeps(t *testing.T, spa fs.FS) Deps {
 		Version: "test",
 		SPA:     spa,
 		Auth:    svc,
+		Game:    game.NewService(st.DB(), game.Options{}),
 	}
 }
 
