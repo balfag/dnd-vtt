@@ -1,60 +1,65 @@
 # Процесс разработки
 
-Над проектом работает **один агент за раз**. Пользователь — владелец продукта и ревьюер: ставит приоритеты, отвечает на вопросы, мерджит PR.
+Роли (владелец, архитектор, исполнитель) и статусы задач описаны в [roles.md](roles.md). Одновременно работает один агент.
 
 ## Жизненный цикл задачи
 
 ```
- Идея / баг
+ Идея / баг (владелец)
      │
      ▼
- Issue (status:needs-spec) ──► спека в docs/ согласована ──► status:ready
-                                                               │
-                                                               ▼
-                                         агент берёт задачу, ветка <type>/<N>-<slug>
-                                                               │
-                                       docs → код → тесты → проверки DoD
-                                                               │
-                                                               ▼
-                                                PR (Closes #N) ──► ревью пользователя
-                                                               │
-                                                     squash merge в main
+ Issue status:needs-spec ──► архитектор: спека в docs/, владелец согласовал
+     │
+     ▼
+ status:needs-brief ──► архитектор: бриф в теле Issue (brief-template.md)
+     │
+     ▼
+ status:ready ──► исполнитель: ветка → код → тесты → PR (Closes #N)
+     │
+     ▼
+ status:in-review ──► архитектор: ревью (review-checklist.md)
+     │                     │
+     │ APPROVE             │ CHANGES → status:changes-requested → исполнитель правит
+     ▼
+ владелец: squash merge в main
 ```
 
-### 1. Подготовка сессии
+### 1. Подготовка сессии (любая роль)
 ```bash
 git switch main
 git pull --ff-only
 git status            # должно быть чисто
 git branch -a         # нет ли незавершённых веток
+gh pr list            # нет ли открытых PR
 ```
-Прочитать `CLAUDE.md`, `docs/roadmap.md`, документ системы, связанные ADR.
 
-### 2. Выбор задачи
+### 2. Выбор задачи (архитектор)
 - Текущий майлстоун — первый незакрытый в [roadmap.md](../roadmap.md).
-- `gh issue list --milestone "M0 Foundation" --label status:ready`
 - Приоритет: `prio:p0` → `p1` → `p2`, затем по номеру.
-- Задача слишком большая (больше ~400 строк изменений или больше одного дня работы) → предложить разбиение на под-Issues и спросить пользователя.
+- Задача больше ~400 строк изменений → разбить на несколько Issues, каждая со своим брифом.
 
-### 3. Спецификация
-- Поведение описано в `docs/systems/*` или `docs/architecture/*`? Если нет или неоднозначно — дописать документ и согласовать с пользователем **до** кода.
-- Архитектурное решение (новая зависимость, новый протокол, смена хранилища) → новый ADR (`docs/adr/NNNN-*.md`, статус `proposed`). Пользователь переводит его в `accepted`.
+### 3. Спецификация (архитектор)
+- Поведение описано в `docs/systems/*` или `docs/architecture/*`? Если нет или неоднозначно — дописать документ и согласовать с владельцем **до** брифа.
+- Архитектурное решение (новая зависимость, новый протокол, смена хранилища) → новый ADR (`docs/adr/NNNN-*.md`, статус `proposed`). Владелец переводит его в `accepted`.
+- Изменения документации идут отдельным PR `docs/...` и мерджатся до брифа, чтобы исполнитель читал актуальный `main`.
 
-### 4. Реализация
-- Ветка `<type>/<issue>-<slug>`.
-- Маленькие коммиты, каждый собирается.
-- Тесты пишутся вместе с кодом (см. [conventions.md](conventions.md#тесты)).
+### 4. Бриф (архитектор)
+- По [brief-template.md](brief-template.md), в тело Issue: `gh issue edit <N> --body-file brief.md`.
+- Метки: снять `status:needs-brief`, поставить `status:ready`.
+
+### 5. Реализация (исполнитель)
+- Ветка из брифа. Маленькие коммиты, каждый собирается.
+- Тесты вместе с кодом (см. [conventions.md](conventions.md#тесты)).
 - Новые строки UI — только через i18n, сразу `ru` и `en`.
+- PR по шаблону: `Closes #N`, «Отклонения от брифа». Issue → `status:in-review`.
 
-### 5. Pull Request
-- Заголовок в формате Conventional Commits: `feat(vtt): drag tokens with snapping`.
-- Описание по шаблону, `Closes #N`.
-- Все проверки из [definition-of-done.md](definition-of-done.md) зелёные.
-- Если изменение видно в UI — приложить скриншот или описать, как проверял вручную.
+### 6. Ревью (архитектор)
+- По [review-checklist.md](review-checklist.md). Вердикт — комментарием в PR.
+- APPROVE → снять статусную метку, сообщить владельцу. CHANGES → `status:changes-requested`.
 
-### 6. После мерджа
+### 7. После мерджа (владелец или архитектор)
 - Отметить пункт в [roadmap.md](../roadmap.md), если закрыт крупный блок.
-- Удалить локальную ветку.
+- Удалить локальную ветку: `git fetch --prune`, `git branch -D <branch>`.
 
 ## Метки (labels)
 
@@ -62,7 +67,7 @@ git branch -a         # нет ли незавершённых веток
 |--------|----------|
 | type | `type:feature`, `type:bug`, `type:docs`, `type:chore`, `type:spike` |
 | area | `area:server`, `area:client`, `area:vtt`, `area:av`, `area:sheet`, `area:wiki`, `area:net`, `area:build` |
-| status | `status:needs-spec`, `status:ready`, `status:blocked` |
+| status | `status:needs-spec`, `status:needs-brief`, `status:ready`, `status:in-review`, `status:changes-requested`, `status:blocked` |
 | prio | `prio:p0` (блокер), `prio:p1` (важно), `prio:p2` (можно позже) |
 
 Создаются скриптом [`scripts/github-bootstrap.ps1`](../../scripts/github-bootstrap.ps1):

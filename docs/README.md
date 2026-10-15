@@ -30,7 +30,10 @@
 - [0007](adr/0007-license-agpl-3.md): лицензия AGPL-3.0
 
 ## Процесс
+- [roles.md](process/roles.md): владелец, архитектор, исполнитель; статусы задач
 - [workflow.md](process/workflow.md): от Issue до мерджа
+- [brief-template.md](process/brief-template.md): шаблон брифа (промта) для исполнителя
+- [review-checklist.md](process/review-checklist.md): чек-лист ревью реализации
 - [conventions.md](process/conventions.md): соглашения по коду, коммитам, i18n
 - [definition-of-done.md](process/definition-of-done.md): критерии готовности
 
