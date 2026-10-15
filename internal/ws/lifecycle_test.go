@@ -448,3 +448,27 @@ func TestPlayerJoinedAnnouncesNewParticipant(t *testing.T) {
 	f.hub.PlayerJoined(context.Background(), game.Player{ID: "x", CampaignID: "other-campaign"})
 	quiet(t, a)
 }
+
+// A client that never reads (frozen tab, dropped network) must not make the
+// request that triggered a hook wait for the close handshake.
+func TestHooksDoNotWaitForSilentClients(t *testing.T) {
+	hooks := map[string]func(f *fixture){
+		"CloseSession":         func(f *fixture) { f.hub.CloseSession(f.player.sess.ID) },
+		"CloseAccountSessions": func(f *fixture) { f.hub.CloseAccountSessions(f.player.acc.ID, "") },
+		"PlayerRemoved":        func(f *fixture) { f.hub.PlayerRemoved(f.playerID) },
+		"GameEnded":            func(f *fixture) { f.hub.GameEnded(context.Background()) },
+		"GameStarted":          func(f *fixture) { f.hub.GameStarted(context.Background()) },
+	}
+	for name, hook := range hooks {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t, testOptions())
+			f.helloAs(f.player) // connects, then never reads again
+
+			start := time.Now()
+			hook(f)
+			if d := time.Since(start); d > time.Second {
+				t.Fatalf("%s took %v, it must not wait for the close handshake", name, d)
+			}
+		})
+	}
+}

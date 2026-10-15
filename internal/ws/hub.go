@@ -190,7 +190,8 @@ func (h *Hub) CloseAll(code websocket.StatusCode, reason string) {
 }
 
 // closeConns closes the connections in parallel: a close waits for the
-// peer's close frame. It must not be called with h.mu held.
+// peer's close frame. It must not be called with h.mu held. Hooks call it in
+// a goroutine; CloseAll waits for it on shutdown.
 func closeConns(conns []*conn, code websocket.StatusCode, reason string) {
 	var wg sync.WaitGroup
 	for _, cn := range conns {
@@ -396,7 +397,9 @@ func (h *Hub) gameChanged(ctx context.Context) {
 	h.mu.Lock()
 	toClose := h.gameChangedLocked(ctx)
 	h.mu.Unlock()
-	closeConns(toClose, protocol.CloseGameEnded, "game ended")
+	// Do not wait for the close handshakes: a silent client would hold the
+	// HTTP request that triggered the hook for up to 5 seconds.
+	go closeConns(toClose, protocol.CloseGameEnded, "game ended")
 }
 
 // gameChangedLocked detaches the players' connections (the caller closes
@@ -482,7 +485,7 @@ func (h *Hub) PlayerRemoved(playerID string) {
 		h.broadcastLocked(protocol.TypePresence, protocol.Presence{PlayerID: playerID, Online: false})
 	}
 	h.mu.Unlock()
-	closeConns(toClose, protocol.ClosePlayerRemoved, "removed")
+	go closeConns(toClose, protocol.ClosePlayerRemoved, "removed")
 }
 
 // CloseSession closes connections of one login session with 4001 (logout).
@@ -505,5 +508,5 @@ func (h *Hub) closeMatching(match func(*conn) bool) {
 		}
 	}
 	h.mu.Unlock()
-	closeConns(toClose, protocol.CloseSessionRevoked, "session revoked")
+	go closeConns(toClose, protocol.CloseSessionRevoked, "session revoked")
 }
