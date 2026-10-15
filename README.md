@@ -9,7 +9,10 @@
 | 1 | Виртуальный стол: сцены, карты, фишки, туман войны, кубики | [docs/systems/vtt.md](docs/systems/vtt.md) |
 | 2 | Встроенный голосовой чат с камерами | [docs/systems/voice-video.md](docs/systems/voice-video.md) |
 | 3 | Интерактивный лист персонажа (D&D 5e 2024, SRD 5.2) | [docs/systems/character-sheet.md](docs/systems/character-sheet.md) |
-| 4 | Вики мастера в стиле Notion | [docs/systems/gm-wiki.md](docs/systems/gm-wiki.md) |
+| 4 | Документация кампании (вики мастера в стиле Notion) | [docs/systems/gm-wiki.md](docs/systems/gm-wiki.md) |
+| 5 | MCP-сервер для ИИ-ассистента мастера | [docs/systems/mcp-server.md](docs/systems/mcp-server.md) |
+
+Плюс общая библиотека контента на GitHub: [docs/systems/content-library.md](docs/systems/content-library.md).
 
 ## Как это работает
 
