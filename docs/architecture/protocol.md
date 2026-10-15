@@ -32,7 +32,7 @@
 | `GET /api/setup` | loopback | → `{"needed": bool}` — нужен ли первый запуск |
 | `POST /api/setup` | loopback, нет аккаунта мастера | `{"setupToken","login","password"}` → `201`, cookie, `Me` |
 | `POST /api/auth/gm-token` | loopback | `{"token"}` → `200`, cookie, `Me` |
-| `POST /api/auth/login` | все | `{"login","password","gameLink"?}` → `200`, cookie, `Me`. Без `gameLink` — только для мастера |
+| `POST /api/auth/login` | все | `{"login","password","gameLink"?}` → `200`, cookie, `Me`. Без `gameLink` — только для мастера. С `gameLink` ссылка проверяется **до** пароля: недействительная → `403 no_active_game`; мастер с действующей ссылкой получает обычную сессию мастера |
 | `POST /api/auth/register` | по ссылке на игру | `{"gameLink","login","password","displayName"}` → `201`, cookie, `Me` |
 | `POST /api/auth/logout` | вошедший | → `204`, cookie удалена |
 | `GET /api/auth/me` | вошедший | → `Me` или `401 unauthorized` |
@@ -54,17 +54,17 @@
 
 | Метод и путь | Тело → ответ |
 |--------------|--------------|
-| `GET /api/campaigns` | → `[{"id","name","createdAt","activeGameSession"?}]` |
+| `GET /api/campaigns` | → `[{"id","name","createdAt","activeGameSession"}]`, `activeGameSession` — `{"id","startedAt"}` или `null` |
 | `POST /api/campaigns` | `{"name"}` → `201` кампания |
 | `PATCH /api/campaigns/{id}` | `{"name"}` → кампания |
 | `POST /api/campaigns/{id}/game-sessions` | → `201` `{"id","campaignId","startedAt","link"}`; активная игровая сессия, если была, завершается |
 | `POST /api/game-sessions/{id}/end` | → `204` |
 | `POST /api/game-sessions/{id}/link` | → `{"link"}` — новая ссылка, старая перестаёт работать |
-| `GET /api/campaigns/{id}/players` | → `[{"id","accountLogin","displayName","color","role","removed","online"}]` |
+| `GET /api/campaigns/{id}/players` | → `[{"id","accountId","accountLogin","displayName","color","role","removed"}]`; поле `"online"` добавится вместе с WebSocket (#4) |
 | `POST /api/players/{id}/remove` | → `204` |
 | `POST /api/accounts/{id}/password-resets` | → `201` `{"link","expiresAt"}` |
 
-`link` — полный URL (`<внешний адрес>/play/<token>`). Токен возвращается только в момент создания; сервер хранит лишь хеш, поэтому показать ссылку повторно нельзя — только сменить.
+`link` — полный URL (`<внешний адрес>/play/<token>`). До решения spike #8 внешний адрес — это схема и хост, по которым мастер открыл приложение. Время во всех ответах — unix-миллисекунды. Токен возвращается только в момент создания; сервер хранит лишь хеш, поэтому показать ссылку повторно нельзя — только сменить.
 
 ## WebSocket: транспорт
 
