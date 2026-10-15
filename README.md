@@ -30,7 +30,24 @@
 
 ## Статус
 
-Этап **M0 Foundation**: есть только документация и процесс разработки, кода пока нет. План — в [docs/roadmap.md](docs/roadmap.md).
+Этап **M0 Foundation**: собирается фундамент (сервер, клиент, хранилище, протокол). План — в [docs/roadmap.md](docs/roadmap.md).
+
+## Локальная разработка
+
+Нужны Go 1.25+, Node.js 22.12+ и pnpm 10.
+
+```powershell
+pnpm -C web install
+go run ./cmd/dndvtt -dev        # сервер на http://localhost:7777
+pnpm -C web dev                 # клиент с hot reload на http://localhost:5173
+```
+
+Сборка одного бинарника со встроенным клиентом:
+
+```powershell
+pnpm -C web build
+$env:CGO_ENABLED = "0"; go build -o bin/dndvtt.exe ./cmd/dndvtt
+```
 
 ## Для разработчиков и агентов
 
