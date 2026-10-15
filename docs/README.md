@@ -13,6 +13,9 @@
 - [protocol.md](architecture/protocol.md): WebSocket-протокол клиент↔сервер
 - [security.md](architecture/security.md): аккаунты, вход, роли, видимость данных
 
+## Дизайн
+- [visual-language.md](design/visual-language.md): визуальный язык клиента — палитра, шрифты, раскладка, принципы (правила процесса — [skills/frontend.md](../skills/frontend.md))
+
 ## Системы
 - [vtt.md](systems/vtt.md): виртуальный стол
 - [voice-video.md](systems/voice-video.md): голос и видео
