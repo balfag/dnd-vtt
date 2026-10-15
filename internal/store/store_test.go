@@ -35,8 +35,8 @@ func TestOpenNonASCIIPath(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("database file missing: %v", err)
 	}
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 2 {
-		t.Errorf("SchemaVersion = %d, %v; want 2", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 3 {
+		t.Errorf("SchemaVersion = %d, %v; want 3", v, err)
 	}
 }
 
@@ -81,11 +81,11 @@ func TestReopen(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 2 {
-		t.Errorf("SchemaVersion = %d, %v; want 2", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 3 {
+		t.Errorf("SchemaVersion = %d, %v; want 3", v, err)
 	}
-	if n := countMigrations(t, s.DB()); n != 2 {
-		t.Errorf("schema_migrations rows = %d, want 2", n)
+	if n := countMigrations(t, s.DB()); n != 3 {
+		t.Errorf("schema_migrations rows = %d, want 3", n)
 	}
 }
 
@@ -210,6 +210,66 @@ func TestAccountSchema(t *testing.T) {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM login_session`).Scan(&n); err != nil || n != 0 {
 			t.Errorf("sessions left = %d, %v; want 0", n, err)
+		}
+	})
+}
+
+func TestGameSessionSchema(t *testing.T) {
+	s := openStore(t)
+	db := s.DB()
+	exec := func(q string, args ...any) error {
+		_, err := db.Exec(q, args...)
+		return err
+	}
+	must := func(q string, args ...any) {
+		t.Helper()
+		if err := exec(q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	hash := func(c string) string { return strings.Repeat(c, 64) }
+
+	must(`INSERT INTO campaign (id, name, created_at) VALUES ('c1', 'Camp', 1)`)
+	must(`INSERT INTO account (id, login, password_hash, is_gm, created_at, password_changed_at) VALUES ('a1', 'anna', '$argon2id$x', 0, 1, 1)`)
+
+	t.Run("one active game session", func(t *testing.T) {
+		must(`INSERT INTO game_session (id, campaign_id, link_hash, started_at) VALUES ('g1', 'c1', ?, 1)`, hash("a"))
+		if err := exec(`INSERT INTO game_session (id, campaign_id, link_hash, started_at) VALUES ('g2', 'c1', ?, 2)`, hash("b")); err == nil {
+			t.Fatal("a second active game session was accepted")
+		}
+		must(`UPDATE game_session SET ended_at = 5 WHERE id = 'g1'`)
+		must(`INSERT INTO game_session (id, campaign_id, link_hash, started_at) VALUES ('g2', 'c1', ?, 6)`, hash("b"))
+		must(`UPDATE game_session SET ended_at = 7 WHERE id = 'g2'`)
+		must(`INSERT INTO game_session (id, campaign_id, link_hash, started_at, ended_at) VALUES ('g3', 'c1', ?, 8, 9)`, hash("c"))
+		must(`INSERT INTO game_session (id, campaign_id, link_hash, started_at, ended_at) VALUES ('g4', 'c1', ?, 8, 9)`, hash("d"))
+	})
+
+	t.Run("login session binding", func(t *testing.T) {
+		err := exec(`INSERT INTO login_session (id, account_id, token_hash, created_at, last_seen_at, expires_at, game_session_id)
+			VALUES ('s0', 'a1', ?, 1, 1, 2, 'nope')`, hash("e"))
+		if err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
+			t.Fatalf("err = %v, want FOREIGN KEY violation", err)
+		}
+		must(`INSERT INTO login_session (id, account_id, token_hash, created_at, last_seen_at, expires_at, game_session_id)
+			VALUES ('s1', 'a1', ?, 1, 1, 2, 'g3')`, hash("f"))
+		must(`DELETE FROM game_session WHERE id = 'g3'`)
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM login_session`).Scan(&n); err != nil || n != 0 {
+			t.Errorf("sessions left = %d, %v; want 0", n, err)
+		}
+	})
+
+	t.Run("player constraints", func(t *testing.T) {
+		const q = `INSERT INTO player (id, campaign_id, account_id, display_name, color, role, created_at) VALUES (?, 'c1', 'a1', 'Anna', ?, ?, 1)`
+		if err := exec(q, "p1", "#e53935", "spectator"); err == nil {
+			t.Error("role spectator was accepted")
+		}
+		if err := exec(q, "p1", "#E53935", "player"); err == nil {
+			t.Error("upper-case color was accepted")
+		}
+		must(q, "p1", "#e53935", "player")
+		if err := exec(q, "p2", "#e53935", "player"); err == nil {
+			t.Error("duplicate (campaign_id, account_id) was accepted")
 		}
 	})
 }
