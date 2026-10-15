@@ -1,0 +1,8 @@
+{
+  "t": "presence.update",
+  "seq": 18,
+  "d": {
+    "playerId": "01J00000000000000000000PL2",
+    "online": false
+  }
+}

@@ -1,0 +1,205 @@
+// WebSocket protocol of docs/architecture/protocol.md. These types mirror
+// internal/ws/protocol (Go); golden.test.ts checks both sides against the
+// shared examples in internal/ws/protocol/testdata.
+
+export const MessageType = {
+  Hello: 'sync.hello',
+  Snapshot: 'sync.snapshot',
+  Presence: 'presence.update',
+  Ping: 'ping',
+  Pong: 'pong',
+  Ack: 'ack',
+  Error: 'error',
+} as const
+
+export const ErrorCode = {
+  BadRequest: 'bad_request',
+  Forbidden: 'forbidden',
+  NotFound: 'not_found',
+  Conflict: 'conflict',
+  RateLimited: 'rate_limited',
+  Internal: 'internal',
+} as const
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
+
+export const CloseCode = {
+  SessionRevoked: 4001,
+  PlayerRemoved: 4003,
+  GameEnded: 4004,
+  Idle: 4008,
+  RateLimited: 4029,
+} as const
+
+export interface Envelope {
+  t: string
+  id?: string
+  re?: string
+  seq?: number
+  d?: unknown
+}
+export interface Hello {
+  gameSessionId?: string
+  lastSeq?: number
+}
+export interface HelloAck {
+  resumed: boolean
+}
+export interface ErrorData {
+  code: ErrorCode
+  message: string
+}
+export interface PlayerInfo {
+  id: string
+  displayName: string
+  color: string
+  role: 'gm' | 'player'
+  online: boolean
+}
+export interface SnapshotMe {
+  accountId: string
+  isGm: boolean
+  playerId: string | null
+}
+export interface SnapshotGame {
+  gameSessionId: string
+  startedAt: number
+  campaign: { id: string; name: string }
+  players: PlayerInfo[]
+}
+export interface Snapshot {
+  seq: number
+  me: SnapshotMe
+  game: SnapshotGame | null
+}
+export interface Presence {
+  playerId: string
+  online: boolean
+  player?: PlayerInfo
+}
+
+// Messages the server sends.
+export type HelloAckMessage = { t: 'ack'; re: string; d: HelloAck }
+export type SnapshotMessage = { t: 'sync.snapshot'; d: Snapshot }
+export type PresenceMessage = { t: 'presence.update'; seq: number; d: Presence }
+export type PongMessage = { t: 'pong'; re: string }
+export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
+
+const colorPattern = /^#[0-9a-f]{6}$/
+const errorCodes: readonly string[] = Object.values(ErrorCode)
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function isInteger(v: unknown, min: number): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= min
+}
+
+function isOptionalString(v: unknown): boolean {
+  return v === undefined || typeof v === 'string'
+}
+
+function isErrorCode(v: unknown): v is ErrorCode {
+  return typeof v === 'string' && errorCodes.includes(v)
+}
+
+function isPlayerInfo(v: unknown): v is PlayerInfo {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.displayName === 'string' &&
+    typeof v.color === 'string' &&
+    colorPattern.test(v.color) &&
+    (v.role === 'gm' || v.role === 'player') &&
+    typeof v.online === 'boolean'
+  )
+}
+
+function isSnapshotMe(v: unknown): v is SnapshotMe {
+  return (
+    isObject(v) &&
+    typeof v.accountId === 'string' &&
+    typeof v.isGm === 'boolean' &&
+    (v.playerId === null || typeof v.playerId === 'string')
+  )
+}
+
+function isSnapshotGame(v: unknown): v is SnapshotGame {
+  return (
+    isObject(v) &&
+    typeof v.gameSessionId === 'string' &&
+    typeof v.startedAt === 'number' &&
+    isObject(v.campaign) &&
+    typeof v.campaign.id === 'string' &&
+    typeof v.campaign.name === 'string' &&
+    Array.isArray(v.players) &&
+    v.players.every(isPlayerInfo)
+  )
+}
+
+export function isEnvelope(v: unknown): v is Envelope {
+  return (
+    isObject(v) &&
+    typeof v.t === 'string' &&
+    isOptionalString(v.id) &&
+    isOptionalString(v.re) &&
+    (v.seq === undefined || isInteger(v.seq, 1))
+  )
+}
+
+export function isHelloAck(v: unknown): v is HelloAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    typeof v.d.resumed === 'boolean'
+  )
+}
+
+export function isSnapshot(v: unknown): v is SnapshotMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Snapshot &&
+    isObject(v.d) &&
+    isInteger(v.d.seq, 0) &&
+    isSnapshotMe(v.d.me) &&
+    (v.d.game === null || isSnapshotGame(v.d.game))
+  )
+}
+
+export function isPresence(v: unknown): v is PresenceMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Presence &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.playerId === 'string' &&
+    typeof v.d.online === 'boolean' &&
+    (v.d.player === undefined || isPlayerInfo(v.d.player))
+  )
+}
+
+export function isPong(v: unknown): v is PongMessage {
+  return isObject(v) && v.t === MessageType.Pong && typeof v.re === 'string'
+}
+
+export function isErrorMessage(v: unknown): v is ErrorMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Error &&
+    isOptionalString(v.re) &&
+    isObject(v.d) &&
+    isErrorCode(v.d.code) &&
+    typeof v.d.message === 'string'
+  )
+}
+
+// Commands the client sends.
+export function helloCommand(id: string, hello: Hello): Envelope {
+  return { t: MessageType.Hello, id, d: hello }
+}
+
+export function pingCommand(id: string): Envelope {
+  return { t: MessageType.Ping, id }
+}

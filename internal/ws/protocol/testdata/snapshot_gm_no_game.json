@@ -1,0 +1,12 @@
+{
+  "t": "sync.snapshot",
+  "d": {
+    "seq": 0,
+    "me": {
+      "accountId": "01J00000000000000000000AC0",
+      "isGm": true,
+      "playerId": null
+    },
+    "game": null
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "t": "sync.hello",
+  "id": "c-1",
+  "d": {
+    "gameSessionId": "01J00000000000000000000GS1",
+    "lastSeq": 17
+  }
+}
