@@ -353,3 +353,101 @@ func TestGMTokensConcurrent(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// insertGameSession adds a campaign and an active game session by SQL: the
+// auth package must not depend on game.
+func (f *fixture) insertGameSession(t *testing.T) string {
+	t.Helper()
+	const gsID = "game-1"
+	if _, err := f.db.Exec(`INSERT INTO campaign (id, name, created_at) VALUES ('camp-1', 'Camp', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(
+		`INSERT INTO game_session (id, campaign_id, link_hash, started_at) VALUES (?, 'camp-1', ?, 1)`,
+		gsID, HashToken("link")); err != nil {
+		t.Fatal(err)
+	}
+	return gsID
+}
+
+func TestPlayerSession(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	player := f.insertPlayer(t, "bob", "bob-password")
+	gsID := f.insertGameSession(t)
+
+	token, sess, err := f.svc.CreatePlayerSession(ctx, player.ID, gsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc, got, err := f.svc.ResolveSession(ctx, token)
+	if err != nil || acc.ID != player.ID {
+		t.Fatalf("resolve = %+v, %v", acc, err)
+	}
+	if got.GameSessionID != gsID || got.ID != sess.ID {
+		t.Errorf("session = %+v, want game session %s", got, gsID)
+	}
+	if want := f.clock.Add(PlayerSessionTTL); !got.ExpiresAt.Equal(want) {
+		t.Errorf("ExpiresAt = %v, want %v", got.ExpiresAt, want)
+	}
+}
+
+func TestPlayerSessionDiesWithGameSession(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	player := f.insertPlayer(t, "bob", "bob-password")
+	gsID := f.insertGameSession(t)
+	token, sess, err := f.svc.CreatePlayerSession(ctx, player.ID, gsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.db.Exec(`UPDATE game_session SET ended_at = ? WHERE id = ?`, f.clock.UnixMilli(), gsID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.svc.ResolveSession(ctx, token); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("after the game ended: err = %v, want ErrNoSession", err)
+	}
+	var n int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM login_session WHERE id = ?`, sess.ID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("session rows = %d, %v; want 0", n, err)
+	}
+}
+
+func TestPlayerSessionExpires(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	player := f.insertPlayer(t, "bob", "bob-password")
+	gsID := f.insertGameSession(t)
+	token, _, err := f.svc.CreatePlayerSession(ctx, player.ID, gsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f.clock = f.clock.Add(PlayerSessionTTL)
+	if _, _, err := f.svc.ResolveSession(ctx, token); !errors.Is(err, ErrNoSession) {
+		t.Errorf("after the TTL: err = %v, want ErrNoSession", err)
+	}
+}
+
+func TestGMSessionHasNoGameSession(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	gm := f.createGM(t)
+
+	token, _, err := f.svc.CreateSession(ctx, gm.ID, GMSessionTTL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.clock = f.clock.Add(time.Hour)
+	_, sess, err := f.svc.ResolveSession(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.GameSessionID != "" {
+		t.Errorf("GameSessionID = %q, want empty", sess.GameSessionID)
+	}
+	if want := f.clock.Add(GMSessionTTL); !sess.ExpiresAt.Equal(want) {
+		t.Errorf("GM session was not renewed: ExpiresAt = %v, want %v", sess.ExpiresAt, want)
+	}
+}

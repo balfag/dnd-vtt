@@ -27,6 +27,8 @@ const (
 	GMSessionTTL = 30 * 24 * time.Hour
 	// GMTokenTTL is how long a one-time GM sign-in token is valid.
 	GMTokenTTL = 10 * time.Minute
+	// PlayerSessionTTL caps a player login session; it also ends with its game session.
+	PlayerSessionTTL = 24 * time.Hour
 	// sessionRenewInterval limits how often a GM session is extended.
 	sessionRenewInterval = time.Hour
 )
@@ -40,9 +42,10 @@ type Account struct {
 
 // Session is a login session on one device.
 type Session struct {
-	ID        string
-	AccountID string
-	ExpiresAt time.Time
+	ID            string
+	AccountID     string
+	GameSessionID string // "" for GM sessions
+	ExpiresAt     time.Time
 }
 
 // Options configures a Service. Zero value is valid.
@@ -270,8 +273,32 @@ func (s *Service) CreateSession(ctx context.Context, accountID string, ttl time.
 	return token, sess, nil
 }
 
+// CreatePlayerSession creates a login session bound to gameSessionID that
+// expires after PlayerSessionTTL. It does not check that the game session is
+// active: the caller (game.Service) has just done that.
+func (s *Service) CreatePlayerSession(ctx context.Context, accountID, gameSessionID string) (string, Session, error) {
+	token, err := NewToken()
+	if err != nil {
+		return "", Session{}, err
+	}
+	now := s.now()
+	sess := Session{
+		ID:            id.New(),
+		AccountID:     accountID,
+		GameSessionID: gameSessionID,
+		ExpiresAt:     now.Add(PlayerSessionTTL),
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO login_session (id, account_id, token_hash, created_at, last_seen_at, expires_at, game_session_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		sess.ID, accountID, HashToken(token), now.UnixMilli(), now.UnixMilli(), sess.ExpiresAt.UnixMilli(), gameSessionID); err != nil {
+		return "", Session{}, fmt.Errorf("create player login session: %w", err)
+	}
+	return token, sess, nil
+}
+
 // ResolveSession returns the account and session for token.
-// Errors: ErrNoSession (unknown or expired; an expired row is deleted).
+// Errors: ErrNoSession (unknown or expired, or bound to an ended game session;
+// such a row is deleted).
 // For the GM, a session last seen at least sessionRenewInterval ago is
 // extended: last_seen_at = now, expires_at = now + GMSessionTTL.
 func (s *Service) ResolveSession(ctx context.Context, token string) (Account, Session, error) {
@@ -279,12 +306,16 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (Account, Se
 		acc                   Account
 		sess                  Session
 		lastSeenMs, expiresMs int64
+		gameSessionID         sql.NullString
+		gameEndedMs           sql.NullInt64
 	)
 	err := s.db.QueryRowContext(ctx, `
-		SELECT a.id, a.login, a.is_gm, ls.id, ls.last_seen_at, ls.expires_at
-		FROM login_session ls JOIN account a ON a.id = ls.account_id
+		SELECT a.id, a.login, a.is_gm, ls.id, ls.game_session_id, ls.last_seen_at, ls.expires_at, gs.ended_at
+		FROM login_session ls
+		JOIN account a ON a.id = ls.account_id
+		LEFT JOIN game_session gs ON gs.id = ls.game_session_id
 		WHERE ls.token_hash = ?`, HashToken(token)).
-		Scan(&acc.ID, &acc.Login, &acc.IsGM, &sess.ID, &lastSeenMs, &expiresMs)
+		Scan(&acc.ID, &acc.Login, &acc.IsGM, &sess.ID, &gameSessionID, &lastSeenMs, &expiresMs, &gameEndedMs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, Session{}, ErrNoSession
 	}
@@ -292,11 +323,19 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (Account, Se
 		return Account{}, Session{}, fmt.Errorf("load login session: %w", err)
 	}
 	sess.AccountID = acc.ID
+	sess.GameSessionID = gameSessionID.String
 
 	now := s.now()
 	if expiresMs <= now.UnixMilli() {
 		if _, err := s.db.ExecContext(ctx, `DELETE FROM login_session WHERE id = ?`, sess.ID); err != nil {
 			return Account{}, Session{}, fmt.Errorf("delete expired login session: %w", err)
+		}
+		return Account{}, Session{}, ErrNoSession
+	}
+	// A player session lives only as long as its game session.
+	if gameSessionID.Valid && gameEndedMs.Valid {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM login_session WHERE id = ?`, sess.ID); err != nil {
+			return Account{}, Session{}, fmt.Errorf("delete login session of ended game: %w", err)
 		}
 		return Account{}, Session{}, ErrNoSession
 	}
