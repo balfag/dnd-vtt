@@ -20,6 +20,8 @@ var (
 	ErrInvalidToken       = errors.New("auth: invalid or expired token")
 	ErrGMExists           = errors.New("auth: gm account already exists")
 	ErrNoSession          = errors.New("auth: no valid login session")
+	ErrAccountNotFound    = errors.New("auth: account not found")
+	ErrCannotResetGM      = errors.New("auth: the gm password cannot be reset with a link")
 )
 
 const (
@@ -29,6 +31,8 @@ const (
 	GMTokenTTL = 10 * time.Minute
 	// PlayerSessionTTL caps a player login session; it also ends with its game session.
 	PlayerSessionTTL = 24 * time.Hour
+	// PasswordResetTTL is how long a password reset link is valid.
+	PasswordResetTTL = 30 * time.Minute
 	// sessionRenewInterval limits how often a GM session is extended.
 	sessionRenewInterval = time.Hour
 )
@@ -407,4 +411,98 @@ func (s *Service) ChangePassword(ctx context.Context, accountID, current, newPas
 		return fmt.Errorf("change password: commit: %w", err)
 	}
 	return nil
+}
+
+// CreatePasswordReset issues a one-time reset token for a non-GM account,
+// valid for PasswordResetTTL. Unused earlier resets of the account are
+// deleted, so only the newest link works.
+// Errors: ErrAccountNotFound, ErrCannotResetGM.
+func (s *Service) CreatePasswordReset(ctx context.Context, accountID string) (token string, expiresAt time.Time, err error) {
+	var isGM bool
+	err = s.db.QueryRowContext(ctx, `SELECT is_gm FROM account WHERE id = ?`, accountID).Scan(&isGM)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", time.Time{}, ErrAccountNotFound
+	}
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("load account: %w", err)
+	}
+	if isGM {
+		return "", time.Time{}, ErrCannotResetGM
+	}
+
+	token, err = NewToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	now := s.now()
+	expiresAt = now.Add(PasswordResetTTL)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("create password reset: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM password_reset WHERE account_id = ? AND used_at IS NULL`, accountID); err != nil {
+		return "", time.Time{}, fmt.Errorf("create password reset: drop old: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO password_reset (id, account_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`,
+		id.New(), accountID, HashToken(token), now.UnixMilli(), expiresAt.UnixMilli()); err != nil {
+		return "", time.Time{}, fmt.Errorf("create password reset: insert: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", time.Time{}, fmt.Errorf("create password reset: commit: %w", err)
+	}
+	return token, expiresAt, nil
+}
+
+// ApplyPasswordReset consumes token, sets newPassword and deletes every login
+// session of the account. It returns the account id so the caller can close
+// the account's live connections.
+// Errors: ErrInvalidToken (unknown, used or expired), ErrInvalidPassword.
+func (s *Service) ApplyPasswordReset(ctx context.Context, token, newPassword string) (accountID string, err error) {
+	// Check the password first: a typo must not burn the link.
+	if err := ValidatePassword(newPassword); err != nil {
+		return "", err
+	}
+	// Hash before the transaction: it is slow and would hold the write lock.
+	newHash, err := HashPassword(newPassword)
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("apply password reset: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	nowMs := s.now().UnixMilli()
+	var resetID string
+	err = tx.QueryRowContext(ctx,
+		`SELECT id, account_id FROM password_reset WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
+		HashToken(token), nowMs).Scan(&resetID, &accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrInvalidToken
+	}
+	if err != nil {
+		return "", fmt.Errorf("apply password reset: find: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `UPDATE password_reset SET used_at = ? WHERE id = ?`, nowMs, resetID); err != nil {
+		return "", fmt.Errorf("apply password reset: mark used: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE account SET password_hash = ?, password_changed_at = ? WHERE id = ?`, newHash, nowMs, accountID); err != nil {
+		return "", fmt.Errorf("apply password reset: update password: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM login_session WHERE account_id = ?`, accountID); err != nil {
+		return "", fmt.Errorf("apply password reset: drop sessions: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("apply password reset: commit: %w", err)
+	}
+	return accountID, nil
 }

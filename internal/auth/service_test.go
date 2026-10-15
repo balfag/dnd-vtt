@@ -451,3 +451,138 @@ func TestGMSessionHasNoGameSession(t *testing.T) {
 		t.Errorf("GM session was not renewed: ExpiresAt = %v, want %v", sess.ExpiresAt, want)
 	}
 }
+
+func TestCreatePasswordReset(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	gm := f.createGM(t)
+	anna := f.insertPlayer(t, "anna", "anna-password")
+
+	token, expires, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(token) != 43 {
+		t.Errorf("token length = %d, want 43", len(token))
+	}
+	if want := f.clock.Add(PasswordResetTTL); !expires.Equal(want) {
+		t.Errorf("expiresAt = %v, want %v", expires, want)
+	}
+	var stored string
+	if err := f.db.QueryRow(`SELECT token_hash FROM password_reset WHERE account_id = ?`, anna.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == token || stored != HashToken(token) {
+		t.Errorf("stored token_hash = %q, want the hash of the token and not the token", stored)
+	}
+
+	if _, _, err := f.svc.CreatePasswordReset(ctx, gm.ID); !errors.Is(err, ErrCannotResetGM) {
+		t.Errorf("gm: err = %v, want ErrCannotResetGM", err)
+	}
+	if _, _, err := f.svc.CreatePasswordReset(ctx, "nope"); !errors.Is(err, ErrAccountNotFound) {
+		t.Errorf("unknown account: err = %v, want ErrAccountNotFound", err)
+	}
+}
+
+func TestApplyPasswordReset(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	anna := f.insertPlayer(t, "anna", "anna-password")
+	var sessions [2]string
+	for i := range sessions {
+		tok, _, err := f.svc.CreateSession(ctx, anna.ID, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessions[i] = tok
+	}
+	token, _, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := f.svc.ApplyPasswordReset(ctx, token, "brand-new-password")
+	if err != nil || got != anna.ID {
+		t.Fatalf("apply = %q, %v; want %q", got, err, anna.ID)
+	}
+	if _, err := f.svc.Authenticate(ctx, "anna", "anna-password"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("old password: err = %v, want ErrInvalidCredentials", err)
+	}
+	if _, err := f.svc.Authenticate(ctx, "anna", "brand-new-password"); err != nil {
+		t.Errorf("new password: err = %v, want nil", err)
+	}
+	for i, tok := range sessions {
+		if _, _, err := f.svc.ResolveSession(ctx, tok); !errors.Is(err, ErrNoSession) {
+			t.Errorf("session %d: err = %v, want ErrNoSession", i, err)
+		}
+	}
+	if _, err := f.svc.ApplyPasswordReset(ctx, token, "another-password"); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("second use: err = %v, want ErrInvalidToken", err)
+	}
+	if _, err := f.svc.ApplyPasswordReset(ctx, "unknown-token", "another-password"); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("unknown token: err = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestApplyPasswordResetKeepsTokenOnBadPassword(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	anna := f.insertPlayer(t, "anna", "anna-password")
+	token, _, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.svc.ApplyPasswordReset(ctx, token, "short"); !errors.Is(err, ErrInvalidPassword) {
+		t.Fatalf("short password: err = %v, want ErrInvalidPassword", err)
+	}
+	if _, err := f.svc.ApplyPasswordReset(ctx, token, "brand-new-password"); err != nil {
+		t.Fatalf("the token must survive a typo: %v", err)
+	}
+}
+
+func TestPasswordResetExpires(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	anna := f.insertPlayer(t, "anna", "anna-password")
+
+	token, _, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.clock = f.clock.Add(PasswordResetTTL)
+	if _, err := f.svc.ApplyPasswordReset(ctx, token, "brand-new-password"); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("at the TTL: err = %v, want ErrInvalidToken", err)
+	}
+
+	f.clock = f.clock.Add(-PasswordResetTTL)
+	token, _, err = f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.clock = f.clock.Add(PasswordResetTTL - time.Second)
+	if _, err := f.svc.ApplyPasswordReset(ctx, token, "brand-new-password"); err != nil {
+		t.Fatalf("a second before the TTL: err = %v, want nil", err)
+	}
+}
+
+func TestOnlyNewestPasswordResetWorks(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	anna := f.insertPlayer(t, "anna", "anna-password")
+
+	first, _, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := f.svc.CreatePasswordReset(ctx, anna.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ApplyPasswordReset(ctx, first, "brand-new-password"); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("first token: err = %v, want ErrInvalidToken", err)
+	}
+	if _, err := f.svc.ApplyPasswordReset(ctx, second, "brand-new-password"); err != nil {
+		t.Errorf("second token: err = %v, want nil", err)
+	}
+}
