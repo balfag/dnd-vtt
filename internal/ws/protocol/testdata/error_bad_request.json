@@ -1,0 +1,8 @@
+{
+  "t": "error",
+  "re": "c-9",
+  "d": {
+    "code": "bad_request",
+    "message": "unknown message type"
+  }
+}

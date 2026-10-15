@@ -1,0 +1,35 @@
+{
+  "t": "sync.snapshot",
+  "d": {
+    "seq": 17,
+    "me": {
+      "accountId": "01J00000000000000000000AC1",
+      "isGm": false,
+      "playerId": "01J00000000000000000000PL2"
+    },
+    "game": {
+      "gameSessionId": "01J00000000000000000000GS1",
+      "startedAt": 1760530000000,
+      "campaign": {
+        "id": "01J00000000000000000000CA1",
+        "name": "Проклятие Страда"
+      },
+      "players": [
+        {
+          "id": "01J00000000000000000000PL1",
+          "displayName": "master",
+          "color": "#e53935",
+          "role": "gm",
+          "online": true
+        },
+        {
+          "id": "01J00000000000000000000PL2",
+          "displayName": "Анна",
+          "color": "#1e88e5",
+          "role": "player",
+          "online": true
+        }
+      ]
+    }
+  }
+}

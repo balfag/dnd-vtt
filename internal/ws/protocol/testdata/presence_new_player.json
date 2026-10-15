@@ -1,0 +1,15 @@
+{
+  "t": "presence.update",
+  "seq": 19,
+  "d": {
+    "playerId": "01J00000000000000000000PL3",
+    "online": true,
+    "player": {
+      "id": "01J00000000000000000000PL3",
+      "displayName": "Борис",
+      "color": "#43a047",
+      "role": "player",
+      "online": true
+    }
+  }
+}
