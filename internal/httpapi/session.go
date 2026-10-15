@@ -12,7 +12,9 @@ const sessionCookieName = "dndvtt_session"
 // setSessionCookie: Path "/", HttpOnly, SameSite=Lax, Secure only if r.TLS != nil,
 // Expires = sess.ExpiresAt.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, sess auth.Session) {
-	http.SetCookie(w, &http.Cookie{
+	// Secure only over HTTPS: players on a LAN use plain http://, and a Secure
+	// cookie would never be stored there (see docs/architecture/security.md).
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure depends on TLS on purpose
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
@@ -25,7 +27,9 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, sess
 
 // clearSessionCookie: same attributes, empty value, MaxAge -1.
 func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
+	// Secure only over HTTPS: players on a LAN use plain http://, and a Secure
+	// cookie would never be stored there (see docs/architecture/security.md).
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure depends on TLS on purpose
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
