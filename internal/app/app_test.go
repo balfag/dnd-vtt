@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/store"
 )
 
 func TestRunServesAndStops(t *testing.T) {
@@ -21,8 +23,17 @@ func TestRunServesAndStops(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	a, err := New(config.Config{}, logger, "test", st.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
 	done := make(chan error, 1)
-	go func() { done <- New(config.Config{}, logger, "test").Run(ctx, ln) }()
+	go func() { done <- a.Run(ctx, ln) }()
 
 	resp, err := http.Get("http://" + ln.Addr().String() + "/api/health")
 	if err != nil {

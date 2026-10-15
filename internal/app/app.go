@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
 	"github.com/balfag/dnd-vtt/web"
@@ -22,11 +24,17 @@ type App struct {
 	cfg     config.Config
 	logger  *slog.Logger
 	version string
+	auth    *auth.Service
 }
 
-// New assembles the application. It neither listens nor starts anything.
-func New(cfg config.Config, logger *slog.Logger, version string) *App {
-	return &App{cfg: cfg, logger: logger, version: version}
+// New assembles the application on an opened and migrated database.
+// It neither listens nor starts anything.
+func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*App, error) {
+	authSvc, err := auth.NewService(db, auth.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("create auth service: %w", err)
+	}
+	return &App{cfg: cfg, logger: logger, version: version, auth: authSvc}, nil
 }
 
 // Run serves HTTP on ln until ctx is cancelled, then shuts down gracefully
@@ -34,7 +42,12 @@ func New(cfg config.Config, logger *slog.Logger, version string) *App {
 func (a *App) Run(ctx context.Context, ln net.Listener) error {
 	// No Read/WriteTimeout: long-lived WebSocket connections will live here.
 	srv := &http.Server{
-		Handler:           httpapi.NewRouter(a.logger, a.version, web.Dist()),
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Logger:  a.logger,
+			Version: a.version,
+			SPA:     web.Dist(),
+			Auth:    a.auth,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

@@ -74,7 +74,12 @@ func run() int {
 		return 1
 	}
 
-	if err := app.New(cfg, logger, version).Run(ctx, ln); err != nil {
+	a, err := app.New(cfg, logger, version, st.DB())
+	if err != nil {
+		logger.Error("create app", "err", err)
+		return 1
+	}
+	if err := a.Run(ctx, ln); err != nil {
 		logger.Error("run", "err", err)
 		return 1
 	}
