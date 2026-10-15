@@ -35,8 +35,8 @@ func TestOpenNonASCIIPath(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("database file missing: %v", err)
 	}
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 3 {
-		t.Errorf("SchemaVersion = %d, %v; want 3", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 4 {
+		t.Errorf("SchemaVersion = %d, %v; want 4", v, err)
 	}
 }
 
@@ -81,11 +81,11 @@ func TestReopen(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 3 {
-		t.Errorf("SchemaVersion = %d, %v; want 3", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 4 {
+		t.Errorf("SchemaVersion = %d, %v; want 4", v, err)
 	}
-	if n := countMigrations(t, s.DB()); n != 3 {
-		t.Errorf("schema_migrations rows = %d, want 3", n)
+	if n := countMigrations(t, s.DB()); n != 4 {
+		t.Errorf("schema_migrations rows = %d, want 4", n)
 	}
 }
 
@@ -272,4 +272,40 @@ func TestGameSessionSchema(t *testing.T) {
 			t.Error("duplicate (campaign_id, account_id) was accepted")
 		}
 	})
+}
+
+func TestPasswordResetSchema(t *testing.T) {
+	s := openStore(t)
+	db := s.DB()
+	hash := func(c string) string { return strings.Repeat(c, 64) }
+	exec := func(q string, args ...any) error {
+		_, err := db.Exec(q, args...)
+		return err
+	}
+	const insert = `INSERT INTO password_reset (id, account_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, 1, 2)`
+
+	if err := exec(`INSERT INTO account (id, login, password_hash, is_gm, created_at, password_changed_at) VALUES ('a1', 'anna', '$argon2id$x', 0, 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := exec(insert, "r0", "nope", hash("a")); err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
+		t.Fatalf("reset of an unknown account: err = %v, want FOREIGN KEY violation", err)
+	}
+	if err := exec(insert, "r1", "a1", hash("a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(insert, "r2", "a1", hash("a")); err == nil {
+		t.Error("a repeated token_hash was accepted")
+	}
+	if err := exec(insert, "r3", "a1", "short"); err == nil {
+		t.Error("a token_hash that is not 64 characters was accepted")
+	}
+
+	if err := exec(`DELETE FROM account WHERE id = 'a1'`); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM password_reset`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("resets left after deleting the account = %d, %v; want 0", n, err)
+	}
 }

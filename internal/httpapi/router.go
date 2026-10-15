@@ -57,6 +57,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/auth/password", a.postPassword)
 	mux.HandleFunc("POST /api/auth/register", a.postRegister)
 	mux.HandleFunc("GET /api/game-links/{token}", a.getGameLink)
+	mux.HandleFunc("POST /api/accounts/{id}/password-resets", a.createPasswordReset)
+	mux.HandleFunc("POST /api/password-resets/{token}", a.applyPasswordReset)
 	mux.HandleFunc("GET /ws", a.getWS)
 
 	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
