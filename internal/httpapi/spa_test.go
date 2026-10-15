@@ -3,6 +3,7 @@ package httpapi
 import (
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,11 +73,25 @@ func TestSPA(t *testing.T) {
 }
 
 func TestSPAStaticContentType(t *testing.T) {
-	fsys := fstest.MapFS{"static/app-1.js": {Data: []byte("js")}}
+	// Simulate a Windows registry that maps .js to text/plain.
+	if err := mime.AddExtensionType(".js", "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	fsys := fstest.MapFS{
+		"index.html":      {Data: []byte("<html>")},
+		"static/app-1.js": {Data: []byte("js")},
+	}
 	h := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test", fsys)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/static/app-1.js", nil))
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
-		t.Errorf("Content-Type = %q, want text/javascript", ct)
+
+	tests := []struct{ path, want string }{
+		{"/static/app-1.js", "text/javascript; charset=utf-8"},
+		{"/play/x", "text/html; charset=utf-8"},
+	}
+	for _, tt := range tests {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", tt.path, nil))
+		if ct := rec.Header().Get("Content-Type"); ct != tt.want {
+			t.Errorf("GET %s: Content-Type = %q, want %q", tt.path, ct, tt.want)
+		}
 	}
 }
