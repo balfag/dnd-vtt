@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"io"
-	"log/slog"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +47,7 @@ func TestSPA(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test", tt.fsys)
+			h := NewRouter(newTestDeps(t, tt.fsys))
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 
@@ -81,7 +79,7 @@ func TestSPAStaticContentType(t *testing.T) {
 		"index.html":      {Data: []byte("<html>")},
 		"static/app-1.js": {Data: []byte("js")},
 	}
-	h := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test", fsys)
+	h := NewRouter(newTestDeps(t, fsys))
 
 	tests := []struct{ path, want string }{
 		{"/static/app-1.js", "text/javascript; charset=utf-8"},
