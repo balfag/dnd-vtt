@@ -146,11 +146,10 @@ func (cn *conn) allow(now time.Time) (ok, exceeded bool) {
 
 // handle processes one text frame. It returns false when the read loop must stop.
 func (cn *conn) handle(data []byte) bool {
+	// Parse first only to learn the command id; every frame, valid or not,
+	// is counted by the rate limiter so garbage cannot bypass it.
 	var env protocol.Envelope
-	if err := json.Unmarshal(data, &env); err != nil || env.T == "" {
-		cn.sendError(env.ID, protocol.CodeBadRequest, "invalid envelope")
-		return true
-	}
+	parseErr := json.Unmarshal(data, &env)
 
 	ok, exceeded := cn.allow(cn.hub.opts.Now())
 	if !ok {
@@ -159,6 +158,10 @@ func (cn *conn) handle(data []byte) bool {
 			_ = cn.c.Close(protocol.CloseRateLimited, "rate limited")
 			return false
 		}
+		return true
+	}
+	if parseErr != nil || env.T == "" {
+		cn.sendError(env.ID, protocol.CodeBadRequest, "invalid envelope")
 		return true
 	}
 

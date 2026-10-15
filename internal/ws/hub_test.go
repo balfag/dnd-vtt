@@ -411,8 +411,8 @@ func TestIdleTimerIsResetByMessages(t *testing.T) {
 	}
 }
 
-// flood sends pings without pauses and reads replies in another goroutine.
-func flood(t *testing.T, c *websocket.Conn, stopAfter time.Duration) (rateLimited bool, status websocket.StatusCode) {
+// flood sends frames without pauses and reads replies in another goroutine.
+func flood(t *testing.T, c *websocket.Conn, frame string, stopAfter time.Duration) (rateLimited bool, status websocket.StatusCode) {
 	t.Helper()
 	var (
 		mu      sync.Mutex
@@ -438,7 +438,7 @@ func flood(t *testing.T, c *websocket.Conn, stopAfter time.Duration) (rateLimite
 	deadline := time.Now().Add(stopAfter)
 	for time.Now().Before(deadline) {
 		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
-		err := c.Write(ctx, websocket.MessageText, []byte(`{"t":"ping","id":"p"}`))
+		err := c.Write(ctx, websocket.MessageText, []byte(frame))
 		cancel()
 		if err != nil {
 			break
@@ -460,7 +460,19 @@ func flood(t *testing.T, c *websocket.Conn, stopAfter time.Duration) (rateLimite
 func TestRateLimitClosesAfterGrace(t *testing.T) {
 	f := newFixture(t, testOptions())
 	c := f.dial()
-	limited, status := flood(t, c, 3*time.Second)
+	limited, status := flood(t, c, `{"t":"ping","id":"p"}`, 3*time.Second)
+	if !limited {
+		t.Error("no rate_limited error among the replies")
+	}
+	if status != protocol.CloseRateLimited {
+		t.Fatalf("close = %d, want 4029", status)
+	}
+}
+
+func TestRateLimitCountsGarbage(t *testing.T) {
+	f := newFixture(t, testOptions())
+	c := f.dial()
+	limited, status := flood(t, c, `not json`, 3*time.Second)
 	if !limited {
 		t.Error("no rate_limited error among the replies")
 	}
