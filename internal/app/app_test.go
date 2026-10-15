@@ -1,12 +1,16 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,4 +61,112 @@ func TestRunServesAndStops(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return within 2s after cancel")
 	}
+}
+
+func TestAnnounce(t *testing.T) {
+	// newApp builds an App on a temporary store with captured output, logs and
+	// browser calls.
+	type env struct {
+		app    *App
+		ln     net.Listener
+		out    *bytes.Buffer
+		logs   *bytes.Buffer
+		opened *[]string
+	}
+	newApp := func(t *testing.T, openBrowser bool, openErr error) env {
+		t.Helper()
+		st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+
+		logs := &bytes.Buffer{}
+		a, err := New(config.Config{OpenBrowser: openBrowser}, slog.New(slog.NewTextHandler(logs, nil)), "test", st.DB())
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := &bytes.Buffer{}
+		opened := &[]string{}
+		a.out = out
+		a.openBrowser = func(u string) error {
+			*opened = append(*opened, u)
+			return openErr
+		}
+
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = ln.Close() })
+		return env{app: a, ln: ln, out: out, logs: logs, opened: opened}
+	}
+	port := func(e env) int { return e.ln.Addr().(*net.TCPAddr).Port }
+
+	t.Run("no GM yet", func(t *testing.T) {
+		e := newApp(t, true, nil)
+		e.app.announce(context.Background(), e.ln)
+
+		prefix := fmt.Sprintf("http://localhost:%d/setup?t=", port(e))
+		line := strings.TrimSuffix(e.out.String(), "\n")
+		if strings.Count(e.out.String(), "\n") != 1 || !strings.HasPrefix(line, "First run: create the GM account at "+prefix) {
+			t.Fatalf("out = %q", e.out.String())
+		}
+		url := strings.TrimPrefix(line, "First run: create the GM account at ")
+		if len(*e.opened) != 1 || (*e.opened)[0] != url {
+			t.Fatalf("opened = %v, want exactly [%s]", *e.opened, url)
+		}
+		token := strings.TrimPrefix(url, prefix)
+		if _, err := e.app.auth.CreateGM(context.Background(), token, "master", "master-password"); err != nil {
+			t.Errorf("the issued setup token was rejected: %v", err)
+		}
+		if strings.Contains(e.logs.String(), token) {
+			t.Error("logs contain the setup token")
+		}
+	})
+
+	t.Run("GM exists", func(t *testing.T) {
+		e := newApp(t, false, nil)
+		setup, err := e.app.auth.IssueSetupToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.app.auth.CreateGM(context.Background(), setup, "master", "master-password"); err != nil {
+			t.Fatal(err)
+		}
+		e.app.announce(context.Background(), e.ln)
+
+		prefix := fmt.Sprintf("http://localhost:%d/?gm=", port(e))
+		line := strings.TrimSuffix(e.out.String(), "\n")
+		const lead = "Sign in as GM on this computer (link valid 10 minutes): "
+		if strings.Count(e.out.String(), "\n") != 1 || !strings.HasPrefix(line, lead+prefix) {
+			t.Fatalf("out = %q", e.out.String())
+		}
+		if len(*e.opened) != 0 {
+			t.Errorf("browser opened with OpenBrowser=false: %v", *e.opened)
+		}
+		token := strings.TrimPrefix(line, lead+prefix)
+		if _, err := e.app.auth.RedeemGMToken(context.Background(), token); err != nil {
+			t.Errorf("the issued GM token was rejected: %v", err)
+		}
+		if strings.Contains(e.logs.String(), token) {
+			t.Error("logs contain the GM token")
+		}
+	})
+
+	t.Run("browser failure", func(t *testing.T) {
+		e := newApp(t, true, errors.New("no browser"))
+		e.app.announce(context.Background(), e.ln) // must return normally
+
+		if !strings.Contains(e.logs.String(), "open browser") {
+			t.Errorf("logs = %q, want an 'open browser' warning", e.logs.String())
+		}
+		token := strings.SplitN(e.out.String(), "?t=", 2)[1]
+		if strings.Contains(e.logs.String(), strings.TrimSpace(token)) {
+			t.Error("logs contain the setup token")
+		}
+		if strings.Contains(e.logs.String(), "localhost:") {
+			t.Error("logs contain the sign-in URL")
+		}
+	})
 }
