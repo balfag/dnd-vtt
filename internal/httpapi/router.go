@@ -11,6 +11,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
+	"github.com/balfag/dnd-vtt/internal/ws"
 )
 
 type healthResponse struct {
@@ -25,6 +26,7 @@ type Deps struct {
 	SPA     fs.FS // built web client, see web.Dist
 	Auth    *auth.Service
 	Game    *game.Service
+	Hub     *ws.Hub
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
 }
 
@@ -55,6 +57,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/auth/password", a.postPassword)
 	mux.HandleFunc("POST /api/auth/register", a.postRegister)
 	mux.HandleFunc("GET /api/game-links/{token}", a.getGameLink)
+	mux.HandleFunc("GET /ws", a.getWS)
 
 	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
 	mux.HandleFunc("POST /api/campaigns", a.createCampaign)

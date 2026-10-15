@@ -13,10 +13,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
+	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/web"
 )
 
@@ -29,6 +32,7 @@ type App struct {
 	version string
 	auth    *auth.Service
 	game    *game.Service
+	hub     *ws.Hub
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -57,6 +61,7 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 		version:     version,
 		auth:        authSvc,
 		game:        gameSvc,
+		hub:         ws.NewHub(gameSvc, logger, ws.Options{}),
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -73,6 +78,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			SPA:     web.Dist(),
 			Auth:    a.auth,
 			Game:    a.game,
+			Hub:     a.hub,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -91,6 +97,9 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 		return fmt.Errorf("serve http: %w", err)
 	case <-ctx.Done():
 	}
+
+	// Shutdown does not touch hijacked WebSocket connections.
+	a.hub.CloseAll(websocket.StatusGoingAway, "server shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
