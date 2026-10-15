@@ -216,8 +216,8 @@ func TestPlayersAPI(t *testing.T) {
 	if p := players[1]; p.Role != "player" || p.AccountLogin != "bob" || p.AccountID == "" || p.ID != me.Player.ID || p.Removed {
 		t.Errorf("players[1] = %+v", p)
 	}
-	if strings.Contains(rec.Body.String(), `"online"`) {
-		t.Error("the list must not have an online field before websockets exist")
+	if players[0].Online || players[1].Online || strings.Count(rec.Body.String(), `"online":false`) != 2 {
+		t.Errorf("nobody is connected, want online:false for both: %s", rec.Body.String())
 	}
 	if rec := f.do(http.MethodGet, "/api/campaigns/nope/players", "", withCookie(gm)); rec.Code != http.StatusNotFound {
 		t.Errorf("players of an unknown campaign = %d, want 404", rec.Code)

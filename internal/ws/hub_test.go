@@ -35,6 +35,7 @@ type identity struct {
 type fixture struct {
 	t    *testing.T
 	hub  *Hub
+	auth *auth.Service
 	game *game.Service
 	srv  *httptest.Server
 
@@ -56,6 +57,8 @@ func testOptions() Options {
 		RateBurst:   5,
 		RateGrace:   200 * time.Millisecond,
 		RateQuiet:   150 * time.Millisecond,
+		BufferSize:  5,
+		BufferTTL:   time.Minute,
 	}
 }
 
@@ -74,7 +77,7 @@ func newFixture(t *testing.T, opts Options) *fixture {
 	}
 	gameSvc := game.NewService(st.DB(), game.Options{})
 
-	f := &fixture{t: t, game: gameSvc}
+	f := &fixture{t: t, auth: authSvc, game: gameSvc}
 	setup, err := authSvc.IssueSetupToken()
 	if err != nil {
 		t.Fatal(err)
@@ -245,8 +248,9 @@ func TestHelloPlayer(t *testing.T) {
 		t.Fatalf("second message = %q, want sync.snapshot", env.T)
 	}
 	snap := decode[protocol.Snapshot](t, env)
-	if snap.Seq != 0 {
-		t.Errorf("seq = %d, want 0", snap.Seq)
+	// The player's own connection announced it online before the snapshot.
+	if snap.Seq != 1 {
+		t.Errorf("seq = %d, want 1", snap.Seq)
 	}
 	if snap.Me.PlayerID == nil || *snap.Me.PlayerID != f.playerID || snap.Me.IsGM || snap.Me.AccountID != f.player.acc.ID {
 		t.Errorf("me = %+v, want the player %s", snap.Me, f.playerID)
@@ -412,11 +416,11 @@ func TestIdleTimerIsResetByMessages(t *testing.T) {
 }
 
 // flood sends frames without pauses and reads replies in another goroutine.
-func flood(t *testing.T, c *websocket.Conn, frame string, stopAfter time.Duration) (rateLimited bool, status websocket.StatusCode) {
+func flood(t *testing.T, c *websocket.Conn, frame string, stopAfter time.Duration) (rateLimited int, status websocket.StatusCode) {
 	t.Helper()
 	var (
 		mu      sync.Mutex
-		limited bool
+		limited int
 		done    = make(chan websocket.StatusCode, 1)
 	)
 	go func() {
@@ -429,7 +433,9 @@ func flood(t *testing.T, c *websocket.Conn, frame string, stopAfter time.Duratio
 			var env protocol.Envelope
 			if json.Unmarshal(data, &env) == nil && env.T == protocol.TypeError {
 				mu.Lock()
-				limited = limited || strings.Contains(string(env.D), protocol.CodeRateLimited)
+				if strings.Contains(string(env.D), protocol.CodeRateLimited) {
+					limited++
+				}
 				mu.Unlock()
 			}
 		}
@@ -461,8 +467,20 @@ func TestRateLimitClosesAfterGrace(t *testing.T) {
 	f := newFixture(t, testOptions())
 	c := f.dial()
 	limited, status := flood(t, c, `{"t":"ping","id":"p"}`, 3*time.Second)
-	if !limited {
+	if limited == 0 {
 		t.Error("no rate_limited error among the replies")
+	}
+	if status != protocol.CloseRateLimited {
+		t.Fatalf("close = %d, want 4029", status)
+	}
+}
+
+func TestRateLimitRepliesOncePerRun(t *testing.T) {
+	f := newFixture(t, testOptions())
+	c := f.dial()
+	limited, status := flood(t, c, `{"t":"ping","id":"p"}`, 3*time.Second)
+	if limited != 1 {
+		t.Errorf("rate_limited replies = %d, want exactly one for the run", limited)
 	}
 	if status != protocol.CloseRateLimited {
 		t.Fatalf("close = %d, want 4029", status)
@@ -473,7 +491,7 @@ func TestRateLimitCountsGarbage(t *testing.T) {
 	f := newFixture(t, testOptions())
 	c := f.dial()
 	limited, status := flood(t, c, `not json`, 3*time.Second)
-	if !limited {
+	if limited == 0 {
 		t.Error("no rate_limited error among the replies")
 	}
 	if status != protocol.CloseRateLimited {
