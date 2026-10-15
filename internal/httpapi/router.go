@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/game"
 )
 
 type healthResponse struct {
@@ -23,6 +24,7 @@ type Deps struct {
 	Version string
 	SPA     fs.FS // built web client, see web.Dist
 	Auth    *auth.Service
+	Game    *game.Service
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
 }
 
@@ -51,6 +53,17 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", a.postLogout)
 	mux.HandleFunc("GET /api/auth/me", a.getMe)
 	mux.HandleFunc("POST /api/auth/password", a.postPassword)
+	mux.HandleFunc("POST /api/auth/register", a.postRegister)
+	mux.HandleFunc("GET /api/game-links/{token}", a.getGameLink)
+
+	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
+	mux.HandleFunc("POST /api/campaigns", a.createCampaign)
+	mux.HandleFunc("PATCH /api/campaigns/{id}", a.renameCampaign)
+	mux.HandleFunc("POST /api/campaigns/{id}/game-sessions", a.startGameSession)
+	mux.HandleFunc("POST /api/game-sessions/{id}/end", a.endGameSession)
+	mux.HandleFunc("POST /api/game-sessions/{id}/link", a.rotateLink)
+	mux.HandleFunc("GET /api/campaigns/{id}/players", a.listPlayers)
+	mux.HandleFunc("POST /api/players/{id}/remove", a.removePlayer)
 	// Unknown API paths must be 404, not the SPA fallback. The method in the
 	// pattern avoids a conflict with "GET /".
 	mux.Handle("GET /api/", http.NotFoundHandler())

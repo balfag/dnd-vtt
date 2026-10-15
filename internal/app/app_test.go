@@ -15,8 +15,40 @@ import (
 	"time"
 
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
 )
+
+func TestNewCreatesDevCampaign(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		dev  bool
+		want int
+	}{
+		{"dev mode", true, 1},
+		{"normal mode", false, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = st.Close() })
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			if _, err := New(config.Config{Dev: tt.dev}, logger, "test", st.DB()); err != nil {
+				t.Fatal(err)
+			}
+
+			list, err := game.NewService(st.DB(), game.Options{}).ListCampaigns(context.Background())
+			if err != nil || len(list) != tt.want {
+				t.Fatalf("campaigns = %+v, %v; want %d", list, err, tt.want)
+			}
+			if tt.want == 1 && list[0].Name != "Dev campaign" {
+				t.Errorf("name = %q, want Dev campaign", list[0].Name)
+			}
+		})
+	}
+}
 
 func TestRunServesAndStops(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

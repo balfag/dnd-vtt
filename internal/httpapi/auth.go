@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"math"
 	"net/http"
@@ -8,17 +9,61 @@ import (
 	"strings"
 
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/game"
 )
 
-type meResponse struct {
-	AccountID string `json:"accountId"`
-	Login     string `json:"login"`
-	IsGM      bool   `json:"isGm"`
-	Player    any    `json:"player"` // always null until #16
+type mePlayerJSON struct {
+	ID          string `json:"id"`
+	CampaignID  string `json:"campaignId"`
+	DisplayName string `json:"displayName"`
+	Color       string `json:"color"`
+	Role        string `json:"role"`
 }
 
-func newMe(acc auth.Account) meResponse {
-	return meResponse{AccountID: acc.ID, Login: acc.Login, IsGM: acc.IsGM}
+type meResponse struct {
+	AccountID string        `json:"accountId"`
+	Login     string        `json:"login"`
+	IsGM      bool          `json:"isGm"`
+	Player    *mePlayerJSON `json:"player"` // null when the account has no participant in the active game
+}
+
+// me builds the Me response: the account plus its participant in the
+// campaign of the active game session, if any.
+func (a *api) me(ctx context.Context, acc auth.Account) (meResponse, error) {
+	resp := meResponse{AccountID: acc.ID, Login: acc.Login, IsGM: acc.IsGM}
+
+	gs, err := a.d.Game.ActiveGameSession(ctx)
+	if errors.Is(err, game.ErrNoActiveGame) {
+		return resp, nil
+	}
+	if err != nil {
+		return meResponse{}, err
+	}
+	p, err := a.d.Game.PlayerForAccount(ctx, gs.CampaignID, acc.ID)
+	if errors.Is(err, game.ErrNotFound) {
+		return resp, nil
+	}
+	if err != nil {
+		return meResponse{}, err
+	}
+	resp.Player = &mePlayerJSON{
+		ID:          p.ID,
+		CampaignID:  p.CampaignID,
+		DisplayName: p.DisplayName,
+		Color:       p.Color,
+		Role:        p.Role,
+	}
+	return resp, nil
+}
+
+// writeMe answers with the Me response of acc, or 500 if it cannot be built.
+func (a *api) writeMe(w http.ResponseWriter, r *http.Request, status int, acc auth.Account) {
+	resp, err := a.me(r.Context(), acc)
+	if err != nil {
+		a.internalError(w, "build me response", err)
+		return
+	}
+	writeJSON(w, status, resp)
 }
 
 // limitKey is one rate-limit bucket checked before an expensive operation.
@@ -119,7 +164,7 @@ func (a *api) postSetup(w http.ResponseWriter, r *http.Request) {
 	if !a.startGMSession(w, r, acc, "setup") {
 		return
 	}
-	writeJSON(w, http.StatusCreated, newMe(acc))
+	a.writeMe(w, r, http.StatusCreated, acc)
 }
 
 func (a *api) postGMToken(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +197,7 @@ func (a *api) postGMToken(w http.ResponseWriter, r *http.Request) {
 	if !a.startGMSession(w, r, acc, "gm-token") {
 		return
 	}
-	writeJSON(w, http.StatusOK, newMe(acc))
+	a.writeMe(w, r, http.StatusOK, acc)
 }
 
 func (a *api) postLogin(w http.ResponseWriter, r *http.Request) {
@@ -165,17 +210,22 @@ func (a *api) postLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "invalid request body")
 		return
 	}
-	// Game links arrive with the game sessions work (#16).
-	if req.GameLink != "" {
-		writeError(w, http.StatusForbidden, "no_active_game", "there is no active game")
-		return
-	}
 
 	keys := []limitKey{ipKey(r), loginKey(r, req.Login)}
 	// Check the limits before Authenticate: a blocked brute force must not
 	// spend argon2 time or learn whether a guess was right.
 	if a.rateLimited(w, keys...) {
 		return
+	}
+
+	// An invalid link is rejected before the password is checked, so it
+	// cannot be used to guess passwords.
+	var gs game.GameSession
+	if req.GameLink != "" {
+		var ok bool
+		if gs, ok = a.resolveLink(w, r, req.GameLink); !ok {
+			return
+		}
 	}
 
 	acc, err := a.d.Auth.Authenticate(r.Context(), req.Login, req.Password)
@@ -188,15 +238,121 @@ func (a *api) postLogin(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, "authenticate", err)
 		return
 	}
-	if !acc.IsGM {
+	if acc.IsGM {
+		if !a.startGMSession(w, r, acc, "password") {
+			return
+		}
+		a.writeMe(w, r, http.StatusOK, acc)
+		return
+	}
+	if req.GameLink == "" {
+		// Players sign in only through a game link.
 		writeError(w, http.StatusForbidden, "no_active_game", "there is no active game")
 		return
 	}
 
-	if !a.startGMSession(w, r, acc, "password") {
+	p, err := a.d.Game.JoinPlayer(r.Context(), gs, acc)
+	switch {
+	case errors.Is(err, game.ErrRemoved):
+		writeError(w, http.StatusForbidden, "removed", "you were removed from this campaign")
+		return
+	case errors.Is(err, game.ErrNoActiveGame):
+		writeError(w, http.StatusForbidden, "no_active_game", "there is no active game")
+		return
+	case err != nil:
+		a.internalError(w, "join player", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newMe(acc))
+	if !a.startPlayerSession(w, r, acc, gs) {
+		return
+	}
+	a.d.Logger.Info("player signed in", "ip", clientIP(r), "campaignId", p.CampaignID)
+	a.writeMe(w, r, http.StatusOK, acc)
+}
+
+// resolveLink finds the active game session for a link token. An unknown or
+// ended link counts as a failed attempt for the IP and answers 403.
+func (a *api) resolveLink(w http.ResponseWriter, r *http.Request, token string) (game.GameSession, bool) {
+	gs, err := a.d.Game.ResolveLink(r.Context(), token)
+	if errors.Is(err, game.ErrNoActiveGame) {
+		a.fail(ipKey(r))
+		writeError(w, http.StatusForbidden, "no_active_game", "there is no active game")
+		return game.GameSession{}, false
+	}
+	if err != nil {
+		a.internalError(w, "resolve game link", err)
+		return game.GameSession{}, false
+	}
+	return gs, true
+}
+
+// startPlayerSession creates a player login session bound to gs and sets the
+// cookie. It reports false after writing an error response.
+func (a *api) startPlayerSession(w http.ResponseWriter, r *http.Request, acc auth.Account, gs game.GameSession) bool {
+	token, sess, err := a.d.Auth.CreatePlayerSession(r.Context(), acc.ID, gs.ID)
+	if err != nil {
+		a.internalError(w, "create player login session", err)
+		return false
+	}
+	setSessionCookie(w, r, token, sess)
+	return true
+}
+
+func (a *api) getGameLink(w http.ResponseWriter, r *http.Request) {
+	if a.rateLimited(w, ipKey(r)) {
+		return
+	}
+	gs, ok := a.resolveLink(w, r, r.PathValue("token"))
+	if !ok {
+		return
+	}
+	c, err := a.d.Game.GetCampaign(r.Context(), gs.CampaignID)
+	if err != nil {
+		a.internalError(w, "get campaign", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"campaignName": c.Name})
+}
+
+func (a *api) postRegister(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		GameLink    string `json:"gameLink"`
+		Login       string `json:"login"`
+		Password    string `json:"password"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid request body")
+		return
+	}
+	if a.rateLimited(w, ipKey(r)) {
+		return
+	}
+	gs, ok := a.resolveLink(w, r, req.GameLink)
+	if !ok {
+		return
+	}
+
+	acc, p, err := a.d.Game.RegisterPlayer(r.Context(), gs, req.Login, req.Password, req.DisplayName)
+	switch {
+	case errors.Is(err, auth.ErrInvalidLogin), errors.Is(err, auth.ErrInvalidPassword), errors.Is(err, game.ErrInvalidName):
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid login, password or display name")
+		return
+	case errors.Is(err, game.ErrLoginTaken):
+		writeError(w, http.StatusConflict, "conflict", "login is already taken")
+		return
+	case errors.Is(err, game.ErrNoActiveGame):
+		writeError(w, http.StatusForbidden, "no_active_game", "there is no active game")
+		return
+	case err != nil:
+		a.internalError(w, "register player", err)
+		return
+	}
+	if !a.startPlayerSession(w, r, acc, gs) {
+		return
+	}
+	a.d.Logger.Info("player registered", "ip", clientIP(r), "campaignId", p.CampaignID)
+	a.writeMe(w, r, http.StatusCreated, acc)
 }
 
 func (a *api) postLogout(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +378,7 @@ func (a *api) getMe(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		setSessionCookie(w, r, cookie.Value, sess)
 	}
-	writeJSON(w, http.StatusOK, newMe(acc))
+	a.writeMe(w, r, http.StatusOK, acc)
 }
 
 func (a *api) postPassword(w http.ResponseWriter, r *http.Request) {
