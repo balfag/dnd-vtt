@@ -27,6 +27,7 @@
 - [0004](adr/0004-dnd-5e-srd-5-2.md): D&D 5e 2024 / SRD 5.2
 - [0005](adr/0005-connectivity-ports-and-tunnel.md): подключение через проброс портов и туннель
 - [0006](adr/0006-wiki-gm-only-no-crdt.md): вики только для мастера, без CRDT
+- [0007](adr/0007-license-agpl-3.md): лицензия AGPL-3.0
 
 ## Процесс
 - [workflow.md](process/workflow.md): от Issue до мерджа
