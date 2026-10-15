@@ -34,6 +34,7 @@ type playerJSON struct {
 	Color        string `json:"color"`
 	Role         string `json:"role"`
 	Removed      bool   `json:"removed"`
+	Online       bool   `json:"online"`
 }
 
 func newCampaignJSON(c game.Campaign) campaignJSON {
@@ -137,6 +138,7 @@ func (a *api) startGameSession(w http.ResponseWriter, r *http.Request) {
 		a.gameError(w, "start game session", err)
 		return
 	}
+	a.d.Hub.GameStarted(r.Context())
 	// The link carries a secret token, so it is not logged.
 	a.d.Logger.Info("game session started", "campaignId", gs.CampaignID, "gameSessionId", gs.ID)
 	writeJSON(w, http.StatusCreated, startedGameJSON{
@@ -156,6 +158,7 @@ func (a *api) endGameSession(w http.ResponseWriter, r *http.Request) {
 		a.gameError(w, "end game session", err)
 		return
 	}
+	a.d.Hub.GameEnded(r.Context())
 	a.d.Logger.Info("game session ended", "gameSessionId", id)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -181,6 +184,7 @@ func (a *api) listPlayers(w http.ResponseWriter, r *http.Request) {
 		a.gameError(w, "list players", err)
 		return
 	}
+	online := a.d.Hub.Online()
 	out := make([]playerJSON, 0, len(players))
 	for _, p := range players {
 		out = append(out, playerJSON{
@@ -191,6 +195,7 @@ func (a *api) listPlayers(w http.ResponseWriter, r *http.Request) {
 			Color:        p.Color,
 			Role:         p.Role,
 			Removed:      p.Removed,
+			Online:       online[p.ID],
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -204,5 +209,6 @@ func (a *api) removePlayer(w http.ResponseWriter, r *http.Request) {
 		a.gameError(w, "remove player", err)
 		return
 	}
+	a.d.Hub.PlayerRemoved(r.PathValue("id"))
 	w.WriteHeader(http.StatusNoContent)
 }

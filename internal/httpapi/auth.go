@@ -266,6 +266,7 @@ func (a *api) postLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.startPlayerSession(w, r, acc, gs) {
 		return
 	}
+	a.d.Hub.PlayerJoined(r.Context(), p)
 	a.d.Logger.Info("player signed in", "ip", clientIP(r), "campaignId", p.CampaignID)
 	a.writeMe(w, r, http.StatusOK, acc)
 }
@@ -351,6 +352,7 @@ func (a *api) postRegister(w http.ResponseWriter, r *http.Request) {
 	if !a.startPlayerSession(w, r, acc, gs) {
 		return
 	}
+	a.d.Hub.PlayerJoined(r.Context(), p)
 	a.d.Logger.Info("player registered", "ip", clientIP(r), "campaignId", p.CampaignID)
 	a.writeMe(w, r, http.StatusCreated, acc)
 }
@@ -364,6 +366,7 @@ func (a *api) postLogout(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, "delete login session", err)
 		return
 	}
+	a.d.Hub.CloseSession(sess.ID)
 	clearSessionCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -412,5 +415,6 @@ func (a *api) postPassword(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, "change password", err)
 		return
 	}
+	a.d.Hub.CloseAccountSessions(acc.ID, sess.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
