@@ -65,7 +65,13 @@ git branch -a         # нет ли незавершённых веток
 | status | `status:needs-spec`, `status:ready`, `status:blocked` |
 | prio | `prio:p0` (блокер), `prio:p1` (важно), `prio:p2` (можно позже) |
 
-Создаются скриптом [`scripts/github-bootstrap.sh`](../../scripts/github-bootstrap.sh).
+Создаются скриптом [`scripts/github-bootstrap.ps1`](../../scripts/github-bootstrap.ps1):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/github-bootstrap.ps1
+```
+
+Служебные скрипты пишутся на PowerShell: основная платформа — Windows, а Git Bash/WSL не видят Windows-версию `gh` и падают при нехватке памяти.
 
 ## Spike-задачи
 
