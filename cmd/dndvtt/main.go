@@ -67,7 +67,8 @@ func run() int {
 	}
 	logger.Info("database ready", "path", dbPath, "schemaVersion", schemaVersion)
 
-	ln, err := net.Listen("tcp", cfg.HTTPAddr)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		logger.Error("listen", "addr", cfg.HTTPAddr, "err", err)
 		return 1
