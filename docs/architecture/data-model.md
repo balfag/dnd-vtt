@@ -1,6 +1,6 @@
 # Модель данных
 
-> Статус: `draft`. Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md)
+> Статус: `draft` (раздел «Аккаунты и игровые сессии» — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
 
 ## Хранение
 
@@ -17,11 +17,15 @@
 ## Сущности
 
 ```
+Account 1─* LoginSession *─0..1 GameSession
+   ├─* PasswordReset
+   └─* Player (участие в кампании)
+
 Campaign 1─* Scene 1─* Token *─0..1 Actor
    │            └─ FogMask (1:1)
    ├─* Actor (character | npc | monster) ─ sheet JSON
    ├─* Player (участник кампании) ─0..1 Actor (свой персонаж)
-   ├─* Invite
+   ├─* GameSession (игровая встреча)
    ├─* Asset
    ├─* ChatMessage / Roll
    ├─* CombatTracker 1─* Combatant
@@ -33,10 +37,29 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 `id, name, created_at, active_scene_id?, settings JSON`
 `name` — от 1 до 200 символов.
 
-### Player
-`id, campaign_id, display_name, color, role (gm|player|spectator), actor_id?, last_seen_at?, created_at`
-`display_name` — от 1 до 64 символов; `color` — `#rrggbb` в нижнем регистре.
-Игрок привязан к кампании и идентифицируется токеном сессии (см. [security.md](security.md)).
+### Аккаунты и игровые сессии
+
+Модель и сценарии — [ADR-0008](../adr/0008-accounts-and-game-sessions.md), правила доступа — [security.md](security.md). Все `*_hash` — `sha256` токена в hex (64 символа).
+
+#### Account
+`id, login, password_hash, is_gm, created_at, password_changed_at`
+`login` — 3–32 символа `[a-z0-9_.-]`, уникален. `password_hash` — argon2id в PHC-формате. `is_gm` — `0`/`1`, аккаунт с `is_gm = 1` не больше одного (частичный уникальный индекс).
+
+#### Player
+`id, campaign_id, account_id, display_name, color, role (gm|player), actor_id?, removed, last_seen_at?, created_at`
+Участник кампании: связь аккаунта с кампанией, уникальная пара `(campaign_id, account_id)`. `display_name` — от 1 до 64 символов; `color` — `#rrggbb` в нижнем регистре. `removed = 1` — мастер удалил участника: строка остаётся (на неё ссылаются сообщения чата и фишки), но войти в кампанию он не может. Роль `spectator` — позже.
+
+#### GameSession
+`id, campaign_id, link_hash, started_at, ended_at?`
+Одна игровая встреча. Активна, пока `ended_at IS NULL`; активной может быть не больше одной на установку (частичный уникальный индекс). `link_hash` — хеш токена ссылки на игру, уникален; «Сменить ссылку» перезаписывает его.
+
+#### LoginSession
+`id, account_id, game_session_id?, token_hash, created_at, last_seen_at, expires_at`
+Вход на одном устройстве. У мастера `game_session_id` пуст; у игрока заполнен, и сессия входа действует, только пока эта игровая сессия активна. Удаление аккаунта или игровой сессии удаляет и сессии входа (`ON DELETE CASCADE`).
+
+#### PasswordReset
+`id, account_id, token_hash, created_at, expires_at, used_at?`
+Одноразовая ссылка на сброс пароля, 30 минут.
 
 ### Scene
 `id, campaign_id, name, sort, background_asset_id?, width, height, grid JSON {type: square|hex, size_px, unit_ft, offset_x, offset_y, color, visible}, settings JSON`
@@ -70,10 +93,6 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 
 ### Asset
 `id, campaign_id, sha256, mime, size, original_name, kind (map|token|portrait|handout|audio|other), created_at`
-
-### Invite
-`id, campaign_id, token_hash, role (player|spectator), expires_at?, max_uses?, uses, revoked, created_at`
-`token_hash` — sha256 токена в hex (64 символа), уникален. Инвайта с ролью `gm` нет: мастер входит с loopback (см. [security.md](security.md)).
 
 ## Миграции
 
