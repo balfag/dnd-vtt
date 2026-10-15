@@ -17,6 +17,8 @@ type Config struct {
 	DataDir  string     // data directory (absolute after Load)
 	Dev      bool       // development mode
 	LogLevel slog.Level // minimum log level
+
+	OpenBrowser bool // open the GM sign-in link in the default browser on start
 }
 
 const defaultHTTPAddr = ":7777"
@@ -40,6 +42,15 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		devDefault = b
 	}
 
+	var openBrowserEnv, openBrowserEnvSet bool
+	if v := getenv("DNDVTT_OPEN_BROWSER"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid DNDVTT_OPEN_BROWSER %q: %w", v, err)
+		}
+		openBrowserEnv, openBrowserEnvSet = b, true
+	}
+
 	logLevelDefault := "info"
 	if v := getenv("DNDVTT_LOG_LEVEL"); v != "" {
 		logLevelDefault = v
@@ -50,8 +61,27 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 	dataDir := fs.String("data-dir", getenv("DNDVTT_DATA_DIR"), "data directory")
 	dev := fs.Bool("dev", devDefault, "development mode")
 	logLevel := fs.String("log-level", logLevelDefault, "log level: debug, info, warn, error")
+	// The default depends on the final -dev value, so it is resolved after
+	// parsing; only fs.Visit can tell an explicit -open-browser=false apart
+	// from an absent flag.
+	openBrowser := fs.Bool("open-browser", false, "open the GM sign-in link in the default browser on start (default: true unless -dev)")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
+	}
+	openSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "open-browser" {
+			openSet = true
+		}
+	})
+	var openBrowserValue bool
+	switch {
+	case openSet:
+		openBrowserValue = *openBrowser
+	case openBrowserEnvSet:
+		openBrowserValue = openBrowserEnv
+	default:
+		openBrowserValue = !*dev
 	}
 
 	if *httpAddr == "" {
@@ -83,5 +113,11 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("create data dir %q: %w", abs, err)
 	}
 
-	return Config{HTTPAddr: *httpAddr, DataDir: abs, Dev: *dev, LogLevel: level}, nil
+	return Config{
+		HTTPAddr:    *httpAddr,
+		DataDir:     abs,
+		Dev:         *dev,
+		LogLevel:    level,
+		OpenBrowser: openBrowserValue,
+	}, nil
 }

@@ -110,3 +110,32 @@ func TestLoadHelp(t *testing.T) {
 		t.Fatalf("err = %v, want flag.ErrHelp", err)
 	}
 }
+
+func TestLoadOpenBrowser(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		env     map[string]string
+		want    bool
+		wantErr bool
+	}{
+		{name: "default", want: true},
+		{name: "dev disables it", args: []string{"-dev"}, want: false},
+		{name: "env overrides dev default", args: []string{"-dev"}, env: map[string]string{"DNDVTT_OPEN_BROWSER": "1"}, want: true},
+		{name: "flag overrides env", args: []string{"-open-browser=false"}, env: map[string]string{"DNDVTT_OPEN_BROWSER": "1"}, want: false},
+		{name: "flag enables it in dev", args: []string{"-dev", "-open-browser"}, want: true},
+		{name: "bad env", env: map[string]string{"DNDVTT_OPEN_BROWSER": "maybe"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := append([]string{"-data-dir=" + t.TempDir()}, tt.args...)
+			got, err := Load(args, env(tt.env))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Load error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && got.OpenBrowser != tt.want {
+				t.Errorf("OpenBrowser = %v, want %v", got.OpenBrowser, tt.want)
+			}
+		})
+	}
+}
