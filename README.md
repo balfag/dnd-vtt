@@ -34,7 +34,7 @@
 
 ## Локальная разработка
 
-Нужны Go 1.25+, Node.js 22.12+ и pnpm 10.
+Нужны Go 1.26+, Node.js 22.12+ и pnpm 10.
 
 ```powershell
 pnpm -C web install

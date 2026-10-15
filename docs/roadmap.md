@@ -9,11 +9,13 @@
 Цель: пустое, но настоящее приложение, к которому можно подключиться по ссылке.
 
 - ✅ Документация и процесс (этот репозиторий)
-- ⬜ Скелет Go-сервера: `cmd/dndvtt`, конфиг, логирование, graceful shutdown
+- ✅ Скелет Go-сервера: `cmd/dndvtt`, конфиг, логирование, graceful shutdown
 - ⬜ Скелет клиента `web/` (Vite + React + TS + i18next), сборка и встраивание через `go:embed`
 - ⬜ SQLite-хранилище и миграции
-- ⬜ WebSocket-канал и базовый протокол (hello/presence/ping), см. [protocol.md](architecture/protocol.md)
-- ⬜ Инвайт-ссылки, роли GM/Player, сессии игроков, см. [security.md](architecture/security.md)
+- ⬜ Аккаунты и вход: первый запуск мастера, логин и пароль, сессии входа, см. [ADR-0008](adr/0008-accounts-and-game-sessions.md) и [security.md](architecture/security.md)
+- ⬜ Кампании (создание и список) и игровые сессии со ссылкой на игру; регистрация и вход игрока по ссылке; сброс пароля
+- ⬜ Клиентские страницы: `/setup`, `/login`, `/play/<token>`, `/reset/<token>`, экран мастера со списком кампаний
+- ⬜ WebSocket-канал и базовый протокол (`sync.hello`/`sync.snapshot`, presence, ping), см. [protocol.md](architecture/protocol.md)
 - ⬜ CI в GitHub Actions: lint, test, build под Windows/Linux
 - ⬜ **Spike:** WebRTC через pion — 3 участника с камерами в одной комнате по LAN
 - ⬜ **Spike:** доступность извне — проброс порта и выбор туннеля (UDP/TURN-TCP), см. [ADR-0005](adr/0005-connectivity-ports-and-tunnel.md)

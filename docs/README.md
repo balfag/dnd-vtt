@@ -11,7 +11,7 @@
 - [networking.md](architecture/networking.md): порты, проброс, туннель, STUN/TURN
 - [data-model.md](architecture/data-model.md): сущности и хранение
 - [protocol.md](architecture/protocol.md): WebSocket-протокол клиент↔сервер
-- [security.md](architecture/security.md): инвайты, роли, видимость данных
+- [security.md](architecture/security.md): аккаунты, вход, роли, видимость данных
 
 ## Системы
 - [vtt.md](systems/vtt.md): виртуальный стол
@@ -28,6 +28,7 @@
 - [0005](adr/0005-connectivity-ports-and-tunnel.md): подключение через проброс портов и туннель
 - [0006](adr/0006-wiki-gm-only-no-crdt.md): вики только для мастера, без CRDT
 - [0007](adr/0007-license-agpl-3.md): лицензия AGPL-3.0
+- [0008](adr/0008-accounts-and-game-sessions.md): локальные аккаунты и игровые сессии вместо инвайтов
 
 ## Процесс
 - [roles.md](process/roles.md): владелец, архитектор, исполнитель; статусы задач
