@@ -1,23 +1,50 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/store"
 )
 
-func newTestRouter() http.Handler {
-	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), "test", fstest.MapFS{})
+func newTestRouter(t *testing.T) http.Handler {
+	t.Helper()
+	return NewRouter(newTestDeps(t, fstest.MapFS{}))
+}
+
+// newTestDeps returns Deps backed by a fresh database in t.TempDir().
+func newTestDeps(t *testing.T, spa fs.FS) Deps {
+	t.Helper()
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	svc, err := auth.NewService(st.DB(), auth.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Deps{
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Version: "test",
+		SPA:     spa,
+		Auth:    svc,
+	}
 }
 
 func TestHealth(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newTestRouter().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	newTestRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -48,7 +75,7 @@ func TestRoutingErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			newTestRouter().ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
+			newTestRouter(t).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 			if rec.Code != tt.want {
 				t.Errorf("status = %d, want %d", rec.Code, tt.want)
 			}
