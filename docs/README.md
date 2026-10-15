@@ -31,9 +31,9 @@
 - [0006](adr/0006-wiki-gm-only-no-crdt.md): вики только для мастера, без CRDT
 - [0007](adr/0007-license-agpl-3.md): лицензия AGPL-3.0
 - [0008](adr/0008-accounts-and-game-sessions.md): локальные аккаунты и игровые сессии вместо инвайтов
-- [0009](adr/0009-rules-engine-content-as-data.md): правила 5e как данные и поэтапный движок правил (proposed)
-- [0010](adr/0010-local-mcp-server.md): MCP-сервер для ИИ-ассистента мастера (proposed)
-- [0011](adr/0011-community-content-library-github.md): общая библиотека контента на GitHub (proposed)
+- [0009](adr/0009-rules-engine-content-as-data.md): правила 5e как данные и поэтапный движок правил
+- [0010](adr/0010-local-mcp-server.md): MCP-сервер для ИИ-ассистента мастера
+- [0011](adr/0011-community-content-library-github.md): общая библиотека контента на GitHub
 
 ## Процесс
 - [roles.md](process/roles.md): владелец, архитектор, исполнитель; статусы задач
