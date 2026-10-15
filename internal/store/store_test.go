@@ -35,8 +35,8 @@ func TestOpenNonASCIIPath(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("database file missing: %v", err)
 	}
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 1 {
-		t.Errorf("SchemaVersion = %d, %v; want 1", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 2 {
+		t.Errorf("SchemaVersion = %d, %v; want 2", v, err)
 	}
 }
 
@@ -81,11 +81,11 @@ func TestReopen(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 1 {
-		t.Errorf("SchemaVersion = %d, %v; want 1", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 2 {
+		t.Errorf("SchemaVersion = %d, %v; want 2", v, err)
 	}
-	if n := countMigrations(t, s.DB()); n != 1 {
-		t.Errorf("schema_migrations rows = %d, want 1", n)
+	if n := countMigrations(t, s.DB()); n != 2 {
+		t.Errorf("schema_migrations rows = %d, want 2", n)
 	}
 }
 
@@ -148,4 +148,68 @@ func TestForeignKeysEnforced(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
 		t.Fatalf("err = %v, want FOREIGN KEY violation", err)
 	}
+}
+
+func TestAccountSchema(t *testing.T) {
+	s := openStore(t)
+	db := s.DB()
+
+	const hash = "$argon2id$v=19$x"
+	insert := func(id, login, hash string, isGM int) error {
+		_, err := db.Exec(
+			`INSERT INTO account (id, login, password_hash, is_gm, created_at, password_changed_at) VALUES (?, ?, ?, ?, 1, 1)`,
+			id, login, hash, isGM)
+		return err
+	}
+
+	tests := []struct {
+		name    string
+		id      string
+		login   string
+		hash    string
+		isGM    int
+		wantErr bool
+	}{
+		{"gm", "a1", "anna", hash, 1, false},
+		{"player with punctuation", "a2", "bob.smith-1_x", hash, 0, false},
+		{"uppercase login", "a3", "Anna2", hash, 0, true},
+		{"too short login", "a4", "ab", hash, 0, true},
+		{"login with space", "a5", "bad login", hash, 0, true},
+		{"non-ascii login", "a6", "юзер", hash, 0, true},
+		{"login of 33 chars", "a7", strings.Repeat("a", 33), hash, 0, true},
+		{"wrong hash algorithm", "a8", "carol", "$argon2i$v=19$x", 0, true},
+		{"second gm", "a9", "dave", hash, 1, true},
+		{"duplicate login", "a10", "anna", hash, 0, true},
+	}
+	// Subtests run in order: later ones rely on the rows inserted by earlier ones.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := insert(tt.id, tt.login, tt.hash, tt.isGM)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+
+	t.Run("session of unknown account", func(t *testing.T) {
+		_, err := db.Exec(`INSERT INTO login_session (id, account_id, token_hash, created_at, last_seen_at, expires_at)
+			VALUES ('s0', 'nope', ?, 1, 1, 2)`, strings.Repeat("a", 64))
+		if err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
+			t.Fatalf("err = %v, want FOREIGN KEY violation", err)
+		}
+	})
+
+	t.Run("deleting account cascades to sessions", func(t *testing.T) {
+		if _, err := db.Exec(`INSERT INTO login_session (id, account_id, token_hash, created_at, last_seen_at, expires_at)
+			VALUES ('s1', 'a2', ?, 1, 1, 2)`, strings.Repeat("b", 64)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`DELETE FROM account WHERE id = 'a2'`); err != nil {
+			t.Fatal(err)
+		}
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM login_session`).Scan(&n); err != nil || n != 0 {
+			t.Errorf("sessions left = %d, %v; want 0", n, err)
+		}
+	})
 }
