@@ -48,15 +48,20 @@ func newCampaignJSON(c game.Campaign) campaignJSON {
 	return out
 }
 
-// gameLinkURL builds the link players open: the scheme and host the GM used
-// for this request, then /play/<token>. The external address (port forwarding
-// or tunnel) is decided by spike #8 and will replace this.
-func gameLinkURL(r *http.Request, token string) string {
+// publicURL builds an absolute link to path: the scheme and host the GM used
+// for this request. The external address (port forwarding or tunnel) is
+// decided by spike #8 and will replace this.
+func publicURL(r *http.Request, path string) string {
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + r.Host + "/play/" + token
+	return scheme + "://" + r.Host + path
+}
+
+// gameLinkURL builds the link players open: /play/<token>.
+func gameLinkURL(r *http.Request, token string) string {
+	return publicURL(r, "/play/"+token)
 }
 
 // gameError answers with the response matching a game.Service error.
