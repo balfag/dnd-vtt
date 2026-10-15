@@ -5,6 +5,7 @@ go 1.26.0
 ignore ./web/node_modules
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/oklog/ulid/v2 v2.1.2
 	golang.org/x/crypto v0.58.0
 	modernc.org/sqlite v1.60.1
