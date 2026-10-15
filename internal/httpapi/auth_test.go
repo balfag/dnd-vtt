@@ -385,6 +385,30 @@ func TestMeAndLogout(t *testing.T) {
 	}
 }
 
+// TestMeRefreshesCookie checks that the browser cookie follows a GM session
+// the service has just extended; otherwise the GM would be signed out 30 days
+// after the first sign-in even when using the app daily.
+func TestMeRefreshesCookie(t *testing.T) {
+	f := newAPIFixture(t)
+	cookie := sessionCookie(t, f.createGM())
+
+	// Past the renewal interval, so ResolveSession extends the session.
+	f.clock = f.clock.Add(2 * time.Hour)
+	rec := f.do(http.MethodGet, "/api/auth/me", "", withCookie(cookie))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("me = %d %s", rec.Code, rec.Body.String())
+	}
+	got := sessionCookie(t, rec)
+	if got.Value != cookie.Value {
+		t.Errorf("refreshed cookie value differs from the session token")
+	}
+	// Cookie Expires has one-second precision.
+	want := f.clock.Add(auth.GMSessionTTL).Truncate(time.Second)
+	if !got.Expires.Equal(want) {
+		t.Errorf("cookie Expires = %v, want %v (renewed session expiry)", got.Expires, want)
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	f := newAPIFixture(t)
 	a := sessionCookie(t, f.createGM())
