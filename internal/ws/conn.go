@@ -14,11 +14,14 @@ import (
 // conn is one WebSocket connection. Only the read loop touches helloDone and
 // the limiter state; out is the only way to write to the socket.
 type conn struct {
-	hub      *Hub
-	c        *websocket.Conn
-	acc      auth.Account
-	sess     auth.Session
-	playerID string // "" for a GM outside a game
+	hub  *Hub
+	c    *websocket.Conn
+	acc  auth.Account
+	sess auth.Session
+
+	// playerID and subscribed are guarded by hub.mu.
+	playerID   string // "" for a GM outside a game
+	subscribed bool   // gets events after the snapshot or the resume
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -92,6 +95,11 @@ func (cn *conn) send(env protocol.Envelope) {
 		cn.hub.logger.Error("ws: marshal envelope", "type", env.T, "err", err)
 		return
 	}
+	cn.sendRaw(b)
+}
+
+// sendRaw queues an already marshalled frame; a full queue closes the connection with 1013.
+func (cn *conn) sendRaw(b []byte) {
 	select {
 	case cn.out <- b:
 	default:
@@ -120,9 +128,10 @@ func (cn *conn) sendError(re, code, message string) {
 	cn.send(env)
 }
 
-// allow spends one token of the rate limiter. exceeded reports that the run of
-// rejections lasted RateGrace and the connection must be closed.
-func (cn *conn) allow(now time.Time) (ok, exceeded bool) {
+// allow spends one token of the rate limiter. firstInRun reports that this
+// rejection started a new run of rejections; exceeded reports that the run
+// lasted RateGrace and the connection must be closed.
+func (cn *conn) allow(now time.Time) (ok, firstInRun, exceeded bool) {
 	o := cn.hub.opts
 	if dt := now.Sub(cn.lastRefill); dt > 0 {
 		cn.tokens += o.RatePerSec * dt.Seconds()
@@ -133,15 +142,16 @@ func (cn *conn) allow(now time.Time) (ok, exceeded bool) {
 	}
 	if cn.tokens >= 1 {
 		cn.tokens--
-		return true, false
+		return true, false, false
 	}
 	// Passed messages do not end a run: with a steady flood a token appears
 	// every 1/RatePerSec, and the run would never reach RateGrace.
 	if cn.runStart.IsZero() || now.Sub(cn.lastReject) >= o.RateQuiet {
 		cn.runStart = now
+		firstInRun = true
 	}
 	cn.lastReject = now
-	return false, now.Sub(cn.runStart) >= o.RateGrace
+	return false, firstInRun, now.Sub(cn.runStart) >= o.RateGrace
 }
 
 // handle processes one text frame. It returns false when the read loop must stop.
@@ -151,9 +161,12 @@ func (cn *conn) handle(data []byte) bool {
 	var env protocol.Envelope
 	parseErr := json.Unmarshal(data, &env)
 
-	ok, exceeded := cn.allow(cn.hub.opts.Now())
+	ok, firstInRun, exceeded := cn.allow(cn.hub.opts.Now())
 	if !ok {
-		cn.sendError(env.ID, protocol.CodeRateLimited, "too many messages")
+		// One reply per run: answering every rejection would amplify a flood.
+		if firstInRun {
+			cn.sendError(env.ID, protocol.CodeRateLimited, "too many messages")
+		}
 		if exceeded {
 			_ = cn.c.Close(protocol.CloseRateLimited, "rate limited")
 			return false
@@ -179,16 +192,42 @@ func (cn *conn) handle(data []byte) bool {
 }
 
 func (cn *conn) handleHello(env protocol.Envelope) {
+	var hello protocol.Hello
 	if len(env.D) > 0 {
-		var hello protocol.Hello
 		if err := json.Unmarshal(env.D, &hello); err != nil {
 			cn.sendError(env.ID, protocol.CodeBadRequest, "invalid hello data")
 			return
 		}
 	}
-	snap, err := cn.hub.snapshot(cn.ctx, cn)
+
+	h := cn.hub
+	// The snapshot (or the resume) and the subscription happen under one lock,
+	// so no event falls between the state the client gets and the stream.
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := h.syncGameLocked(cn.ctx); err != nil {
+		h.logger.Error("ws: sync game state", "err", err)
+		cn.sendError(env.ID, protocol.CodeInternal, "internal error")
+		return
+	}
+
+	if h.canResumeLocked(hello) {
+		if env.ID != "" {
+			cn.sendNew(protocol.TypeAck, env.ID, protocol.HelloAck{Resumed: true})
+		}
+		for _, ev := range h.state.events {
+			if ev.seq > hello.LastSeq {
+				cn.sendRaw(ev.frame)
+			}
+		}
+		cn.subscribed = true
+		cn.helloDone = true
+		return
+	}
+
+	snap, err := h.snapshotLocked(cn.ctx, cn)
 	if err != nil {
-		cn.hub.logger.Error("ws: build snapshot", "err", err)
+		h.logger.Error("ws: build snapshot", "err", err)
 		cn.sendError(env.ID, protocol.CodeInternal, "internal error")
 		return
 	}
@@ -196,5 +235,6 @@ func (cn *conn) handleHello(env protocol.Envelope) {
 		cn.sendNew(protocol.TypeAck, env.ID, protocol.HelloAck{Resumed: false})
 	}
 	cn.sendNew(protocol.TypeSnapshot, "", snap)
+	cn.subscribed = true
 	cn.helloDone = true
 }
