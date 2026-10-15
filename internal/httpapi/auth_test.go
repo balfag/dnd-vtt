@@ -20,6 +20,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
+	"github.com/balfag/dnd-vtt/internal/ws"
 )
 
 const (
@@ -57,12 +58,14 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		t.Fatal(err)
 	}
 	f.game = game.NewService(f.db, game.Options{Now: now})
+	logger := slog.New(slog.NewTextHandler(f.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	f.h = NewRouter(Deps{
-		Logger:  slog.New(slog.NewTextHandler(f.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		Logger:  logger,
 		Version: "test",
 		SPA:     fstest.MapFS{},
 		Auth:    f.svc,
 		Game:    f.game,
+		Hub:     ws.NewHub(f.game, logger, ws.Options{}),
 		Now:     now,
 	})
 	return f

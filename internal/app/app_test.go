@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
@@ -201,4 +203,91 @@ func TestAnnounce(t *testing.T) {
 			t.Error("logs contain the sign-in URL")
 		}
 	})
+}
+
+func TestRunClosesWebSocketsOnShutdown(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	a, err := New(config.Config{}, logger, "test", st.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.out = io.Discard
+
+	// Create the GM and a login session directly: Run's own sign-in link
+	// would replace a setup token issued concurrently.
+	setup, err := a.auth.IssueSetupToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm, err := a.auth.CreateGM(ctx, setup, "master", "master-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionToken, _, err := a.auth.CreateSession(ctx, gm.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := "dndvtt_session=" + sessionToken
+
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx, ln) }()
+
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dialCancel()
+	c, resp, err := websocket.Dial(dialCtx, "ws://"+ln.Addr().String()+"/ws", &websocket.DialOptions{
+		HTTPHeader: http.Header{"Cookie": {cookie}},
+	})
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	if resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	t.Cleanup(func() { _ = c.CloseNow() })
+	// The first reply proves the hub has registered the connection.
+	if err := c.Write(dialCtx, websocket.MessageText, []byte(`{"t":"sync.hello","d":{}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := c.Read(dialCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	status := make(chan websocket.StatusCode, 1)
+	go func() {
+		for {
+			if _, _, err := c.Read(dialCtx); err != nil {
+				status <- websocket.CloseStatus(err)
+				return
+			}
+		}
+	}()
+
+	cancel()
+	select {
+	case got := <-status:
+		if got != websocket.StatusGoingAway {
+			t.Fatalf("close = %d, want 1001", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("websocket was not closed within 2s after cancel")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return within 2s after cancel")
+	}
 }
