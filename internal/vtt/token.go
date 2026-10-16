@@ -46,7 +46,10 @@ type tokenScene struct {
 	width  int
 	height int
 	active bool
+	fog    protocol.Fog
 }
+
+func (sc tokenScene) state() sceneState { return sceneState{Active: sc.active, Fog: sc.fog} }
 
 const rowSelect = `SELECT t.id, t.scene_id, t.layer, t.x, t.y, t.w, t.h, t.rotation, t.z, t.name, t.name_visibility,
 	t.image_asset_id, t.hidden, t.locked, t.owners, t.bars, t.conditions FROM token t`
@@ -135,7 +138,7 @@ func loadTokenScene(ctx context.Context, q queryer, campaignID, sceneID string) 
 	if err != nil {
 		return tokenScene{}, err
 	}
-	return tokenScene{id: row.id, width: row.width, height: row.height, active: active == row.id}, nil
+	return tokenScene{id: row.id, width: row.width, height: row.height, active: active == row.id, fog: row.fog}, nil
 }
 
 func finite(ns ...float64) bool {
@@ -402,7 +405,7 @@ func (s *Service) CreateToken(ctx context.Context, campaignID string, in protoco
 			t.Hidden, t.Locked, owners, bars, conditions, nowMs, nowMs); err != nil {
 			return fmt.Errorf("insert token: %w", err)
 		}
-		res = TokenResult{Token: t, State: sceneState{Active: sc.active}}
+		res = TokenResult{Token: t, State: sc.state()}
 		return nil
 	})
 	return res, err
@@ -437,7 +440,7 @@ func (s *Service) UpdateToken(ctx context.Context, campaignID string, in protoco
 		if err := s.saveToken(ctx, tx, t); err != nil {
 			return err
 		}
-		res = TokenResult{Token: t, State: sceneState{Active: sc.active}}
+		res = TokenResult{Token: t, State: sc.state()}
 		return nil
 	})
 	return res, err
@@ -452,7 +455,7 @@ func (s *Service) MoveToken(ctx context.Context, campaignID string, in protocol.
 		if err != nil {
 			return err
 		}
-		state := sceneState{Active: sc.active}
+		state := sc.state()
 		if err := mayMove(t, state); err != nil {
 			return err
 		}
@@ -478,7 +481,7 @@ func (s *Service) CheckDrag(ctx context.Context, campaignID string, in protocol.
 	if err != nil {
 		return TokenResult{}, false, err
 	}
-	state := sceneState{Active: sc.active}
+	state := sc.state()
 	if mayMove(t, state) != nil || !finite(in.X, in.Y) ||
 		in.X < 0 || in.X > float64(sc.width) || in.Y < 0 || in.Y > float64(sc.height) {
 		return TokenResult{}, false, nil
@@ -497,7 +500,7 @@ func (s *Service) DeleteToken(ctx context.Context, campaignID, tokenID string) (
 		if _, err := tx.ExecContext(ctx, `DELETE FROM token WHERE id = ?`, tokenID); err != nil {
 			return fmt.Errorf("delete token: %w", err)
 		}
-		res = TokenResult{Token: t, State: sceneState{Active: sc.active}}
+		res = TokenResult{Token: t, State: sc.state()}
 		return nil
 	})
 	return res, err
@@ -516,13 +519,17 @@ func (s *Service) PlayerCanSeeTokenImage(ctx context.Context, campaignID, player
 	if err != nil || active == "" {
 		return false, err
 	}
+	scene, err := loadScene(ctx, s.db, campaignID, active)
+	if err != nil {
+		return false, err
+	}
 	tokens, err := listTokens(ctx, s.db, active)
 	if err != nil {
 		return false, err
 	}
 	v := ws.Viewer{PlayerID: playerID}
 	for _, t := range tokens {
-		if t.Image != nil && t.Image.AssetID == assetID && TokenVisible(t, v, sceneState{Active: true}) {
+		if t.Image != nil && t.Image.AssetID == assetID && TokenVisible(t, v, sceneState{Active: true, Fog: scene.fog}) {
 			return true, nil
 		}
 	}

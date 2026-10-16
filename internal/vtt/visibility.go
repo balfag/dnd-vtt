@@ -9,14 +9,14 @@ import (
 
 // sceneState is what visibility needs to know about a token's scene at emit time.
 type sceneState struct {
-	Active bool // the scene is the campaign's active scene
-	// #51 adds the fog here.
+	Active bool         // the scene is the campaign's active scene
+	Fog    protocol.Fog // the fog of the scene
 }
 
 // TokenVisible reports whether v sees t (protocol.md, «Видимость фишки для игрока»):
 // the GM sees everything; a player sees tokens of the active scene only, never
 // layer gm; an owner sees own tokens even when hidden; others see tokens that
-// are not hidden. #51 adds the fog condition for non-owners.
+// are not hidden and, with the fog on, stand in a revealed place.
 func TokenVisible(t protocol.Token, v ws.Viewer, s sceneState) bool {
 	if v.IsGM {
 		return true
@@ -27,7 +27,7 @@ func TokenVisible(t protocol.Token, v ws.Viewer, s sceneState) bool {
 	if owns(t, v) {
 		return true
 	}
-	return !t.Hidden
+	return !t.Hidden && revealed(s.Fog, t.X, t.Y)
 }
 
 func owns(t protocol.Token, v ws.Viewer) bool {
