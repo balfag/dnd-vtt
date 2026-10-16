@@ -1,0 +1,18 @@
+{
+  "t": "scene.create",
+  "id": "c-3",
+  "d": {
+    "name": "Таверна",
+    "width": 3000,
+    "height": 2000,
+    "grid": {
+      "type": "square",
+      "sizePx": 70,
+      "unitFt": 5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "color": "#9aa8b3",
+      "visible": true
+    }
+  }
+}

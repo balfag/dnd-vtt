@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"image"
 	"image/png"
 	"mime/multipart"
@@ -13,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/balfag/dnd-vtt/internal/asset"
+	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
 
 type multipartPart struct {
@@ -275,5 +278,86 @@ func TestAssetUploadChecksOrigin(t *testing.T) {
 		withHeader("Content-Type", contentType), withHeader("Origin", "http://evil.example"), withCookie(f.gm))
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("foreign Origin = %d, want 403", rec.Code)
+	}
+}
+
+func TestPlayerReadsTheBackgroundOfTheActiveSceneOnly(t *testing.T) {
+	f := newAssetFixture(t, asset.Options{})
+	ctx := context.Background()
+	bgA := f.mustUpload("a.png", testPNG(t, 300, 200))
+	bgB := f.mustUpload("b.png", testPNG(t, 301, 200))
+	plain := f.mustUpload("c.png", testPNG(t, 302, 200))
+
+	sceneA, err := f.vtt.CreateScene(ctx, f.campaignID, protocol.SceneCreate{Name: "A"}) // becomes active
+	if err != nil {
+		t.Fatal(err)
+	}
+	sceneB, err := f.vtt.CreateScene(ctx, f.campaignID, protocol.SceneCreate{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for scene, bg := range map[string]string{sceneA.SceneID: bgA.ID, sceneB.SceneID: bgB.ID} {
+		if _, err := f.vtt.UpdateScene(ctx, f.campaignID, protocol.SceneUpdate{SceneID: scene, BackgroundAssetID: json.RawMessage(`"` + bg + `"`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gsID, link := f.startGame(f.gm, f.campaignID)
+	bob, _ := f.playerSession(link, "bob")
+
+	status := func(a assetJSON) int {
+		return f.do(http.MethodGet, a.URL, "", withCookie(bob)).Code
+	}
+	if got := status(bgA); got != http.StatusOK {
+		t.Errorf("background of the active scene = %d, want 200", got)
+	}
+	if got := status(bgB); got != http.StatusNotFound {
+		t.Errorf("background of an inactive scene = %d, want 404", got)
+	}
+	if got := status(plain); got != http.StatusNotFound {
+		t.Errorf("an asset that is no background = %d, want 404", got)
+	}
+
+	if _, err := f.vtt.ActivateScene(ctx, f.campaignID, sceneB.SceneID); err != nil {
+		t.Fatal(err)
+	}
+	if got := status(bgA); got != http.StatusNotFound {
+		t.Errorf("the old background after another scene was activated = %d, want 404", got)
+	}
+	if got := status(bgB); got != http.StatusOK {
+		t.Errorf("the new background = %d, want 200", got)
+	}
+
+	// The GM still reads everything.
+	if got := f.do(http.MethodGet, plain.URL, "", withCookie(f.gm)).Code; got != http.StatusOK {
+		t.Errorf("GM reads any asset: %d", got)
+	}
+
+	// A login session of an ended game is gone: the player is signed out.
+	if rec := f.do(http.MethodPost, "/api/game-sessions/"+gsID+"/end", "", withCookie(f.gm)); rec.Code != http.StatusNoContent {
+		t.Fatalf("end game = %d", rec.Code)
+	}
+	if got := status(bgB); got != http.StatusUnauthorized {
+		t.Errorf("after the game ended = %d, want 401", got)
+	}
+}
+
+func TestPlayerOfAnotherCampaignDoesNotReadTheBackground(t *testing.T) {
+	f := newAssetFixture(t, asset.Options{})
+	ctx := context.Background()
+	bg := f.mustUpload("a.png", testPNG(t, 300, 200))
+	scene, err := f.vtt.CreateScene(ctx, f.campaignID, protocol.SceneCreate{Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.vtt.UpdateScene(ctx, f.campaignID, protocol.SceneUpdate{SceneID: scene.SceneID, BackgroundAssetID: json.RawMessage(`"` + bg.ID + `"`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The game runs in another campaign; its player must not see this background.
+	otherID := f.createCampaign(f.gm, "Other")
+	_, link := f.startGame(f.gm, otherID)
+	bob, _ := f.playerSession(link, "bob")
+	if got := f.do(http.MethodGet, bg.URL, "", withCookie(bob)).Code; got != http.StatusNotFound {
+		t.Errorf("background of a campaign without a game = %d, want 404", got)
 	}
 }

@@ -1,0 +1,9 @@
+{
+  "t": "scene.update",
+  "id": "c-4",
+  "d": {
+    "sceneId": "01J00000000000000000000SC1",
+    "name": "Таверна «Дракон»",
+    "backgroundAssetId": null
+  }
+}

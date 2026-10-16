@@ -21,6 +21,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
+	"github.com/balfag/dnd-vtt/internal/vtt"
 	"github.com/balfag/dnd-vtt/internal/ws"
 )
 
@@ -34,6 +35,7 @@ type apiFixture struct {
 	h     http.Handler
 	svc   *auth.Service
 	game  *game.Service
+	vtt   *vtt.Service
 	db    *sql.DB
 	clock time.Time
 	logs  *bytes.Buffer
@@ -65,6 +67,7 @@ func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 		t.Fatal(err)
 	}
 	f.game = game.NewService(f.db, game.Options{Now: now})
+	f.vtt = vtt.NewService(f.db, vtt.Options{Now: now})
 	logger := slog.New(slog.NewTextHandler(f.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	f.h = NewRouter(Deps{
 		Logger:  logger,
@@ -74,6 +77,7 @@ func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 		Game:    f.game,
 		Hub:     ws.NewHub(f.game, logger, ws.Options{}),
 		Assets:  asset.NewService(f.db, t.TempDir(), opts),
+		VTT:     f.vtt,
 		Now:     now,
 	})
 	return f
