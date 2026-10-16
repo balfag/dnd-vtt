@@ -1,0 +1,29 @@
+{
+  "t": "ack",
+  "re": "c-5",
+  "d": {
+    "scene": {
+      "id": "01J00000000000000000000SC1",
+      "name": "Таверна",
+      "width": 3000,
+      "height": 2000,
+      "grid": {
+        "type": "square",
+        "sizePx": 70,
+        "unitFt": 5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "color": "#9aa8b3",
+        "visible": true
+      },
+      "background": {
+        "assetId": "01J00000000000000000000AS1",
+        "url": "/assets/01J00000000000000000000AS1"
+      },
+      "fog": {
+        "enabled": false,
+        "ops": []
+      }
+    }
+  }
+}

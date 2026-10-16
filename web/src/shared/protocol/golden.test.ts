@@ -9,7 +9,14 @@ import ping from '../../../../internal/ws/protocol/testdata/ping.json'
 import pong from '../../../../internal/ws/protocol/testdata/pong.json'
 import presenceNewPlayer from '../../../../internal/ws/protocol/testdata/presence_new_player.json'
 import presenceOffline from '../../../../internal/ws/protocol/testdata/presence_offline.json'
+import sceneActivated from '../../../../internal/ws/protocol/testdata/scene_activated.json'
+import sceneChanged from '../../../../internal/ws/protocol/testdata/scene_changed.json'
+import sceneCreateExample from '../../../../internal/ws/protocol/testdata/scene_create_command.json'
+import sceneUpdateExample from '../../../../internal/ws/protocol/testdata/scene_update_command.json'
+import sceneViewAck from '../../../../internal/ws/protocol/testdata/scene_view_ack.json'
+import scenesChanged from '../../../../internal/ws/protocol/testdata/scenes_changed.json'
 import snapshotGmNoGame from '../../../../internal/ws/protocol/testdata/snapshot_gm_no_game.json'
+import snapshotGmScenes from '../../../../internal/ws/protocol/testdata/snapshot_gm_scenes.json'
 import snapshotPlayer from '../../../../internal/ws/protocol/testdata/snapshot_player.json'
 import {
   helloCommand,
@@ -19,8 +26,16 @@ import {
   isNoop,
   isPong,
   isPresence,
+  isSceneActivated,
+  isSceneChanged,
+  isSceneViewAck,
+  isScenesChanged,
   isSnapshot,
   pingCommand,
+  sceneCreateCommand,
+  sceneReorderCommand,
+  sceneRefCommand,
+  sceneUpdateCommand,
 } from './index'
 
 type Guard = (v: unknown) => boolean
@@ -31,6 +46,11 @@ describe('server examples pass their guards', () => {
     ['hello_ack_fresh', helloAckFresh, isHelloAck],
     ['snapshot_player', snapshotPlayer, isSnapshot],
     ['snapshot_gm_no_game', snapshotGmNoGame, isSnapshot],
+    ['snapshot_gm_scenes', snapshotGmScenes, isSnapshot],
+    ['scenes_changed', scenesChanged, isScenesChanged],
+    ['scene_changed', sceneChanged, isSceneChanged],
+    ['scene_activated', sceneActivated, isSceneActivated],
+    ['scene_view_ack', sceneViewAck, isSceneViewAck],
     ['presence_offline', presenceOffline, isPresence],
     ['presence_new_player', presenceNewPlayer, isPresence],
     ['noop', noop, isNoop],
@@ -43,7 +63,13 @@ describe('server examples pass their guards', () => {
   })
 
   it('client examples are envelopes too', () => {
-    for (const example of [helloCommandExample, helloEmptyCommand, ping]) {
+    for (const example of [
+      helloCommandExample,
+      helloEmptyCommand,
+      ping,
+      sceneCreateExample,
+      sceneUpdateExample,
+    ]) {
       expect(isEnvelope(example)).toBe(true)
     }
   })
@@ -58,6 +84,48 @@ describe('command builders match the examples', () => {
 
   it('helloCommand without data', () => {
     expect(helloCommand('c-1', {})).toStrictEqual(helloEmptyCommand)
+  })
+
+  it('sceneCreateCommand', () => {
+    expect(
+      sceneCreateCommand('c-3', {
+        name: 'Таверна',
+        width: 3000,
+        height: 2000,
+        grid: {
+          type: 'square',
+          sizePx: 70,
+          unitFt: 5,
+          offsetX: 0,
+          offsetY: 0,
+          color: '#9aa8b3',
+          visible: true,
+        },
+      }),
+    ).toStrictEqual(sceneCreateExample)
+  })
+
+  it('sceneUpdateCommand keeps backgroundAssetId: null', () => {
+    expect(
+      sceneUpdateCommand('c-4', {
+        sceneId: '01J00000000000000000000SC1',
+        name: 'Таверна «Дракон»',
+        backgroundAssetId: null,
+      }),
+    ).toStrictEqual(sceneUpdateExample)
+  })
+
+  it('scene ref and reorder commands', () => {
+    expect(sceneRefCommand('scene.activate', 'c-6', 'S1')).toStrictEqual({
+      t: 'scene.activate',
+      id: 'c-6',
+      d: { sceneId: 'S1' },
+    })
+    expect(sceneReorderCommand('c-7', ['S2', 'S1'])).toStrictEqual({
+      t: 'scene.reorder',
+      id: 'c-7',
+      d: { sceneIds: ['S2', 'S1'] },
+    })
   })
 
   it('pingCommand has no d field', () => {
@@ -130,6 +198,36 @@ describe('guards reject damaged messages', () => {
       corrupt(helloAckResumed, ['d', 'resumed'], undefined, true),
     ],
     ['error code is unknown', isErrorMessage, corrupt(errorBadRequest, ['d', 'code'], 'oops')],
+    [
+      'scene grid type is unknown',
+      isSceneChanged,
+      corrupt(sceneChanged, ['d', 'scene', 'grid', 'type'], 'octagon'),
+    ],
+    [
+      'scene grid color in upper case',
+      isSceneChanged,
+      corrupt(sceneChanged, ['d', 'scene', 'grid', 'color'], '#9AA8B3'),
+    ],
+    [
+      'scene fog ops is not an array',
+      isSceneActivated,
+      corrupt(sceneActivated, ['d', 'scene', 'fog', 'ops'], {}),
+    ],
+    [
+      'snapshot of a player lacks the scene',
+      isSnapshot,
+      corrupt(snapshotPlayer, ['d', 'game', 'scene'], undefined, true),
+    ],
+    [
+      'snapshot scenes is not an array',
+      isSnapshot,
+      corrupt(snapshotGmScenes, ['d', 'game', 'scenes'], null),
+    ],
+    [
+      'scenes_changed sort is negative',
+      isScenesChanged,
+      corrupt(scenesChanged, ['d', 'scenes', '0', 'sort'], -1),
+    ],
     ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
     ['noop has data', isNoop, corrupt(noop, ['d'], {})],
     ['isEnvelope(null)', isEnvelope, null],
