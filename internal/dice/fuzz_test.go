@@ -2,6 +2,7 @@ package dice
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ func FuzzParse(f *testing.F) {
 	}
 	for _, s := range []string{
 		"", "2d6+", "2d", "2d1", "0d6", "101d6", "2d6kh3", "2d6kh1kl1", "1d6r<=6", "1 0d6", "2d6x", "2d6ж",
-		"100d6+100d6+1d6", "1d6r>=1", "d", "-", "+-", "1d%!!", "99999999999999999999d6",
+		"100d6+100d6+1d6", "1d6r>=1", "d", "-", "+-", "1d%!!", "99999999999999999999d6", strings.Repeat("ж", 101),
 	} {
 		f.Add(s)
 	}

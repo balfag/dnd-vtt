@@ -88,6 +88,8 @@ func TestParseErrors(t *testing.T) {
 		{"huge constant", "99999999999999999999999", 0},
 		{"huge count", "99999999999999999999d6", 0},
 		{"too long", strings.Repeat("1", 201), 200},
+		// 101 runes are 202 bytes: the limit counts runes, so this is short enough.
+		{"length is counted in runes", strings.Repeat("ж", 101), 0},
 		{"21 terms", terms21, 40},
 		{"sum of dice over 200", "100d6+100d6+1d6", 12},
 	}
