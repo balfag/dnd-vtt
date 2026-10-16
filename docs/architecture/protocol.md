@@ -277,11 +277,11 @@
 
 | Команда | Данные | Ответ `ack` | Событие |
 |---------|--------|-------------|---------|
-| `scene.create` | `{ "name", "width"?, "height"?, "grid"? }` | `{ "sceneId" }` | `scenes.changed` |
+| `scene.create` | `{ "name", "width"?, "height"?, "grid"? }` | `{ "sceneId" }` | `scenes.changed`; если активной сцены нет — затем `scene.activated` |
 | `scene.update` | `{ "sceneId", "name"?, "width"?, "height"?, "grid"?, "backgroundAssetId"? }` (`null` — убрать фон) | — | `scene.changed` |
 | `scene.delete` | `{ "sceneId" }`; активную удалить нельзя → `conflict` | — | `scenes.changed` |
 | `scene.reorder` | `{ "sceneIds": [ … ] }` — полный порядок | — | `scenes.changed` |
-| `scene.activate` | `{ "sceneId" }`; первая созданная сцена становится активной сама | — | `scene.activated` |
+| `scene.activate` | `{ "sceneId" }` | — | `scene.activated` |
 | `scene.view` | `{ "sceneId" }` — что смотрит **этот** мастерский клиент | `{ "scene": SceneView }` | — |
 
 События:
