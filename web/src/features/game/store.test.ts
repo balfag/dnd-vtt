@@ -28,6 +28,9 @@ function snapshot(seq = 4): Snapshot {
       startedAt: 1000,
       campaign: { id: 'c1', name: 'Campaign' },
       players: [gm, ann],
+      activeSceneId: null,
+      scenes: [],
+      scene: null,
     },
   }
 }

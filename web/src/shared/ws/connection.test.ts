@@ -17,6 +17,9 @@ const snapshot = (seq: number, gameSessionId = 'g1') => ({
         { id: 'p1', displayName: 'GM', color: '#aa0000', role: 'gm', online: true },
         { id: 'p2', displayName: 'Ann', color: '#00aa00', role: 'player', online: true },
       ],
+      activeSceneId: null,
+      scenes: [],
+      scene: null,
     },
   },
 })
