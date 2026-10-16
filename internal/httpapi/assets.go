@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/game"
 )
 
 const (
@@ -144,27 +146,49 @@ func (a *api) deleteAsset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// canReadAsset decides who may read an asset. For now only the GM: the access
-// of players to the background of the active scene (#48) and to token images
-// (#50) will extend this function.
-func canReadAsset(acc auth.Account, _ asset.Asset) bool {
-	return acc.IsGM
+// canReadAsset decides who may read an asset: the GM any, a player the
+// background of the active scene of the campaign of the game their login
+// session belongs to. The images of tokens join in #50.
+func (a *api) canReadAsset(ctx context.Context, acc auth.Account, sess auth.Session, as asset.Asset) (bool, error) {
+	if acc.IsGM {
+		return true, nil
+	}
+	gs, err := a.d.Game.ActiveGameSession(ctx)
+	if errors.Is(err, game.ErrNoActiveGame) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if gs.ID != sess.GameSessionID || gs.CampaignID != as.CampaignID {
+		return false, nil
+	}
+	return a.d.VTT.BackgroundOfActiveScene(ctx, as.CampaignID, as.ID)
 }
 
 // serveAsset answers 404 for an asset the account may not read, so the
 // existence of the file is not confirmed.
 func (a *api) serveAsset(w http.ResponseWriter, r *http.Request) {
-	acc, _, ok := a.requireSession(w, r)
+	acc, sess, ok := a.requireSession(w, r)
 	if !ok {
 		return
 	}
 	as, err := a.d.Assets.Get(r.Context(), r.PathValue("id"))
-	if errors.Is(err, asset.ErrNotFound) || (err == nil && !canReadAsset(acc, as)) {
+	if errors.Is(err, asset.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "not found")
 		return
 	}
 	if err != nil {
 		a.internalError(w, "get asset", err)
+		return
+	}
+	allowed, err := a.canReadAsset(r.Context(), acc, sess, as)
+	if err != nil {
+		a.internalError(w, "check asset access", err)
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusNotFound, "not_found", "not found")
 		return
 	}
 

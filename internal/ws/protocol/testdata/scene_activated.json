@@ -1,0 +1,26 @@
+{
+  "t": "scene.activated",
+  "seq": 22,
+  "d": {
+    "scene": {
+      "id": "01J00000000000000000000SC2",
+      "name": "Склеп",
+      "width": 2800,
+      "height": 2100,
+      "grid": {
+        "type": "hexPointy",
+        "sizePx": 80,
+        "unitFt": 5,
+        "offsetX": 12.5,
+        "offsetY": 0,
+        "color": "#c9a34e",
+        "visible": false
+      },
+      "background": null,
+      "fog": {
+        "enabled": true,
+        "ops": []
+      }
+    }
+  }
+}

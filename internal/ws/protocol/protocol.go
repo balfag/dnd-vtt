@@ -80,6 +80,7 @@ type SnapshotGame struct {
 	StartedAt     int64        `json:"startedAt"` // unix milliseconds
 	Campaign      CampaignRef  `json:"campaign"`
 	Players       []PlayerInfo `json:"players"` // never null; removed participants are not listed
+	SnapshotTable
 }
 
 // CampaignRef is the campaign of a game session.
@@ -128,4 +129,120 @@ func ErrorReply(re, code, message string) (Envelope, error) {
 	}
 	env.Re = re
 	return env, nil
+}
+
+// Message types of the scenes of M1.
+const (
+	TypeSceneCreate    = "scene.create"
+	TypeSceneUpdate    = "scene.update"
+	TypeSceneDelete    = "scene.delete"
+	TypeSceneReorder   = "scene.reorder"
+	TypeSceneActivate  = "scene.activate"
+	TypeSceneView      = "scene.view"
+	TypeScenesChanged  = "scenes.changed"
+	TypeSceneChanged   = "scene.changed"
+	TypeSceneActivated = "scene.activated"
+)
+
+// Grid is the grid of a scene.
+type Grid struct {
+	Type    string  `json:"type"` // square | hexPointy | hexFlat
+	SizePx  int     `json:"sizePx"`
+	UnitFt  int     `json:"unitFt"`
+	OffsetX float64 `json:"offsetX"`
+	OffsetY float64 `json:"offsetY"`
+	Color   string  `json:"color"`
+	Visible bool    `json:"visible"`
+}
+
+// AssetRef points at an uploaded file.
+type AssetRef struct {
+	AssetID string `json:"assetId"`
+	URL     string `json:"url"` // "/assets/<id>"
+}
+
+// Fog is the fog of a scene. Ops are passed through as stored until #51 types them.
+type Fog struct {
+	Enabled bool            `json:"enabled"`
+	Ops     json.RawMessage `json:"ops"` // JSON array, "[]" for a new scene
+}
+
+// SceneView is a scene as a client sees it. Tokens and drawings join in #50 and #52.
+type SceneView struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+	Grid       Grid      `json:"grid"`
+	Background *AssetRef `json:"background"` // null: no background
+	Fog        Fog       `json:"fog"`
+}
+
+// SceneListItem is a scene in the list of the GM.
+type SceneListItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Sort int    `json:"sort"`
+}
+
+// SnapshotTable is the M1 part of SnapshotGame.
+type SnapshotTable struct {
+	ActiveSceneID *string         `json:"activeSceneId"` // null: no active scene
+	Scenes        []SceneListItem `json:"scenes"`        // GM only; [] for players, never null
+	Scene         *SceneView      `json:"scene"`         // the active scene rendered for the viewer; null: none
+}
+
+// SceneCreate is the data of scene.create.
+type SceneCreate struct {
+	Name   string `json:"name"`
+	Width  *int   `json:"width,omitempty"`
+	Height *int   `json:"height,omitempty"`
+	Grid   *Grid  `json:"grid,omitempty"`
+}
+
+// SceneCreateAck is the data of the ack to scene.create.
+type SceneCreateAck struct {
+	SceneID string `json:"sceneId"`
+}
+
+// SceneUpdate is the data of scene.update: absent fields stay, and
+// "backgroundAssetId": null removes the background. BackgroundAssetID is a
+// json.RawMessage to tell an absent field from null.
+type SceneUpdate struct {
+	SceneID           string          `json:"sceneId"`
+	Name              *string         `json:"name,omitempty"`
+	Width             *int            `json:"width,omitempty"`
+	Height            *int            `json:"height,omitempty"`
+	Grid              *Grid           `json:"grid,omitempty"` // replaces the whole grid
+	BackgroundAssetID json.RawMessage `json:"backgroundAssetId,omitempty"`
+}
+
+// SceneRef is the data of scene.delete, scene.activate and scene.view.
+type SceneRef struct {
+	SceneID string `json:"sceneId"`
+}
+
+// SceneReorder is the data of scene.reorder.
+type SceneReorder struct {
+	SceneIDs []string `json:"sceneIds"`
+}
+
+// ScenesChanged is the data of scenes.changed.
+type ScenesChanged struct {
+	Scenes []SceneListItem `json:"scenes"`
+}
+
+// SceneChanged is the data of scene.changed.
+type SceneChanged struct {
+	Scene SceneView `json:"scene"`
+}
+
+// SceneActivated is the data of scene.activated.
+type SceneActivated struct {
+	Scene SceneView `json:"scene"`
+}
+
+// SceneViewAck is the data of the ack to scene.view.
+type SceneViewAck struct {
+	Scene SceneView `json:"scene"`
 }

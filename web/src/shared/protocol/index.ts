@@ -7,6 +7,15 @@ export const MessageType = {
   Snapshot: 'sync.snapshot',
   Presence: 'presence.update',
   Noop: 'sync.noop',
+  SceneCreate: 'scene.create',
+  SceneUpdate: 'scene.update',
+  SceneDelete: 'scene.delete',
+  SceneReorder: 'scene.reorder',
+  SceneActivate: 'scene.activate',
+  SceneView: 'scene.view',
+  ScenesChanged: 'scenes.changed',
+  SceneChanged: 'scene.changed',
+  SceneActivated: 'scene.activated',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -61,11 +70,47 @@ export interface SnapshotMe {
   isGm: boolean
   playerId: string | null
 }
+export interface Grid {
+  type: 'square' | 'hexPointy' | 'hexFlat'
+  sizePx: number
+  unitFt: number
+  offsetX: number
+  offsetY: number
+  color: string
+  visible: boolean
+}
+export interface AssetRef {
+  assetId: string
+  url: string
+}
+export interface Fog {
+  enabled: boolean
+  ops: unknown[]
+}
+/** SceneView is a scene as the client sees it; tokens and drawings join later. */
+export interface SceneView {
+  id: string
+  name: string
+  width: number
+  height: number
+  grid: Grid
+  background: AssetRef | null
+  fog: Fog
+}
+export interface SceneListItem {
+  id: string
+  name: string
+  sort: number
+}
 export interface SnapshotGame {
   gameSessionId: string
   startedAt: number
   campaign: { id: string; name: string }
   players: PlayerInfo[]
+  activeSceneId: string | null
+  /** The GM gets every scene; a player gets []. */
+  scenes: SceneListItem[]
+  scene: SceneView | null
 }
 export interface Snapshot {
   seq: number
@@ -84,6 +129,14 @@ export type SnapshotMessage = { t: 'sync.snapshot'; d: Snapshot }
 export type PresenceMessage = { t: 'presence.update'; seq: number; d: Presence }
 /** NoopMessage says that the event number is taken and there is nothing for this recipient. */
 export type NoopMessage = { t: 'sync.noop'; seq: number }
+export type ScenesChangedMessage = {
+  t: 'scenes.changed'
+  seq: number
+  d: { scenes: SceneListItem[] }
+}
+export type SceneChangedMessage = { t: 'scene.changed'; seq: number; d: { scene: SceneView } }
+export type SceneActivatedMessage = { t: 'scene.activated'; seq: number; d: { scene: SceneView } }
+export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
 
@@ -118,6 +171,50 @@ function isPlayerInfo(v: unknown): v is PlayerInfo {
   )
 }
 
+const gridTypes: readonly string[] = ['square', 'hexPointy', 'hexFlat']
+
+function isGrid(v: unknown): v is Grid {
+  return (
+    isObject(v) &&
+    typeof v.type === 'string' &&
+    gridTypes.includes(v.type) &&
+    typeof v.sizePx === 'number' &&
+    typeof v.unitFt === 'number' &&
+    typeof v.offsetX === 'number' &&
+    typeof v.offsetY === 'number' &&
+    typeof v.color === 'string' &&
+    colorPattern.test(v.color) &&
+    typeof v.visible === 'boolean'
+  )
+}
+
+function isAssetRef(v: unknown): v is AssetRef {
+  return isObject(v) && typeof v.assetId === 'string' && typeof v.url === 'string'
+}
+
+function isFog(v: unknown): v is Fog {
+  return isObject(v) && typeof v.enabled === 'boolean' && Array.isArray(v.ops)
+}
+
+function isSceneView(v: unknown): v is SceneView {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.width === 'number' &&
+    typeof v.height === 'number' &&
+    isGrid(v.grid) &&
+    (v.background === null || isAssetRef(v.background)) &&
+    isFog(v.fog)
+  )
+}
+
+function isSceneListItem(v: unknown): v is SceneListItem {
+  return (
+    isObject(v) && typeof v.id === 'string' && typeof v.name === 'string' && isInteger(v.sort, 0)
+  )
+}
+
 function isSnapshotMe(v: unknown): v is SnapshotMe {
   return (
     isObject(v) &&
@@ -136,7 +233,11 @@ function isSnapshotGame(v: unknown): v is SnapshotGame {
     typeof v.campaign.id === 'string' &&
     typeof v.campaign.name === 'string' &&
     Array.isArray(v.players) &&
-    v.players.every(isPlayerInfo)
+    v.players.every(isPlayerInfo) &&
+    (v.activeSceneId === null || typeof v.activeSceneId === 'string') &&
+    Array.isArray(v.scenes) &&
+    v.scenes.every(isSceneListItem) &&
+    (v.scene === null || isSceneView(v.scene))
   )
 }
 
@@ -193,6 +294,47 @@ export function isNoop(v: unknown): v is NoopMessage {
   )
 }
 
+export function isScenesChanged(v: unknown): v is ScenesChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.ScenesChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    Array.isArray(v.d.scenes) &&
+    v.d.scenes.every(isSceneListItem)
+  )
+}
+
+export function isSceneChanged(v: unknown): v is SceneChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.SceneChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    isSceneView(v.d.scene)
+  )
+}
+
+export function isSceneActivated(v: unknown): v is SceneActivatedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.SceneActivated &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    isSceneView(v.d.scene)
+  )
+}
+
+export function isSceneViewAck(v: unknown): v is SceneViewAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    isSceneView(v.d.scene)
+  )
+}
+
 export function isPong(v: unknown): v is PongMessage {
   return isObject(v) && v.t === MessageType.Pong && typeof v.re === 'string'
 }
@@ -215,4 +357,44 @@ export function helloCommand(id: string, hello: Hello): Envelope {
 
 export function pingCommand(id: string): Envelope {
   return { t: MessageType.Ping, id }
+}
+
+export interface SceneCreate {
+  name: string
+  width?: number
+  height?: number
+  grid?: Grid
+}
+export interface SceneUpdate {
+  sceneId: string
+  name?: string
+  width?: number
+  height?: number
+  grid?: Grid
+  /** null removes the background; absent leaves it. */
+  backgroundAssetId?: string | null
+}
+
+export function sceneCreateCommand(id: string, d: SceneCreate): Envelope {
+  return { t: MessageType.SceneCreate, id, d }
+}
+
+export function sceneUpdateCommand(id: string, d: SceneUpdate): Envelope {
+  return { t: MessageType.SceneUpdate, id, d }
+}
+
+/** sceneRefCommand builds scene.delete, scene.activate or scene.view. */
+export function sceneRefCommand(
+  t:
+    | typeof MessageType.SceneDelete
+    | typeof MessageType.SceneActivate
+    | typeof MessageType.SceneView,
+  id: string,
+  sceneId: string,
+): Envelope {
+  return { t, id, d: { sceneId } }
+}
+
+export function sceneReorderCommand(id: string, sceneIds: string[]): Envelope {
+  return { t: MessageType.SceneReorder, id, d: { sceneIds } }
 }
