@@ -15,6 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/game"
@@ -33,6 +34,7 @@ type App struct {
 	auth    *auth.Service
 	game    *game.Service
 	hub     *ws.Hub
+	assets  *asset.Service
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -62,6 +64,7 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 		auth:        authSvc,
 		game:        gameSvc,
 		hub:         ws.NewHub(gameSvc, logger, ws.Options{}),
+		assets:      asset.NewService(db, cfg.DataDir, asset.Options{}),
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -79,6 +82,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			Auth:    a.auth,
 			Game:    a.game,
 			Hub:     a.hub,
+			Assets:  a.assets,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

@@ -17,6 +17,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
@@ -39,6 +40,12 @@ type apiFixture struct {
 }
 
 func newAPIFixture(t *testing.T) *apiFixture {
+	t.Helper()
+	return newAPIFixtureWithAssets(t, asset.Options{})
+}
+
+// newAPIFixtureWithAssets is newAPIFixture with the asset service tuned by opts.
+func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 	t.Helper()
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -66,6 +73,7 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		Auth:    f.svc,
 		Game:    f.game,
 		Hub:     ws.NewHub(f.game, logger, ws.Options{}),
+		Assets:  asset.NewService(f.db, t.TempDir(), opts),
 		Now:     now,
 	})
 	return f
