@@ -74,6 +74,37 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  e2e:
+    name: E2E
+    needs: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm -C web install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: dndvtt-Linux-amd64
+          path: out
+      - run: chmod +x out/dndvtt
+      - run: pnpm -C web exec playwright install --with-deps chromium
+      - run: pnpm -C web e2e
+        env:
+          DNDVTT_E2E_BIN: ${{ github.workspace }}/out/dndvtt
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-traces
+          path: web/test-results
+          retention-days: 7
+
   docs:
     name: Docs links
     runs-on: ubuntu-latest
