@@ -36,7 +36,7 @@ async function readJSON(res: Response): Promise<unknown> {
  * returns undefined for 204 or when no guard is given, and throws ApiError on any failure.
  */
 export async function apiRequest<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   opts?: { body?: unknown; guard?: (v: unknown) => v is T },
 ): Promise<T | undefined> {

@@ -62,6 +62,16 @@ describe('apiRequest', () => {
     expect([err.status, err.code]).toEqual([0, 'network'])
   })
 
+  it('sends PATCH with a JSON body', async () => {
+    const fetchMock = stubFetch(() => Response.json({ ok: true }))
+    await apiRequest('PATCH', '/x', { body: { name: 'n' } })
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"n"}',
+    })
+  })
+
   it('sends JSON with a Content-Type only when there is a body', async () => {
     const fetchMock = stubFetch(() => new Response(null, { status: 204 }))
 

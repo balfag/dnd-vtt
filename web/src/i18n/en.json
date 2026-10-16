@@ -44,10 +44,6 @@
     "linkDead": "The reset link has expired or was already used. Ask the GM for a new one."
   },
   "home": {
-    "gm": {
-      "title": "Welcome, {{login}}",
-      "next": "The campaigns screen is coming in the next version."
-    },
     "gmLinkExpired": "The GM sign-in link has expired. Restart the app or sign in with your password.",
     "gmLinkLogin": "Sign in with a password",
     "player": {
@@ -72,5 +68,57 @@
     "internal": "Something failed on the GM’s server. Try again.",
     "network": "No connection to the GM’s server.",
     "unknown": "Something went wrong. Try again."
+  },
+  "campaigns": {
+    "title": "Campaigns",
+    "colName": "Name",
+    "colCreated": "Created",
+    "running": "game running",
+    "start": "Start the game",
+    "new": "New campaign",
+    "newPlaceholder": "Campaign name",
+    "rename": "Rename “{{name}}”",
+    "empty": "No campaigns yet. Create the first one and invite your players.",
+    "nameInvalid": "1 to 200 characters"
+  },
+  "game": {
+    "running": "Game running — {{name}}, since {{time}}",
+    "linkLabel": "Game link",
+    "linkHidden": "The link is shown only right after it is made. To share it again, change the link.",
+    "rotate": "Change the link",
+    "end": "End the game",
+    "replaceConfirm": "A game is running in “{{name}}”. Starting a new one ends it and players leave.",
+    "rotateConfirm": "The old link will stop working. Players already at the table stay.",
+    "endConfirm": "End the game? Players leave the table and their links stop working.",
+    "started": "Game started",
+    "rotated": "Link changed",
+    "ended": "Game ended"
+  },
+  "participants": {
+    "title": "Participants",
+    "online": "online",
+    "offline": "offline",
+    "gmRole": "GM",
+    "resetLink": "Password reset link",
+    "remove": "Remove from campaign",
+    "empty": "No players yet. Send them the game link.",
+    "resetTitle": "Password reset: {{name}}",
+    "resetHint": "The link for {{name}}. It works once, until {{time}}.",
+    "removeConfirm": "Remove {{name}} from the campaign? Joining with the game link will no longer work.",
+    "removed": "Participant removed"
+  },
+  "ui": {
+    "dialog": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "confirmEnd": "End the game",
+      "confirmRotate": "Change the link",
+      "confirmRemove": "Remove"
+    },
+    "copy": {
+      "button": "Copy the link",
+      "done": "Link copied",
+      "manual": "Copy the selected link manually: Ctrl+C"
+    }
   }
 }
