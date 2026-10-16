@@ -1,6 +1,6 @@
 # Модель данных
 
-> Статус: `draft` (раздел «Аккаунты и игровые сессии» — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
+> Статус: `draft` (разделы «Аккаунты и игровые сессии», Scene, Token, Drawing, ChatMessage, Asset — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
 
 ## Хранение
 
@@ -22,12 +22,13 @@ Account 1─* LoginSession *─0..1 GameSession
    └─* Player (участие в кампании)
 
 Campaign 1─* Scene 1─* Token *─0..1 Actor
-   │            └─ FogMask (1:1)
+   │            ├─* Drawing
+   │            └─ fog (JSON в Scene)
    ├─* Actor (character | npc | monster) ─ sheet JSON
    ├─* Player (участник кампании) ─0..1 Actor (свой персонаж)
    ├─* GameSession (игровая встреча)
    ├─* Asset
-   ├─* ChatMessage / Roll
+   ├─* ChatMessage (текст и броски)
    ├─* CombatTracker 1─* Combatant
    └─* WikiPage (дерево) ─0..1 WikiDatabase
                                └─* WikiProperty
@@ -61,27 +62,54 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 `id, account_id, token_hash, created_at, expires_at, used_at?`
 Одноразовая ссылка на сброс пароля, 30 минут.
 
+**Стол (M1).** Форматы полей в API — [protocol.md](protocol.md) («Сообщения M1: стол»); здесь — хранение и ограничения. Колонки JSON — `TEXT` с `CHECK (json_valid(...))`, ключи внутри — в `camelCase`, как в протоколе.
+
 ### Scene
-`id, campaign_id, name, sort, background_asset_id?, width, height, grid JSON {type: square|hex, size_px, unit_ft, offset_x, offset_y, color, visible}, settings JSON`
+`id, campaign_id, name, sort, width, height, grid JSON, background_asset_id?, fog JSON, created_at, updated_at`
+
+- `name` — 1–200 символов; `sort` — `INTEGER`, порядок в списке (новая сцена — в конец); `width`, `height` — 100–20000 px, по умолчанию `2800`×`2100` (40×30 клеток по 70 px).
+- `grid` — `{type, sizePx, unitFt, offsetX, offsetY, color, visible}`: `type` — `square` \| `hexPointy` \| `hexFlat`; `sizePx` 10–500 (по умолчанию 70); `unitFt` 1–100 (по умолчанию 5); `offsetX`, `offsetY` — `0..sizePx`; `color` — `#rrggbb`; `visible` — bool.
+- `background_asset_id` → `asset(id)` `ON DELETE RESTRICT`. Если при `scene.update` задан фон, а `width`/`height` не переданы, они берутся из размеров ассета.
+- `fog` — `{enabled, ops: [{op: reveal|hide, shape}]}`, не больше 500 операций; фигуры — как в протоколе (`rect`, `polygon` 3–200 точек, `circle`). Новая сцена: `{"enabled": false, "ops": []}`. Отдельной таблицы тумана нет: он всегда читается и пишется вместе со сценой.
+- `campaign.active_scene_id` → `scene(id)` `ON DELETE SET NULL`; добавляется миграцией сцен (`ALTER TABLE`). Удаление активной сцены запрещено командой, `SET NULL` — страховка.
 
 ### Token
-`id, scene_id, actor_id?, layer (map|tokens|gm|drawings), x, y, w, h, rotation, image_asset_id?, name, hidden, locked, owners JSON [player_id], bars JSON, z, updated_at`
-`owners` — кто из игроков может двигать фишку (мастер может всегда).
+`id, scene_id, layer, x, y, w, h, rotation, z, name, name_visibility, image_asset_id?, hidden, locked, owners JSON, bars JSON, conditions JSON, created_at, updated_at`
 
-### FogMask
-`scene_id, enabled, revealed JSON` — список раскрытых полигонов и прямоугольников (векторно, а не растром, чтобы не зависеть от разрешения).
+- `scene_id` → `scene(id)` `ON DELETE CASCADE`; `image_asset_id` → `asset(id)` `ON DELETE RESTRICT`. `actor_id` добавит миграция актёров (M4).
+- `layer` — `map` \| `tokens` \| `gm` (слой `drawings` — таблица `drawing`).
+- `x`, `y` — `REAL`, центр в пикселях сцены, `0..width`/`0..height`; `w`, `h` — `REAL` 0.25–20 клеток; `rotation` — `REAL` `[0, 360)`, сервер нормализует; `z` — `INTEGER`, при создании без `z` — максимум на сцене + 1.
+- `name` — 0–100 символов; `name_visibility` — `all` \| `hover` \| `gm`.
+- `hidden`, `locked` — `0`/`1`.
+- `owners` — массив `playerId` участников этой кампании (не удалённых), до 20; мастеру быть владельцем не нужно.
+- `bars` — до 5 `{key, value, max, visibility}`: `key` — `[a-z0-9_]{1,16}`, уникален в фишке; `value`, `max` — целые `-9999..99999`, `max ≥ 1`; `visibility` — `all` \| `owners` \| `gm`.
+- `conditions` — до 20 уникальных строк `[a-z0-9_-]{1,32}` (ключи состояний SRD; словарь — в задаче фишек на клиенте).
+- Индекс `(scene_id, z)`.
+
+### Drawing
+`id, scene_id, author_player_id, kind, data JSON, color, created_at, updated_at`
+
+- `kind` — `freehand` \| `rect` \| `circle` \| `text` \| `template`; `data` — до 16 КиБ (форматы — в протоколе); `color` — `#rrggbb`.
+- `scene_id` → `scene(id)` `ON DELETE CASCADE`; `author_player_id` → `player(id)`.
 
 ### Actor
 `id, campaign_id, type (character|npc|monster), name, portrait_asset_id?, owner_player_id?, sheet JSON, schema_version`
 Структура `sheet` описывается в [character-sheet.md](../systems/character-sheet.md).
 
 ### ChatMessage
-`id, campaign_id, author_player_id, kind (text|roll|system|handout), visibility (public|gm|self|blind), payload JSON, created_at`
-Бросок хранит формулу, отдельные результаты кубиков и итог, чтобы его можно было воспроизвести и проверить.
+`id, campaign_id, game_session_id?, author_player_id?, kind, visibility, recipients JSON, payload JSON, created_at`
 
-### CombatTracker / Combatant
+- `kind` — `text` \| `roll` \| `system` (`handout` — в M3); `visibility` — `public` \| `private` \| `gm` \| `self` \| `blind` (`private` — только для `text`; `gm`/`self`/`blind` — только для `roll`).
+- `author_player_id` → `player(id)`; пуст у `system`. `game_session_id` → `game_session(id)` `ON DELETE SET NULL` — в какой игре написано.
+- `recipients` — массив `playerId` (1–20) для `private`, иначе `[]`.
+- `payload`: для `text`/`system` — `{text}` (1–2000 символов); для `roll` — `{formula, label, result}`, где `result` — `dice.Result` целиком: бросок можно показать и проверить потом.
+- Индекс `(campaign_id, id)`: история читается страницами по убыванию `id` (ULID сортируется по времени).
+- Видимость при чтении — правила протокола; фильтр применяется к каждой строке на сервере.
+
+### CombatTracker / Combatant (`draft`)
 `tracker: id, scene_id, round, turn_index, active`
 `combatant: id, tracker_id, token_id?, actor_id?, initiative, sort, hidden`
+Уточняется в задаче трекера инициативы.
 
 ### WikiPage
 `id, campaign_id, parent_id?, title, icon, sort, content JSON (ProseMirror doc), database_id? (если страница — запись базы), props JSON (значения свойств записи), created_at, updated_at`
@@ -92,7 +120,14 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 `view: id, database_id, name, kind (table|cards), filters JSON, sorts JSON, visible_props JSON`
 
 ### Asset
-`id, campaign_id, sha256, mime, size, original_name, kind (map|token|portrait|handout|audio|other), created_at`
+`id, campaign_id, sha256, mime, size, width, height, original_name, kind, created_at`
+
+- `sha256` — hex 64 символа; уникальная пара `(campaign_id, sha256)`: повторная загрузка того же файла в кампанию возвращает существующую строку.
+- `mime` — `image/png` \| `image/jpeg` \| `image/webp` \| `image/gif` (аудио — позже); `size` — байты, до 50 МиБ; `width`, `height` — px, 1–16384.
+- `original_name` — до 200 символов, только для показа, на диск не влияет.
+- `kind` — `map` \| `token` \| `portrait` \| `handout` \| `other`.
+- `campaign_id` → `campaign(id)` `ON DELETE CASCADE`. Ссылки на ассет (`scene.background_asset_id`, `token.image_asset_id`) — `ON DELETE RESTRICT`: используемый ассет удалить нельзя (`409`).
+- Файл: `<data>/campaigns/<campaign_id>/assets/<sha256>.<ext>`.
 
 ## Миграции
 
@@ -104,4 +139,5 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - Любое изменение схемы — новая миграция; старые не редактируются после мерджа.
 - Колонки со ссылкой на таблицу из более позднего майлстоуна (`campaign.active_scene_id`, `player.actor_id`) добавляет миграция, создающая эту таблицу: `ALTER TABLE ... ADD COLUMN ... REFERENCES ...`.
 - Внутри миграции нельзя менять `PRAGMA foreign_keys`: в транзакции эта прагма игнорируется.
+- Миграции M1: `0005_assets` (`asset`), `0006_scenes` (`scene`, `token`, `drawing`, `campaign.active_scene_id`), `0007_chat` (`chat_message`). Номера закреплены за задачами: если задачи мерджатся не по порядку, исполнитель следующей задачи берёт следующий свободный номер и пишет об этом в «Отклонениях».
 - JSON-поля: при изменении формата повышается `schema_version` и пишется функция апгрейда в Go.
