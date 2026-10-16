@@ -1,0 +1,205 @@
+/* Layout of the sign-in screens: a left-aligned column and the fog map on the right. */
+.auth {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.auth__column {
+  position: relative;
+  z-index: 1;
+  width: 26rem;
+  max-width: 100%;
+  margin-left: clamp(0px, 8vw, 120px);
+  /* Anchored to the top, so an error appearing below does not move the title. */
+  padding: clamp(48px, 14vh, 140px) 24px 48px;
+}
+
+.auth__context {
+  margin: 0 0 4px;
+  color: var(--fog);
+  font-size: 18px;
+}
+
+.auth__title {
+  margin: 0 0 16px;
+  font: 700 40px/1.1 var(--serif);
+}
+
+.auth__column p {
+  max-width: 70ch;
+  margin: 0 0 16px;
+}
+
+.auth__column form {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 719px) {
+  .auth__column {
+    margin-left: 0;
+    padding: 32px 16px;
+  }
+
+  .auth__title {
+    font-size: 31px;
+  }
+}
+
+/* The room opened out of the fog. */
+.fogmap {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 64%;
+  pointer-events: none;
+}
+
+.fogmap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fogmap__room {
+  fill: var(--board);
+}
+
+.fogmap__hex {
+  fill: none;
+  stroke: var(--fog);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+}
+
+.fogmap__outline {
+  fill: none;
+  stroke: var(--chalk);
+  stroke-width: 2;
+}
+
+.fogmap__token {
+  stroke: var(--slate);
+  stroke-width: 3;
+}
+
+/* The fog is transparent by default, so with reduced motion the map is simply visible. */
+.fog {
+  position: absolute;
+  inset: 0;
+  background: var(--slate);
+  opacity: 0;
+  animation: fog-lift 1.4s ease-out backwards;
+}
+
+@keyframes fog-lift {
+  from {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fog {
+    animation: none;
+  }
+}
+
+@media (max-width: 719px) {
+  .fogmap {
+    display: none;
+  }
+}
+
+/* Form controls. */
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field__label {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.field__input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--fog);
+  border-radius: 6px;
+  background: var(--board);
+  color: var(--chalk);
+  font: 400 17px/1.4 var(--sans);
+}
+
+.field__input[aria-invalid='true'] {
+  border-color: var(--seal);
+}
+
+.field__text {
+  margin: 0;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.field__text--error {
+  padding-left: 9px;
+  border-left: 3px solid var(--seal);
+  color: var(--chalk);
+}
+
+.button {
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--verdigris);
+  color: var(--ink-on-verdigris);
+  font: 500 17px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--seal);
+  border-radius: 0 6px 6px 0;
+  background: var(--board);
+}
+
+.tabs {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--fog);
+}
+
+.tabs__tab {
+  margin-bottom: -1px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fog);
+  font: 500 17px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.tabs__tab[aria-selected='true'] {
+  border-bottom-color: var(--chalk);
+  color: var(--chalk);
+}
+
+.link {
+  color: var(--chalk);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
