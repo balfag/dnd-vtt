@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import errorBadRequest from '../../../../internal/ws/protocol/testdata/error_bad_request.json'
+import fogChangedGm from '../../../../internal/ws/protocol/testdata/fog_changed_gm.json'
+import fogChangedPlayer from '../../../../internal/ws/protocol/testdata/fog_changed_player.json'
+import fogChangedPlayerEmpty from '../../../../internal/ws/protocol/testdata/fog_changed_player_empty.json'
+import fogHidePolygon from '../../../../internal/ws/protocol/testdata/fog_hide_polygon_command.json'
+import fogRevealCircle from '../../../../internal/ws/protocol/testdata/fog_reveal_circle_command.json'
+import fogRevealRect from '../../../../internal/ws/protocol/testdata/fog_reveal_rect_command.json'
+import fogSet from '../../../../internal/ws/protocol/testdata/fog_set_command.json'
 import helloAckFresh from '../../../../internal/ws/protocol/testdata/hello_ack_fresh.json'
 import helloAckResumed from '../../../../internal/ws/protocol/testdata/hello_ack_resumed.json'
 import helloCommandExample from '../../../../internal/ws/protocol/testdata/hello_command.json'
@@ -27,13 +34,19 @@ import tokenMoveExample from '../../../../internal/ws/protocol/testdata/token_mo
 import tokenRemoved from '../../../../internal/ws/protocol/testdata/token_removed.json'
 import tokenUpdateExample from '../../../../internal/ws/protocol/testdata/token_update_command.json'
 import {
+  fogHideCommand,
+  fogResetCommand,
+  fogRevealCommand,
+  fogSetCommand,
   helloCommand,
   isEnvelope,
+  isFogChanged,
   isErrorMessage,
   isHelloAck,
   isNoop,
   isPong,
   isPresence,
+  isShape,
   isSceneActivated,
   isSceneChanged,
   isSceneViewAck,
@@ -68,6 +81,9 @@ describe('server examples pass their guards', () => {
     ['scene_changed', sceneChanged, isSceneChanged],
     ['scene_activated', sceneActivated, isSceneActivated],
     ['scene_view_ack', sceneViewAck, isSceneViewAck],
+    ['fog_changed_gm', fogChangedGm, isFogChanged],
+    ['fog_changed_player', fogChangedPlayer, isFogChanged],
+    ['fog_changed_player_empty', fogChangedPlayerEmpty, isFogChanged],
     ['token_changed', tokenChanged, isTokenChanged],
     ['token_changed_player', tokenChangedPlayer, isTokenChanged],
     ['token_removed', tokenRemoved, isTokenRemoved],
@@ -94,9 +110,42 @@ describe('server examples pass their guards', () => {
       tokenUpdateExample,
       tokenMoveExample,
       tokenDragExample,
+      fogSet,
+      fogRevealRect,
+      fogHidePolygon,
+      fogRevealCircle,
     ]) {
       expect(isEnvelope(example)).toBe(true)
     }
+  })
+})
+
+describe('isShape follows the limits of the server', () => {
+  const rect = { type: 'rect', x: 0, y: 0, w: 1, h: 1 }
+  const triangle = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+  ]
+  const points = (n: number) => Array.from({ length: n }, (_, i) => [i, i % 7])
+  it.each([
+    ['rect', rect, true],
+    ['rect with w = 0', { ...rect, w: 0 }, false],
+    ['rect with an extra field', { ...rect, r: 1 }, false],
+    ['rect without h', { type: 'rect', x: 0, y: 0, w: 1 }, false],
+    ['circle', { type: 'circle', x: 0, y: 0, r: 1 }, true],
+    ['circle with r = 0', { type: 'circle', x: 0, y: 0, r: 0 }, false],
+    ['coordinate over the limit', { type: 'circle', x: 100001, y: 0, r: 1 }, false],
+    ['coordinate at the limit', { type: 'circle', x: -100000, y: 0, r: 1 }, true],
+    ['NaN is not JSON but still not a coordinate', { type: 'circle', x: NaN, y: 0, r: 1 }, false],
+    ['polygon of 3', { type: 'polygon', points: triangle }, true],
+    ['polygon of 2', { type: 'polygon', points: triangle.slice(0, 2) }, false],
+    ['polygon of 200', { type: 'polygon', points: points(200) }, true],
+    ['polygon of 201', { type: 'polygon', points: points(201) }, false],
+    ['polygon point of three', { type: 'polygon', points: [[0, 0, 0], ...triangle] }, false],
+    ['unknown type', { type: 'star' }, false],
+  ])('%s', (_name, shape, ok) => {
+    expect(isShape(shape)).toBe(ok)
   })
 })
 
@@ -183,6 +232,37 @@ describe('command builders match the examples', () => {
       id: 'c-9',
       d: { tokenId: 'T1' },
     })
+  })
+
+  it('fog commands', () => {
+    const scene = '01J00000000000000000000SC2'
+    expect(fogSetCommand('c-9', scene, true)).toStrictEqual(fogSet)
+    expect(
+      fogRevealCommand('c-10', scene, { type: 'rect', x: 0, y: 0, w: 1400, h: 1050 }),
+    ).toStrictEqual(fogRevealRect)
+    expect(
+      fogHideCommand('c-11', scene, {
+        type: 'polygon',
+        points: [
+          [300, 200],
+          [700, 200],
+          [500, 600.5],
+        ],
+      }),
+    ).toStrictEqual(fogHidePolygon)
+    expect(
+      fogRevealCommand('c-12', scene, { type: 'circle', x: 500, y: 400.5, r: 120 }),
+    ).toStrictEqual(fogRevealCircle)
+    expect(fogResetCommand('c-13', 'S1')).toStrictEqual({
+      t: 'fog.reset',
+      id: 'c-13',
+      d: { sceneId: 'S1' },
+    })
+  })
+
+  it('isFogChanged tells the GM frame from the player frame', () => {
+    expect('tokens' in fogChangedGm.d).toBe(false)
+    expect(fogChangedPlayerEmpty.d.tokens).toStrictEqual([])
   })
 
   it('isTokenCreateAck', () => {
@@ -275,6 +355,17 @@ describe('guards reject damaged messages', () => {
       isSceneChanged,
       corrupt(sceneChanged, ['d', 'scene', 'tokens'], []),
     ],
+    [
+      'fog op is unknown',
+      isFogChanged,
+      corrupt(fogChangedGm, ['d', 'fog', 'ops', '0', 'op'], 'toggle'),
+    ],
+    [
+      'fog shape has an extra field',
+      isFogChanged,
+      corrupt(fogChangedGm, ['d', 'fog', 'ops', '0', 'shape', 'r'], 5),
+    ],
+    ['fog tokens is not an array', isFogChanged, corrupt(fogChangedPlayer, ['d', 'tokens'], null)],
     [
       'scene fog ops is not an array',
       isSceneActivated,

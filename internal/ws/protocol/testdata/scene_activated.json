@@ -19,7 +19,38 @@
       "background": null,
       "fog": {
         "enabled": true,
-        "ops": []
+        "ops": [
+          {
+            "op": "reveal",
+            "shape": {
+              "type": "rect",
+              "x": 0,
+              "y": 0,
+              "w": 1400,
+              "h": 1050
+            }
+          },
+          {
+            "op": "hide",
+            "shape": {
+              "type": "polygon",
+              "points": [
+                [
+                  300,
+                  200
+                ],
+                [
+                  700,
+                  200
+                ],
+                [
+                  500,
+                  600.5
+                ]
+              ]
+            }
+          }
+        ]
       },
       "tokens": [
         {

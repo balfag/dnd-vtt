@@ -93,7 +93,7 @@ func TestCreateSceneDefaults(t *testing.T) {
 	if v.Name != "Tavern" || v.Width != 2800 || v.Height != 2100 || v.Grid != DefaultGrid() || v.Background != nil {
 		t.Errorf("view = %+v", v)
 	}
-	if v.Fog.Enabled || string(v.Fog.Ops) != "[]" {
+	if v.Fog.Enabled || len(v.Fog.Ops) != 0 {
 		t.Errorf("fog = %+v, want the default off with no ops", v.Fog)
 	}
 	if len(second.Scenes) != 2 || second.Scenes[0].Sort != 0 || second.Scenes[1].Sort != 1 || second.Scenes[1].Name != "Crypt" {
