@@ -263,7 +263,7 @@ func TestTypeLimitDoesNotFeedTheGeneralRun(t *testing.T) {
 	opts := Options{
 		IdleTimeout: 30 * time.Second,
 		RatePerSec:  100,
-		RateBurst:   100,
+		RateBurst:   1000, // above 700 commands and the hello: the general limit must never reject here
 		Now: func() time.Time {
 			mu.Lock()
 			defer mu.Unlock()
