@@ -1,0 +1,10 @@
+{
+  "t": "token.update",
+  "id": "c-7",
+  "d": {
+    "tokenId": "01J00000000000000000000TK1",
+    "imageAssetId": null,
+    "hidden": true,
+    "owners": []
+  }
+}

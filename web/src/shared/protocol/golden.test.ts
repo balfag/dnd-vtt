@@ -18,6 +18,14 @@ import scenesChanged from '../../../../internal/ws/protocol/testdata/scenes_chan
 import snapshotGmNoGame from '../../../../internal/ws/protocol/testdata/snapshot_gm_no_game.json'
 import snapshotGmScenes from '../../../../internal/ws/protocol/testdata/snapshot_gm_scenes.json'
 import snapshotPlayer from '../../../../internal/ws/protocol/testdata/snapshot_player.json'
+import tokenChanged from '../../../../internal/ws/protocol/testdata/token_changed.json'
+import tokenChangedPlayer from '../../../../internal/ws/protocol/testdata/token_changed_player.json'
+import tokenCreateExample from '../../../../internal/ws/protocol/testdata/token_create_command.json'
+import tokenDragExample from '../../../../internal/ws/protocol/testdata/token_drag_command.json'
+import tokenDragging from '../../../../internal/ws/protocol/testdata/token_dragging.json'
+import tokenMoveExample from '../../../../internal/ws/protocol/testdata/token_move_command.json'
+import tokenRemoved from '../../../../internal/ws/protocol/testdata/token_removed.json'
+import tokenUpdateExample from '../../../../internal/ws/protocol/testdata/token_update_command.json'
 import {
   helloCommand,
   isEnvelope,
@@ -31,11 +39,20 @@ import {
   isSceneViewAck,
   isScenesChanged,
   isSnapshot,
+  isTokenChanged,
+  isTokenCreateAck,
+  isTokenDragging,
+  isTokenRemoved,
   pingCommand,
   sceneCreateCommand,
   sceneReorderCommand,
   sceneRefCommand,
   sceneUpdateCommand,
+  tokenCreateCommand,
+  tokenDeleteCommand,
+  tokenDragMessage,
+  tokenMoveCommand,
+  tokenUpdateCommand,
 } from './index'
 
 type Guard = (v: unknown) => boolean
@@ -51,6 +68,10 @@ describe('server examples pass their guards', () => {
     ['scene_changed', sceneChanged, isSceneChanged],
     ['scene_activated', sceneActivated, isSceneActivated],
     ['scene_view_ack', sceneViewAck, isSceneViewAck],
+    ['token_changed', tokenChanged, isTokenChanged],
+    ['token_changed_player', tokenChangedPlayer, isTokenChanged],
+    ['token_removed', tokenRemoved, isTokenRemoved],
+    ['token_dragging', tokenDragging, isTokenDragging],
     ['presence_offline', presenceOffline, isPresence],
     ['presence_new_player', presenceNewPlayer, isPresence],
     ['noop', noop, isNoop],
@@ -69,6 +90,10 @@ describe('server examples pass their guards', () => {
       ping,
       sceneCreateExample,
       sceneUpdateExample,
+      tokenCreateExample,
+      tokenUpdateExample,
+      tokenMoveExample,
+      tokenDragExample,
     ]) {
       expect(isEnvelope(example)).toBe(true)
     }
@@ -126,6 +151,43 @@ describe('command builders match the examples', () => {
       id: 'c-7',
       d: { sceneIds: ['S2', 'S1'] },
     })
+  })
+
+  it('token commands', () => {
+    expect(
+      tokenCreateCommand('c-6', '01J00000000000000000000SC2', {
+        x: 350,
+        y: 210.5,
+        name: 'Гоблин',
+        nameVisibility: 'gm',
+        imageAssetId: '01J00000000000000000000AS2',
+        owners: ['01J00000000000000000000PL2'],
+        bars: [{ key: 'hp', value: 7, max: 7, visibility: 'owners' }],
+      }),
+    ).toStrictEqual(tokenCreateExample)
+    expect(
+      tokenUpdateCommand('c-7', '01J00000000000000000000TK1', {
+        hidden: true,
+        imageAssetId: null,
+        owners: [],
+      }),
+    ).toStrictEqual(tokenUpdateExample)
+    expect(tokenMoveCommand('c-8', '01J00000000000000000000TK1', 420, 260)).toStrictEqual(
+      tokenMoveExample,
+    )
+    expect(tokenDragMessage('01J00000000000000000000TK1', 400.5, 250)).toStrictEqual(
+      tokenDragExample,
+    )
+    expect(tokenDeleteCommand('c-9', 'T1')).toStrictEqual({
+      t: 'token.delete',
+      id: 'c-9',
+      d: { tokenId: 'T1' },
+    })
+  })
+
+  it('isTokenCreateAck', () => {
+    expect(isTokenCreateAck({ t: 'ack', re: 'c-6', d: { tokenId: 'T1' } })).toBe(true)
+    expect(isTokenCreateAck({ t: 'ack', re: 'c-6', d: {} })).toBe(false)
   })
 
   it('pingCommand has no d field', () => {
@@ -227,6 +289,24 @@ describe('guards reject damaged messages', () => {
       'scenes_changed sort is negative',
       isScenesChanged,
       corrupt(scenesChanged, ['d', 'scenes', '0', 'sort'], -1),
+    ],
+    [
+      'token layer is unknown',
+      isTokenChanged,
+      corrupt(tokenChanged, ['d', 'token', 'layer'], 'sky'),
+    ],
+    [
+      'token bar visibility is unknown',
+      isTokenChanged,
+      corrupt(tokenChanged, ['d', 'token', 'bars', '0', 'visibility'], 'friends'),
+    ],
+    ['token owners is null', isTokenChanged, corrupt(tokenChanged, ['d', 'token', 'owners'], null)],
+    ['token removed has no seq', isTokenRemoved, corrupt(tokenRemoved, ['seq'], undefined, true)],
+    ['token dragging has a seq', isTokenDragging, corrupt(tokenDragging, ['seq'], 3)],
+    [
+      'scene tokens is null',
+      isSceneActivated,
+      corrupt(sceneActivated, ['d', 'scene', 'tokens'], null),
     ],
     ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
     ['noop has data', isNoop, corrupt(noop, ['d'], {})],

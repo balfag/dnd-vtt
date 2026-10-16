@@ -16,6 +16,14 @@ export const MessageType = {
   ScenesChanged: 'scenes.changed',
   SceneChanged: 'scene.changed',
   SceneActivated: 'scene.activated',
+  TokenCreate: 'token.create',
+  TokenUpdate: 'token.update',
+  TokenMove: 'token.move',
+  TokenDrag: 'token.drag',
+  TokenDelete: 'token.delete',
+  TokenChanged: 'token.changed',
+  TokenRemoved: 'token.removed',
+  TokenDragging: 'token.dragging',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -87,7 +95,32 @@ export interface Fog {
   enabled: boolean
   ops: unknown[]
 }
-/** SceneView is a scene as the client sees it; tokens and drawings join later. */
+export interface TokenBar {
+  key: string
+  value: number
+  max: number
+  visibility: 'all' | 'owners' | 'gm'
+}
+export interface Token {
+  id: string
+  sceneId: string
+  layer: 'map' | 'tokens' | 'gm'
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: number
+  z: number
+  name: string
+  nameVisibility: 'all' | 'hover' | 'gm'
+  image: AssetRef | null
+  hidden: boolean
+  locked: boolean
+  owners: string[]
+  bars: TokenBar[]
+  conditions: string[]
+}
+/** SceneView is a scene as the client sees it; drawings join later. */
 export interface SceneView {
   id: string
   name: string
@@ -96,6 +129,8 @@ export interface SceneView {
   grid: Grid
   background: AssetRef | null
   fog: Fog
+  /** Only the tokens the viewer may see. */
+  tokens: Token[]
 }
 export interface SceneListItem {
   id: string
@@ -136,6 +171,14 @@ export type ScenesChangedMessage = {
 }
 export type SceneChangedMessage = { t: 'scene.changed'; seq: number; d: { scene: SceneView } }
 export type SceneActivatedMessage = { t: 'scene.activated'; seq: number; d: { scene: SceneView } }
+export type TokenChangedMessage = { t: 'token.changed'; seq: number; d: { token: Token } }
+export type TokenRemovedMessage = { t: 'token.removed'; seq: number; d: { tokenId: string } }
+/** TokenDraggingMessage is transient: it has no seq. */
+export type TokenDraggingMessage = {
+  t: 'token.dragging'
+  d: { tokenId: string; x: number; y: number }
+}
+export type TokenCreateAckMessage = { t: 'ack'; re: string; d: { tokenId: string } }
 export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
@@ -196,6 +239,46 @@ function isFog(v: unknown): v is Fog {
   return isObject(v) && typeof v.enabled === 'boolean' && Array.isArray(v.ops)
 }
 
+const visibilities: readonly unknown[] = ['all', 'owners', 'gm']
+
+function isTokenBar(v: unknown): v is TokenBar {
+  return (
+    isObject(v) &&
+    typeof v.key === 'string' &&
+    typeof v.value === 'number' &&
+    typeof v.max === 'number' &&
+    visibilities.includes(v.visibility)
+  )
+}
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === 'string')
+}
+
+export function isToken(v: unknown): v is Token {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.sceneId === 'string' &&
+    (v.layer === 'map' || v.layer === 'tokens' || v.layer === 'gm') &&
+    typeof v.x === 'number' &&
+    typeof v.y === 'number' &&
+    typeof v.w === 'number' &&
+    typeof v.h === 'number' &&
+    typeof v.rotation === 'number' &&
+    typeof v.z === 'number' &&
+    typeof v.name === 'string' &&
+    (v.nameVisibility === 'all' || v.nameVisibility === 'hover' || v.nameVisibility === 'gm') &&
+    (v.image === null || isAssetRef(v.image)) &&
+    typeof v.hidden === 'boolean' &&
+    typeof v.locked === 'boolean' &&
+    isStringArray(v.owners) &&
+    Array.isArray(v.bars) &&
+    v.bars.every(isTokenBar) &&
+    isStringArray(v.conditions)
+  )
+}
+
 function isSceneView(v: unknown): v is SceneView {
   return (
     isObject(v) &&
@@ -205,7 +288,9 @@ function isSceneView(v: unknown): v is SceneView {
     typeof v.height === 'number' &&
     isGrid(v.grid) &&
     (v.background === null || isAssetRef(v.background)) &&
-    isFog(v.fog)
+    isFog(v.fog) &&
+    Array.isArray(v.tokens) &&
+    v.tokens.every(isToken)
   )
 }
 
@@ -325,6 +410,48 @@ export function isSceneActivated(v: unknown): v is SceneActivatedMessage {
   )
 }
 
+export function isTokenChanged(v: unknown): v is TokenChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.TokenChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    isToken(v.d.token)
+  )
+}
+
+export function isTokenRemoved(v: unknown): v is TokenRemovedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.TokenRemoved &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.tokenId === 'string'
+  )
+}
+
+export function isTokenDragging(v: unknown): v is TokenDraggingMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.TokenDragging &&
+    v.seq === undefined &&
+    isObject(v.d) &&
+    typeof v.d.tokenId === 'string' &&
+    typeof v.d.x === 'number' &&
+    typeof v.d.y === 'number'
+  )
+}
+
+export function isTokenCreateAck(v: unknown): v is TokenCreateAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    typeof v.d.tokenId === 'string'
+  )
+}
+
 export function isSceneViewAck(v: unknown): v is SceneViewAckMessage {
   return (
     isObject(v) &&
@@ -397,4 +524,46 @@ export function sceneRefCommand(
 
 export function sceneReorderCommand(id: string, sceneIds: string[]): Envelope {
   return { t: MessageType.SceneReorder, id, d: { sceneIds } }
+}
+
+/** TokenFields are the settable fields of a token; absent ones stay as they are. */
+export interface TokenFields {
+  layer?: Token['layer']
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+  rotation?: number
+  z?: number
+  name?: string
+  nameVisibility?: Token['nameVisibility']
+  /** null removes the image; absent leaves it. */
+  imageAssetId?: string | null
+  hidden?: boolean
+  locked?: boolean
+  /** An empty list clears; absent leaves it. */
+  owners?: string[]
+  bars?: TokenBar[]
+  conditions?: string[]
+}
+
+export function tokenCreateCommand(id: string, sceneId: string, fields: TokenFields): Envelope {
+  return { t: MessageType.TokenCreate, id, d: { sceneId, ...fields } }
+}
+
+export function tokenUpdateCommand(id: string, tokenId: string, fields: TokenFields): Envelope {
+  return { t: MessageType.TokenUpdate, id, d: { tokenId, ...fields } }
+}
+
+export function tokenMoveCommand(id: string, tokenId: string, x: number, y: number): Envelope {
+  return { t: MessageType.TokenMove, id, d: { tokenId, x, y } }
+}
+
+/** tokenDragMessage has no id: the server never answers it. */
+export function tokenDragMessage(tokenId: string, x: number, y: number): Envelope {
+  return { t: MessageType.TokenDrag, d: { tokenId, x, y } }
+}
+
+export function tokenDeleteCommand(id: string, tokenId: string): Envelope {
+  return { t: MessageType.TokenDelete, id, d: { tokenId } }
 }

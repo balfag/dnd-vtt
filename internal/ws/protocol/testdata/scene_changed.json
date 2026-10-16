@@ -23,7 +23,8 @@
       "fog": {
         "enabled": false,
         "ops": []
-      }
+      },
+      "tokens": []
     }
   }
 }

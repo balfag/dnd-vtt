@@ -28,6 +28,10 @@ func strPtr(s string) *string { return &s }
 
 func intPtr(n int) *int { return &n }
 
+func fp(f float64) *float64 { return &f }
+
+func boolPtr(b bool) *bool { return &b }
+
 // examples are the reference messages of the protocol, one per file in
 // testdata. The TypeScript side reads the same files.
 func examples(t *testing.T) map[string]Envelope {
@@ -43,12 +47,35 @@ func examples(t *testing.T) map[string]Envelope {
 		ID: "01J00000000000000000000SC1", Name: "Таверна", Width: 3000, Height: 2000, Grid: grid,
 		Background: &AssetRef{AssetID: "01J00000000000000000000AS1", URL: "/assets/01J00000000000000000000AS1"},
 		Fog:        Fog{Enabled: false, Ops: json.RawMessage("[]")},
+		Tokens:     []Token{},
 	}
+	goblinImage := &AssetRef{AssetID: "01J00000000000000000000AS2", URL: "/assets/01J00000000000000000000AS2"}
+	goblin := Token{
+		ID: "01J00000000000000000000TK1", SceneID: "01J00000000000000000000SC2", Layer: "tokens",
+		X: 350, Y: 210.5, W: 1, H: 1, Rotation: 90, Z: 3,
+		Name: "Гоблин", NameVisibility: "gm", Image: goblinImage,
+		Hidden: false, Locked: false,
+		Owners: []string{"01J00000000000000000000PL2"},
+		Bars: []TokenBar{
+			{Key: "hp", Value: 7, Max: 7, Visibility: "owners"},
+			{Key: "ac", Value: 15, Max: 15, Visibility: "all"},
+			{Key: "secret", Value: 1, Max: 3, Visibility: "gm"},
+		},
+		Conditions: []string{"prone"},
+	}
+	goblinForPlayer := goblin
+	goblinForPlayer.Name = ""
+	goblinForPlayer.Bars = []TokenBar{{Key: "ac", Value: 15, Max: 15, Visibility: "all"}}
 	crypt := SceneView{
 		ID: "01J00000000000000000000SC2", Name: "Склеп", Width: 2800, Height: 2100, Grid: hexGrid,
 		Background: nil,
 		Fog:        Fog{Enabled: true, Ops: json.RawMessage("[]")},
+		Tokens:     []Token{goblin},
 	}
+	tavernForPlayer := tavern
+	tavernForPlayer.Tokens = []Token{goblinForPlayer}
+	cryptForPlayer := crypt
+	cryptForPlayer.Tokens = []Token{goblinForPlayer}
 
 	return map[string]Envelope{
 		"hello_command": with(mustNew(t, TypeHello, Hello{GameSessionID: "01J00000000000000000000GS1", LastSeq: 17}),
@@ -70,7 +97,7 @@ func examples(t *testing.T) map[string]Envelope {
 					{ID: "01J00000000000000000000PL1", DisplayName: "master", Color: "#e53935", Role: "gm", Online: true},
 					{ID: "01J00000000000000000000PL2", DisplayName: "Анна", Color: "#1e88e5", Role: "player", Online: true},
 				},
-				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavern},
+				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavernForPlayer},
 			},
 		}),
 		"snapshot_gm_scenes": mustNew(t, TypeSnapshot, Snapshot{
@@ -99,7 +126,7 @@ func examples(t *testing.T) map[string]Envelope {
 			Scenes: []SceneListItem{{ID: tavern.ID, Name: tavern.Name, Sort: 0}, {ID: crypt.ID, Name: crypt.Name, Sort: 1}},
 		}), func(e *Envelope) { e.Seq = 20 }),
 		"scene_changed":   with(mustNew(t, TypeSceneChanged, SceneChanged{Scene: tavern}), func(e *Envelope) { e.Seq = 21 }),
-		"scene_activated": with(mustNew(t, TypeSceneActivated, SceneActivated{Scene: crypt}), func(e *Envelope) { e.Seq = 22 }),
+		"scene_activated": with(mustNew(t, TypeSceneActivated, SceneActivated{Scene: cryptForPlayer}), func(e *Envelope) { e.Seq = 22 }),
 		"scene_view_ack":  with(mustNew(t, TypeAck, SceneViewAck{Scene: tavern}), func(e *Envelope) { e.Re = "c-5" }),
 		"snapshot_gm_no_game": mustNew(t, TypeSnapshot, Snapshot{
 			Seq:  0,
@@ -110,6 +137,29 @@ func examples(t *testing.T) map[string]Envelope {
 			func(e *Envelope) { e.Seq = 18 }),
 		"presence_new_player": with(mustNew(t, TypePresence, Presence{PlayerID: "01J00000000000000000000PL3", Online: true, Player: &newPlayer}),
 			func(e *Envelope) { e.Seq = 19 }),
+		"token_create_command": with(mustNew(t, TypeTokenCreate, TokenCreate{
+			SceneID: crypt.ID,
+			TokenFields: TokenFields{
+				X: fp(350), Y: fp(210.5), Name: strPtr("Гоблин"), NameVisibility: strPtr("gm"),
+				ImageAssetID: json.RawMessage(`"01J00000000000000000000AS2"`),
+				Owners:       []string{"01J00000000000000000000PL2"},
+				Bars:         []TokenBar{{Key: "hp", Value: 7, Max: 7, Visibility: "owners"}},
+			},
+		}), func(e *Envelope) { e.ID = "c-6" }),
+		"token_update_command": with(mustNew(t, TypeTokenUpdate, TokenUpdate{
+			TokenID: goblin.ID,
+			TokenFields: TokenFields{
+				Hidden: boolPtr(true), ImageAssetID: json.RawMessage("null"), Owners: []string{},
+			},
+		}), func(e *Envelope) { e.ID = "c-7" }),
+		"token_move_command": with(mustNew(t, TypeTokenMove, TokenMove{TokenID: goblin.ID, X: 420, Y: 260}),
+			func(e *Envelope) { e.ID = "c-8" }),
+		"token_drag_command": mustNew(t, TypeTokenDrag, TokenMove{TokenID: goblin.ID, X: 400.5, Y: 250}),
+		"token_changed":      with(mustNew(t, TypeTokenChanged, TokenChanged{Token: goblin}), func(e *Envelope) { e.Seq = 24 }),
+		"token_changed_player": with(mustNew(t, TypeTokenChanged, TokenChanged{Token: goblinForPlayer}),
+			func(e *Envelope) { e.Seq = 24 }),
+		"token_removed":     with(mustNew(t, TypeTokenRemoved, TokenRef{TokenID: goblin.ID}), func(e *Envelope) { e.Seq = 25 }),
+		"token_dragging":    mustNew(t, TypeTokenDragging, TokenMove{TokenID: goblin.ID, X: 400.5, Y: 250}),
 		"noop":              with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
 		"ping":              with(mustNew(t, TypePing, nil), func(e *Envelope) { e.ID = "p-5" }),
 		"pong":              with(mustNew(t, TypePong, nil), func(e *Envelope) { e.Re = "p-5" }),
@@ -185,6 +235,16 @@ func TestGolden(t *testing.T) {
 				data = &SceneChanged{}
 			case TypeSceneActivated:
 				data = &SceneActivated{}
+			case TypeTokenCreate:
+				data = &TokenCreate{}
+			case TypeTokenUpdate:
+				data = &TokenUpdate{}
+			case TypeTokenMove, TypeTokenDrag, TypeTokenDragging:
+				data = &TokenMove{}
+			case TypeTokenChanged:
+				data = &TokenChanged{}
+			case TypeTokenRemoved:
+				data = &TokenRef{}
 			case TypeSnapshot:
 				data = &Snapshot{}
 			case TypePresence:
@@ -198,5 +258,21 @@ func TestGolden(t *testing.T) {
 				t.Errorf("decode data of %s: %v", decoded.T, err)
 			}
 		})
+	}
+}
+
+func TestTokenFieldsTellAbsentFromEmpty(t *testing.T) {
+	var absent, empty TokenUpdate
+	if err := strictDecode([]byte(`{"tokenId":"t","hidden":true}`), &absent); err != nil {
+		t.Fatal(err)
+	}
+	if err := strictDecode([]byte(`{"tokenId":"t","owners":[],"bars":[],"conditions":[]}`), &empty); err != nil {
+		t.Fatal(err)
+	}
+	if absent.Owners != nil || absent.Bars != nil || absent.Conditions != nil {
+		t.Errorf("absent lists decoded as %+v, want nil", absent.TokenFields)
+	}
+	if empty.Owners == nil || empty.Bars == nil || empty.Conditions == nil {
+		t.Errorf("empty lists decoded as %+v, want non-nil", empty.TokenFields)
 	}
 }
