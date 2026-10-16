@@ -6,6 +6,7 @@ export const MessageType = {
   Hello: 'sync.hello',
   Snapshot: 'sync.snapshot',
   Presence: 'presence.update',
+  Noop: 'sync.noop',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -81,6 +82,8 @@ export interface Presence {
 export type HelloAckMessage = { t: 'ack'; re: string; d: HelloAck }
 export type SnapshotMessage = { t: 'sync.snapshot'; d: Snapshot }
 export type PresenceMessage = { t: 'presence.update'; seq: number; d: Presence }
+/** NoopMessage says that the event number is taken and there is nothing for this recipient. */
+export type NoopMessage = { t: 'sync.noop'; seq: number }
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
 
@@ -177,6 +180,16 @@ export function isPresence(v: unknown): v is PresenceMessage {
     typeof v.d.playerId === 'string' &&
     typeof v.d.online === 'boolean' &&
     (v.d.player === undefined || isPlayerInfo(v.d.player))
+  )
+}
+
+export function isNoop(v: unknown): v is NoopMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Noop &&
+    isInteger(v.seq, 1) &&
+    v.d === undefined &&
+    isEnvelope(v)
   )
 }
 

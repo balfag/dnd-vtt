@@ -4,6 +4,7 @@ import helloAckFresh from '../../../../internal/ws/protocol/testdata/hello_ack_f
 import helloAckResumed from '../../../../internal/ws/protocol/testdata/hello_ack_resumed.json'
 import helloCommandExample from '../../../../internal/ws/protocol/testdata/hello_command.json'
 import helloEmptyCommand from '../../../../internal/ws/protocol/testdata/hello_empty_command.json'
+import noop from '../../../../internal/ws/protocol/testdata/noop.json'
 import ping from '../../../../internal/ws/protocol/testdata/ping.json'
 import pong from '../../../../internal/ws/protocol/testdata/pong.json'
 import presenceNewPlayer from '../../../../internal/ws/protocol/testdata/presence_new_player.json'
@@ -15,6 +16,7 @@ import {
   isEnvelope,
   isErrorMessage,
   isHelloAck,
+  isNoop,
   isPong,
   isPresence,
   isSnapshot,
@@ -31,6 +33,7 @@ describe('server examples pass their guards', () => {
     ['snapshot_gm_no_game', snapshotGmNoGame, isSnapshot],
     ['presence_offline', presenceOffline, isPresence],
     ['presence_new_player', presenceNewPlayer, isPresence],
+    ['noop', noop, isNoop],
     ['pong', pong, isPong],
     ['error_bad_request', errorBadRequest, isErrorMessage],
   ]
@@ -127,6 +130,8 @@ describe('guards reject damaged messages', () => {
       corrupt(helloAckResumed, ['d', 'resumed'], undefined, true),
     ],
     ['error code is unknown', isErrorMessage, corrupt(errorBadRequest, ['d', 'code'], 'oops')],
+    ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
+    ['noop has data', isNoop, corrupt(noop, ['d'], {})],
     ['isEnvelope(null)', isEnvelope, null],
     ['isEnvelope([])', isEnvelope, []],
     ['isEnvelope({ t: 1 })', isEnvelope, { t: 1 }],

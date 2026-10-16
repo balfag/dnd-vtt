@@ -17,6 +17,7 @@ const (
 	TypeHello    = "sync.hello"
 	TypeSnapshot = "sync.snapshot"
 	TypePresence = "presence.update"
+	TypeNoop     = "sync.noop" // the number is taken, there is nothing for this recipient
 	TypePing     = "ping"
 	TypePong     = "pong"
 	TypeAck      = "ack"

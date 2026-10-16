@@ -33,6 +33,8 @@ type conn struct {
 	lastRefill time.Time
 	runStart   time.Time // start of the current run of rejections; zero: no run
 	lastReject time.Time
+
+	typeBuckets map[string]*typeBucket // limits of command types, read loop only
 }
 
 func newConn(ctx context.Context, cancel context.CancelFunc, h *Hub, c *websocket.Conn, acc auth.Account, sess auth.Session, playerID string, queueLen int) *conn {
@@ -186,7 +188,12 @@ func (cn *conn) handle(data []byte) bool {
 	case !cn.helloDone:
 		cn.sendError(env.ID, protocol.CodeBadRequest, "sync.hello expected")
 	default:
-		cn.sendError(env.ID, protocol.CodeBadRequest, "unknown message type")
+		entry, ok := cn.hub.handlers[env.T]
+		if !ok {
+			cn.sendError(env.ID, protocol.CodeBadRequest, "unknown message type")
+			return true
+		}
+		cn.dispatch(env, entry)
 	}
 	return true
 }
@@ -217,7 +224,7 @@ func (cn *conn) handleHello(env protocol.Envelope) {
 		}
 		for _, ev := range h.state.events {
 			if ev.seq > hello.LastSeq {
-				cn.sendRaw(ev.frame)
+				cn.sendRaw(h.frameLocked(ev, viewerLocked(cn)))
 			}
 		}
 		cn.subscribed = true
