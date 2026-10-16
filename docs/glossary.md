@@ -30,6 +30,7 @@
 | Пинг | Ping | Временная метка-указатель на сцене |
 | Инициатива | Initiative / Combat tracker | Очерёдность ходов в бою |
 | Бросок | Roll | Результат броска кубиков по формуле (`2d6+3`) |
+| Состояние | Condition | Эффект на существе по правилам SRD 5.2 (список — ниже, «Состояния»); на фишке — `conditions` |
 | Видимость броска | Roll visibility | `public`, `gm` (видно мастеру), `self` (видно себе), `blind` (видит только мастер, игрок не видит результат) |
 | Чат | Chat | Текстовые сообщения и лог бросков |
 | Отрисовка для получателя | Per-recipient rendering | Событие превращается для каждого получателя в то, что ему можно видеть (или в `sync.noop`) |
@@ -58,3 +59,25 @@
 | MCP-сервер | MCP server | Интерфейс Model Context Protocol для ИИ-ассистента мастера |
 | Общая библиотека | Content library | Публичный GitHub-репозиторий пакетов контента под CC-BY-4.0 или CC0 |
 | Приветственный экран | Welcome screen | Экран первого запуска с motion design о приложении и системах |
+
+## Состояния
+
+Названия состояний SRD 5.2. Ключ — в данных (`token.conditions`), RU и EN — в интерфейсе. Описания правил в интерфейс M1 не входят.
+
+| Ключ | RU | EN |
+|------|----|----|
+| `blinded` | Ослеплён | Blinded |
+| `charmed` | Очарован | Charmed |
+| `deafened` | Оглушён (глухота) | Deafened |
+| `exhaustion` | Истощение | Exhaustion |
+| `frightened` | Испуган | Frightened |
+| `grappled` | Схвачен | Grappled |
+| `incapacitated` | Недееспособен | Incapacitated |
+| `invisible` | Невидим | Invisible |
+| `paralyzed` | Парализован | Paralyzed |
+| `petrified` | Окаменел | Petrified |
+| `poisoned` | Отравлен | Poisoned |
+| `prone` | Лежит ничком | Prone |
+| `restrained` | Опутан | Restrained |
+| `stunned` | Ошеломлён | Stunned |
+| `unconscious` | Без сознания | Unconscious |
