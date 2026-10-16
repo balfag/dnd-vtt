@@ -197,7 +197,13 @@ func (e *emitter) Emit(r Renderer) {
 	}
 }
 
-func (e *emitter) EmitAll(t string, d any) { e.Emit(Same(t, d)) }
+func (e *emitter) EmitAll(t string, d any) {
+	e.h.mu.Lock()
+	defer e.h.mu.Unlock()
+	if e.liveLocked() {
+		e.h.emitSameLocked(t, d)
+	}
+}
 
 func (e *emitter) Transient(t string, d any, to func(Viewer) bool) {
 	env, err := protocol.New(t, d)

@@ -21,6 +21,14 @@ func (f *fixture) emit(r Renderer) {
 	f.hub.emitLocked(r)
 }
 
+// emitSame publishes an event for everyone the way EmitAll does.
+func (f *fixture) emitSame(t string, d any) {
+	f.t.Helper()
+	f.hub.mu.Lock()
+	defer f.hub.mu.Unlock()
+	f.hub.emitSameLocked(t, d)
+}
+
 // onlyGM renders t and d for the GM and nothing for the others.
 func onlyGM(t string, d any) Renderer {
 	return func(v Viewer) (string, any, bool) { return t, d, v.IsGM }
@@ -174,7 +182,7 @@ func TestRenderEncodingErrorBecomesNoop(t *testing.T) {
 	wantNoop(t, read(t, player), n)
 	wantNoop(t, read(t, gm), n)
 
-	f.emit(Same("test.bad_same", func() {}))
+	f.emitSame("test.bad_same", func() {})
 	wantNoop(t, read(t, player), n+1)
 	wantNoop(t, read(t, gm), n+1)
 
@@ -186,7 +194,7 @@ func TestRenderEncodingErrorBecomesNoop(t *testing.T) {
 func TestSameKeepsOneFrameInTheBuffer(t *testing.T) {
 	f := newFixture(t, testOptions())
 	f.helloAs(f.player)
-	f.emit(Same("test.same", 1))
+	f.emitSame("test.same", 1)
 	f.emit(onlyGM("test.secret", 2))
 
 	f.hub.mu.Lock()
@@ -205,5 +213,26 @@ func TestNoopFrame(t *testing.T) {
 	var env protocol.Envelope
 	if err := json.Unmarshal(noopFrame(42), &env); err != nil || env.T != protocol.TypeNoop || env.Seq != 42 {
 		t.Fatalf("noopFrame = %s, %v", noopFrame(42), err)
+	}
+}
+
+// A renderer that uses Same for one of its branches is still rendered per
+// recipient: the GM must not get the player's view.
+func TestRendererBuiltFromSameIsStillPerRecipient(t *testing.T) {
+	f := newFixture(t, testOptions())
+	player, gm := connectPair(f)
+
+	f.emit(func(v Viewer) (string, any, bool) {
+		if v.IsGM {
+			return "x", "gm-secret", true
+		}
+		return Same("x", "player-view")(v)
+	})
+	n := f.stateSeq()
+	if env := read(t, gm); env.T != "x" || env.Seq != n || string(env.D) != `"gm-secret"` {
+		t.Errorf("GM got %+v, want the secret", env)
+	}
+	if env := read(t, player); env.T != "x" || env.Seq != n || string(env.D) != `"player-view"` {
+		t.Errorf("player got %+v, want the player view", env)
 	}
 }

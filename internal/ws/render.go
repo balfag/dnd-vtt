@@ -11,16 +11,6 @@ import (
 type Viewer struct {
 	IsGM     bool
 	PlayerID string // "" for a GM who is not a participant of the campaign
-
-	// same is set only by emitLocked, to learn whether a Renderer is a Same one.
-	same *sameEvent
-}
-
-// sameEvent is what a Same renderer reports to a probe.
-type sameEvent struct {
-	t  string
-	d  any
-	ok bool
 }
 
 // Renderer returns the event as v must see it; ok=false means v gets sync.noop.
@@ -29,23 +19,11 @@ type sameEvent struct {
 // shared mutable state.
 type Renderer func(v Viewer) (t string, d any, ok bool)
 
-// Same is a Renderer that gives everyone the same event.
+// Same is a Renderer that gives everyone the same event. To emit an event to
+// everyone use Emitter.EmitAll: its frame is serialized once, while a
+// Renderer is called for every recipient and on every resume.
 func Same(t string, d any) Renderer {
-	return func(v Viewer) (string, any, bool) {
-		if v.same != nil {
-			*v.same = sameEvent{t: t, d: d, ok: true}
-		}
-		return t, d, true
-	}
-}
-
-// probeSame reports whether r is a Same renderer and, if so, its event. It
-// calls r once with an empty viewer that carries the probe; any other renderer
-// just answers for that empty viewer and the answer is dropped.
-func probeSame(r Renderer) (sameEvent, bool) {
-	var se sameEvent
-	r(Viewer{same: &se})
-	return se, se.ok
+	return func(Viewer) (string, any, bool) { return t, d, true }
 }
 
 // noopFrame is the frame of an event that has nothing for the recipient.
@@ -87,25 +65,34 @@ func viewerLocked(cn *conn) Viewer {
 	return Viewer{IsGM: cn.acc.IsGM, PlayerID: cn.playerID}
 }
 
-// emitLocked assigns the next seq to the event r describes, keeps it in the
-// buffer (dropping events beyond BufferSize or older than BufferTTL) and
-// queues to every subscribed connection its own frame.
+// emitLocked assigns the next seq to the event r describes, keeps it with r in
+// the buffer (dropping events beyond BufferSize or older than BufferTTL) and
+// queues to every subscribed connection its own rendering of it.
 func (h *Hub) emitLocked(r Renderer) {
 	if h.state.id == "" {
 		return
 	}
-	ev := bufferedEvent{seq: h.state.seq + 1, at: h.opts.Now()}
-	if se, same := probeSame(r); same {
-		frame, err := marshalEvent(se.t, ev.seq, se.d)
-		if err != nil {
-			h.logger.Error("ws: encode event", "type", se.t, "seq", ev.seq, "err", err)
-			frame = noopFrame(ev.seq)
-		}
-		ev.frame = frame
-	} else {
-		ev.render = r
-	}
+	h.appendEventLocked(bufferedEvent{seq: h.state.seq + 1, at: h.opts.Now(), render: r})
+}
 
+// emitSameLocked is emitLocked for an event everyone sees the same: the frame
+// is serialized once and kept in the buffer.
+func (h *Hub) emitSameLocked(t string, d any) {
+	if h.state.id == "" {
+		return
+	}
+	ev := bufferedEvent{seq: h.state.seq + 1, at: h.opts.Now()}
+	frame, err := marshalEvent(t, ev.seq, d)
+	if err != nil {
+		h.logger.Error("ws: encode event", "type", t, "seq", ev.seq, "err", err)
+		frame = noopFrame(ev.seq)
+	}
+	ev.frame = frame
+	h.appendEventLocked(ev)
+}
+
+// appendEventLocked buffers ev and sends it to the subscribed connections.
+func (h *Hub) appendEventLocked(ev bufferedEvent) {
 	h.state.seq = ev.seq
 	h.state.events = append(h.state.events, ev)
 	h.trimBufferLocked()
@@ -118,5 +105,5 @@ func (h *Hub) emitLocked(r Renderer) {
 
 // broadcastLocked emits an event of type t for everyone.
 func (h *Hub) broadcastLocked(t string, d any) {
-	h.emitLocked(Same(t, d))
+	h.emitSameLocked(t, d)
 }

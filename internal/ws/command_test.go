@@ -218,8 +218,14 @@ func TestCommandTypeLimits(t *testing.T) {
 	}, HandlerOptions{RatePerSec: 5})
 	c, _ := f.helloAs(f.player)
 
-	for range 20 {
-		command(t, c, "test.silent", "")
+	// The commands have ids, and still the rejected ones get no reply.
+	for i := range 20 {
+		command(t, c, "test.silent", fmt.Sprintf("s-%d", i))
+	}
+	for i := range 5 {
+		if ack := read(t, c); ack.T != protocol.TypeAck {
+			t.Fatalf("reply %d = %+v, want an ack of an executed command", i, ack)
+		}
 	}
 	quiet(t, c) // the pong comes after all 20 are handled; no error was sent
 	if silent.Load() != 5 {
@@ -424,4 +430,62 @@ func TestCommandErrorMessage(t *testing.T) {
 	if err.Error() != "ws: forbidden: no way" || err.Code != "forbidden" || err.Message != "no way" {
 		t.Errorf("Errorf = %+v, %q", err, err.Error())
 	}
+}
+
+// The bucket of a type holds at most RatePerSec tokens: a long pause does not
+// store up more.
+func TestTypeLimitBucketHasACeiling(t *testing.T) {
+	var mu sync.Mutex
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	opts := noLimits()
+	opts.Now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return now
+	}
+	f := newFixture(t, opts)
+	var ran atomic.Int32
+	f.hub.Handle("test.capped", func(context.Context, Command, Emitter) (any, error) {
+		ran.Add(1)
+		return nil, nil
+	}, HandlerOptions{RatePerSec: 5, Silent: true})
+	c, _ := f.helloAs(f.player)
+
+	command(t, c, "test.capped", "")
+	quiet(t, c)
+	mu.Lock()
+	now = now.Add(10 * time.Second) // would refill 50 tokens without the ceiling
+	mu.Unlock()
+	for range 20 {
+		command(t, c, "test.capped", "")
+	}
+	quiet(t, c)
+
+	if got := ran.Load(); got != 1+5 {
+		t.Errorf("commands run = %d, want 6 (the first and a full bucket of 5)", got)
+	}
+}
+
+// An Emitter kept after its handler returned publishes nothing.
+func TestEmitterIsDeadAfterTheHandlerReturns(t *testing.T) {
+	f := newFixture(t, noLimits())
+	saved := make(chan Emitter, 1)
+	f.handle("test.keep", func(_ context.Context, _ Command, em Emitter) (any, error) {
+		saved <- em
+		return nil, nil
+	})
+	c, _ := f.helloAs(f.player)
+	command(t, c, "test.keep", "c-1")
+	wantAckFor(t, read(t, c), "c-1")
+
+	em := <-saved
+	seq := f.stateSeq()
+	em.EmitAll("test.late", 1)
+	em.Emit(Same("test.late", 2))
+	em.Transient("test.late", 3, nil)
+
+	if got := f.stateSeq(); got != seq {
+		t.Errorf("seq moved from %d to %d", seq, got)
+	}
+	quiet(t, c) // nothing was sent
 }
