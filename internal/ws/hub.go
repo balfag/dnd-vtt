@@ -3,7 +3,6 @@ package ws
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -19,8 +18,10 @@ import (
 
 const (
 	maxMessageBytes = 64 << 10
-	sendQueueLen    = 64
-	writeTimeout    = 10 * time.Second
+	// sendQueueSlack is the room of a connection's send queue beyond a full
+	// resume buffer: replies, presence and the like.
+	sendQueueSlack = 64
+	writeTimeout   = 10 * time.Second
 )
 
 // Options tunes a Hub. Zero values mean the production defaults.
@@ -49,6 +50,12 @@ type Hub struct {
 	mu    sync.Mutex
 	conns map[*conn]struct{}
 	state gameState
+
+	// cmdMu serializes table commands: the change in the database and the seq
+	// of its events do not interleave with another command. Lock order: cmdMu,
+	// then mu, never the other way round; a handler runs without mu.
+	cmdMu    sync.Mutex
+	handlers map[string]handlerEntry
 }
 
 // gameState is the event stream of the active game session.
@@ -60,10 +67,14 @@ type gameState struct {
 	events     []bufferedEvent // ascending seq
 }
 
+// bufferedEvent is an event kept for resume. An event for everyone (Same)
+// keeps its frame, serialized once; any other keeps the Renderer, so a resume
+// renders it anew for the resuming connection.
 type bufferedEvent struct {
-	seq   int64
-	at    time.Time
-	frame []byte // marshalled envelope
+	seq    int64
+	at     time.Time
+	frame  []byte   // marshalled envelope, nil for a rendered event
+	render Renderer // nil for an event with a frame
 }
 
 // NewHub returns a Hub that reads game state from g.
@@ -92,7 +103,7 @@ func NewHub(g *game.Service, logger *slog.Logger, opts Options) *Hub {
 	if opts.BufferTTL <= 0 {
 		opts.BufferTTL = 5 * time.Minute
 	}
-	return &Hub{game: g, logger: logger, opts: opts, conns: make(map[*conn]struct{})}
+	return &Hub{game: g, logger: logger, opts: opts, conns: make(map[*conn]struct{}), handlers: make(map[string]handlerEntry)}
 }
 
 // Serve upgrades r to a WebSocket and runs the connection until it closes.
@@ -121,7 +132,7 @@ func (h *Hub) Serve(w http.ResponseWriter, r *http.Request, acc auth.Account, se
 		return
 	}
 
-	cn := newConn(ctx, cancel, h, c, acc, sess, playerID, sendQueueLen)
+	cn := newConn(ctx, cancel, h, c, acc, sess, playerID, h.opts.BufferSize+sendQueueSlack)
 	h.register(ctx, cn)
 	defer h.unregister(cn)
 
@@ -286,34 +297,6 @@ func (h *Hub) trimBufferLocked() {
 		ev = ev[1:]
 	}
 	h.state.events = ev
-}
-
-// broadcastLocked assigns the next seq to an event of type t, keeps it in the
-// buffer (dropping events beyond BufferSize or older than BufferTTL) and
-// queues it to every subscribed connection.
-func (h *Hub) broadcastLocked(t string, d any) {
-	if h.state.id == "" {
-		return
-	}
-	env, err := protocol.New(t, d)
-	if err != nil {
-		h.logger.Error("ws: encode event", "type", t, "err", err)
-		return
-	}
-	env.Seq = h.state.seq + 1
-	frame, err := json.Marshal(env)
-	if err != nil {
-		h.logger.Error("ws: marshal event", "type", t, "err", err)
-		return
-	}
-	h.state.seq = env.Seq
-	h.state.events = append(h.state.events, bufferedEvent{seq: env.Seq, at: h.opts.Now(), frame: frame})
-	h.trimBufferLocked()
-	for cn := range h.conns {
-		if cn.subscribed {
-			cn.sendRaw(frame)
-		}
-	}
 }
 
 // canResumeLocked reports whether a client that has seen events up to
