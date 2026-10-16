@@ -41,7 +41,7 @@ export function Tabs({ tabs, selected, onSelect }: TabsProps) {
           role="tab"
           id={tabId(tab.id)}
           aria-selected={tab.id === selected}
-          aria-controls={panelId(tab.id)}
+          aria-controls={tab.id === selected ? panelId(tab.id) : undefined}
           tabIndex={tab.id === selected ? 0 : -1}
           onClick={() => {
             onSelect(tab.id)

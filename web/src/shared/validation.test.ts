@@ -27,12 +27,20 @@ describe('isValidPassword', () => {
   })
 
   it('counts code points, not UTF-16 units', () => {
+    // Each emoji is two UTF-16 units but one code point.
+    expect(isValidPassword('😀'.repeat(4))).toBe(false)
     expect(isValidPassword('😀'.repeat(8))).toBe(true)
+    expect(isValidPassword('😀'.repeat(128))).toBe(true)
     expect(isValidPassword('😀'.repeat(129))).toBe(false)
   })
 })
 
 describe('isValidDisplayName', () => {
+  it('counts code points, not UTF-16 units', () => {
+    expect(isValidDisplayName('😀'.repeat(64))).toBe(true)
+    expect(isValidDisplayName('😀'.repeat(65))).toBe(false)
+  })
+
   it.each(['A', 'Анна', 'x'.repeat(64), ' Anna '])('accepts %j', (name) => {
     expect(isValidDisplayName(name)).toBe(true)
   })
