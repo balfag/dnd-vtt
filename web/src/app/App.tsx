@@ -4,7 +4,7 @@ import { LoginPage } from '../features/auth/LoginPage'
 import { PlayPage } from '../features/auth/PlayPage'
 import { ResetPage } from '../features/auth/ResetPage'
 import { SetupPage } from '../features/auth/SetupPage'
-import { GmHome } from '../features/home/GmHome'
+import { CampaignsPage } from '../features/campaigns/CampaignsPage'
 import { PlayerHome } from '../features/home/PlayerHome'
 import { getSetupNeeded, postGMToken } from '../shared/api/auth'
 import { AuthLayout } from '../ui/AuthLayout'
@@ -113,7 +113,7 @@ function HomeRoute() {
     return null
   }
   return state.me.isGm ? (
-    <GmHome login={state.me.login} />
+    <CampaignsPage login={state.me.login} />
   ) : (
     <PlayerHome name={state.me.player?.displayName ?? state.me.login} />
   )

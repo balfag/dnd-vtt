@@ -28,11 +28,9 @@ test('gm sets up, a player registers by the game link and the link can be replac
   await gm.getByLabel(ru.common.password, { exact: true }).fill(gmPassword)
   await gm.getByLabel(ru.common.passwordRepeat, { exact: true }).fill(gmPassword)
   await gm.getByRole('button', { name: ru.setup.submit }).click()
-  await expect(
-    gm.getByRole('heading', { name: fill(ru.home.gm.title, { login: gmLogin }) }),
-  ).toBeVisible()
+  await expect(gm.getByRole('heading', { name: ru.campaigns.title })).toBeVisible()
 
-  // 2. The GM starts a game over REST: there is no campaigns screen yet.
+  // 2. The GM starts a game over REST.
   const campaignRes = await gmContext.request.post('/api/campaigns', { data: { name: 'E2E' } })
   expect(campaignRes.status()).toBe(201)
   const campaign = (await campaignRes.json()) as { id: string }

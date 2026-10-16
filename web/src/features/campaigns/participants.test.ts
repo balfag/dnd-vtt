@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CampaignPlayer } from '../../shared/api/campaigns'
 import type { PlayerInfo } from '../../shared/protocol'
-import { hasUnknownParticipant, mergeParticipants } from './participants'
+import { mergeParticipants, unknownParticipantIds } from './participants'
 
 function rest(id: string, patch: Partial<CampaignPlayer> = {}): CampaignPlayer {
   return {
@@ -56,10 +56,12 @@ describe('mergeParticipants', () => {
   })
 })
 
-describe('hasUnknownParticipant', () => {
+describe('unknownParticipantIds', () => {
   it('finds a participant that REST does not have', () => {
-    expect(hasUnknownParticipant([rest('p1')], [live('p1', true), live('p2', true)])).toBe(true)
-    expect(hasUnknownParticipant([rest('p1'), rest('p2')], [live('p2', false)])).toBe(false)
-    expect(hasUnknownParticipant([], [])).toBe(false)
+    expect(unknownParticipantIds([rest('p1')], [live('p1', true), live('p2', true)])).toEqual([
+      'p2',
+    ])
+    expect(unknownParticipantIds([rest('p1'), rest('p2')], [live('p2', false)])).toEqual([])
+    expect(unknownParticipantIds([], [])).toEqual([])
   })
 })

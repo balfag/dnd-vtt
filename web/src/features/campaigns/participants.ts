@@ -21,7 +21,7 @@ export function mergeParticipants(
     })
 }
 
-/** hasUnknownParticipant tells that live has someone the REST list lacks (a late registration). */
-export function hasUnknownParticipant(rest: CampaignPlayer[], live: PlayerInfo[]): boolean {
-  return live.some((p) => !rest.some((r) => r.id === p.id))
+/** unknownParticipantIds lists who live has and the REST list lacks (a late registration). */
+export function unknownParticipantIds(rest: CampaignPlayer[], live: PlayerInfo[]): string[] {
+  return live.filter((p) => !rest.some((r) => r.id === p.id)).map((p) => p.id)
 }

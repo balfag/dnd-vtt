@@ -1,0 +1,266 @@
+/* The GM's screen: a working registry, not a landing page. */
+.campaigns {
+  max-width: 60rem;
+  margin-left: clamp(0px, 8vw, 120px);
+  padding: clamp(32px, 8vh, 80px) 24px 96px;
+}
+
+.campaigns__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-bottom: 24px;
+}
+
+.campaigns__title {
+  margin: 0;
+  font: 700 40px/1.1 var(--serif);
+}
+
+.campaigns__who {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.campaigns__login {
+  color: var(--fog);
+}
+
+/* The running game: a strip above the list. */
+.active-game {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--verdigris);
+  background: var(--board);
+}
+
+.active-game__title {
+  margin: 0;
+  font: 700 24px/1.2 var(--serif);
+}
+
+.active-game__hidden {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--fog);
+}
+
+.active-game__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Participants. */
+.participants {
+  display: grid;
+  gap: 8px;
+}
+
+.participants__title {
+  margin: 0;
+  font: 700 18px/1.2 var(--serif);
+}
+
+.participants__empty {
+  margin: 0;
+  color: var(--fog);
+}
+
+.participants__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.participant {
+  display: grid;
+  /* The same columns in every row, so the status and the actions line up. */
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) 6rem 21rem;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.participant__dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 50%;
+}
+
+.participant__name {
+  font-weight: 500;
+}
+
+.participant__login {
+  color: var(--fog);
+}
+
+.participant__online {
+  color: var(--verdigris);
+}
+
+.participant__offline {
+  color: var(--fog);
+}
+
+.participant__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+}
+
+.participant__role {
+  color: var(--brass);
+}
+
+.participant__error {
+  grid-column: 1 / -1;
+}
+
+/* A button that looks like text: the quiet actions of a row. */
+.text-button {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--chalk);
+  font: 400 15px/1.4 var(--sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.text-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.text-button--name {
+  font-size: 17px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+}
+
+.text-button--name:hover {
+  text-decoration: underline;
+}
+
+/* The registry of campaigns. */
+.registry {
+  display: grid;
+}
+
+.registry__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12rem 12rem;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.registry__row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.registry__row--head {
+  border-top: 0;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.registry__created {
+  color: var(--fog);
+}
+
+.registry__action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.registry__running {
+  color: var(--verdigris);
+}
+
+.registry__edit {
+  display: grid;
+  gap: 4px;
+}
+
+.registry__empty {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+}
+
+.registry__empty p {
+  margin: 0;
+  max-width: 70ch;
+}
+
+.registry__new {
+  margin-top: 16px;
+}
+
+.registry-section {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 719px) {
+  .campaigns {
+    margin-left: 0;
+    padding: 32px 16px 96px;
+  }
+
+  .campaigns__title {
+    font-size: 31px;
+  }
+
+  /* Rows wrap into two lines: the action goes under the text. */
+  .participant {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .participant__login {
+    grid-column: 2;
+  }
+
+  .participant__online,
+  .participant__offline {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .participant__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .registry__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .registry__row--head > :nth-child(2) {
+    display: none;
+  }
+
+  .registry__created {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .registry__action {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
