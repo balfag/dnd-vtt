@@ -67,6 +67,7 @@ func examples(t *testing.T) map[string]Envelope {
 			func(e *Envelope) { e.Seq = 18 }),
 		"presence_new_player": with(mustNew(t, TypePresence, Presence{PlayerID: "01J00000000000000000000PL3", Online: true, Player: &newPlayer}),
 			func(e *Envelope) { e.Seq = 19 }),
+		"noop":              with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
 		"ping":              with(mustNew(t, TypePing, nil), func(e *Envelope) { e.ID = "p-5" }),
 		"pong":              with(mustNew(t, TypePong, nil), func(e *Envelope) { e.Re = "p-5" }),
 		"error_bad_request": errReply,
