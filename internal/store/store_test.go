@@ -35,8 +35,8 @@ func TestOpenNonASCIIPath(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("database file missing: %v", err)
 	}
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 5 {
-		t.Errorf("SchemaVersion = %d, %v; want 5", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 6 {
+		t.Errorf("SchemaVersion = %d, %v; want 6", v, err)
 	}
 }
 
@@ -81,11 +81,11 @@ func TestReopen(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 5 {
-		t.Errorf("SchemaVersion = %d, %v; want 5", v, err)
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 6 {
+		t.Errorf("SchemaVersion = %d, %v; want 6", v, err)
 	}
-	if n := countMigrations(t, s.DB()); n != 5 {
-		t.Errorf("schema_migrations rows = %d, want 5", n)
+	if n := countMigrations(t, s.DB()); n != 6 {
+		t.Errorf("schema_migrations rows = %d, want 6", n)
 	}
 }
 
