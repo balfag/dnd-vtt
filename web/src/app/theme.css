@@ -1,0 +1,34 @@
+@import '@fontsource/alegreya/400.css';
+@import '@fontsource/alegreya/700.css';
+@import '@fontsource/alegreya-sans/400.css';
+@import '@fontsource/alegreya-sans/500.css';
+
+:root {
+  --slate: #23303a;
+  --board: #2e3d49;
+  --chalk: #ece7db;
+  --fog: #9aa8b3;
+  --verdigris: #4fa58e;
+  --ink-on-verdigris: #10201b;
+  --brass: #c9a34e;
+  --seal: #c25468;
+
+  --serif: 'Alegreya', Georgia, serif;
+  --sans: 'Alegreya Sans', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--slate);
+  color: var(--chalk);
+  font: 400 17px/1.5 var(--sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
