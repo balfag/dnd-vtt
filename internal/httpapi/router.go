@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/ws"
@@ -27,6 +28,7 @@ type Deps struct {
 	Auth    *auth.Service
 	Game    *game.Service
 	Hub     *ws.Hub
+	Assets  *asset.Service
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
 }
 
@@ -59,6 +61,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/game-links/{token}", a.getGameLink)
 	mux.HandleFunc("POST /api/accounts/{id}/password-resets", a.createPasswordReset)
 	mux.HandleFunc("POST /api/password-resets/{token}", a.applyPasswordReset)
+	mux.HandleFunc("POST /api/campaigns/{id}/assets", a.uploadAsset)
+	mux.HandleFunc("GET /api/campaigns/{id}/assets", a.listAssets)
+	mux.HandleFunc("DELETE /api/assets/{id}", a.deleteAsset)
+	mux.HandleFunc("GET /assets/{id}", a.serveAsset)
 	mux.HandleFunc("GET /ws", a.getWS)
 
 	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
