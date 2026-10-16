@@ -1,6 +1,6 @@
 # Модель данных
 
-> Статус: `draft` (разделы «Аккаунты и игровые сессии», Scene, Token, Drawing, ChatMessage, Asset — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
+> Статус: `draft` (разделы «Аккаунты и игровые сессии», Scene, Token, Drawing, ChatMessage, Combat, Asset — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
 
 ## Хранение
 
@@ -23,13 +23,13 @@ Account 1─* LoginSession *─0..1 GameSession
 
 Campaign 1─* Scene 1─* Token *─0..1 Actor
    │            ├─* Drawing
+   │            ├─ Combat 1─* Combatant
    │            └─ fog (JSON в Scene)
    ├─* Actor (character | npc | monster) ─ sheet JSON
    ├─* Player (участник кампании) ─0..1 Actor (свой персонаж)
    ├─* GameSession (игровая встреча)
    ├─* Asset
    ├─* ChatMessage (текст и броски)
-   ├─* CombatTracker 1─* Combatant
    └─* WikiPage (дерево) ─0..1 WikiDatabase
                                └─* WikiProperty
 ```
@@ -106,10 +106,15 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - Индекс `(campaign_id, id)`: история читается страницами по убыванию `id` (ULID сортируется по времени).
 - Видимость при чтении — правила протокола; фильтр применяется к каждой строке на сервере.
 
-### CombatTracker / Combatant (`draft`)
-`tracker: id, scene_id, round, turn_index, active`
-`combatant: id, tracker_id, token_id?, actor_id?, initiative, sort, hidden`
-Уточняется в задаче трекера инициативы.
+### Combat / Combatant
+`combat: scene_id, round, turn_combatant_id?, created_at`
+`combatant: id, scene_id, token_id, initiative?, added_seq, hidden`
+
+- Трекер — одна строка на сцену: `combat.scene_id` — первичный ключ, → `scene(id)` `ON DELETE CASCADE`; `round` ≥ 1.
+- `combatant.scene_id` → `combat(scene_id)` `ON DELETE CASCADE`; `token_id` → `token(id)` `ON DELETE CASCADE` (удалённая фишка выходит из боя); уникальная пара `(scene_id, token_id)`.
+- `initiative` — `INTEGER` `-99..99` или `NULL`; `added_seq` — порядок добавления (для равных значений); `hidden` — `0`/`1`.
+- `turn_combatant_id` → `combatant(id)` `ON DELETE SET NULL`; при удалении участника, чей был ход, сервис сам переводит ход раньше удаления.
+- `actor_id` у участника добавит M4 вместе с актёрами.
 
 ### WikiPage
 `id, campaign_id, parent_id?, title, icon, sort, content JSON (ProseMirror doc), database_id? (если страница — запись базы), props JSON (значения свойств записи), created_at, updated_at`
@@ -139,5 +144,5 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - Любое изменение схемы — новая миграция; старые не редактируются после мерджа.
 - Колонки со ссылкой на таблицу из более позднего майлстоуна (`campaign.active_scene_id`, `player.actor_id`) добавляет миграция, создающая эту таблицу: `ALTER TABLE ... ADD COLUMN ... REFERENCES ...`.
 - Внутри миграции нельзя менять `PRAGMA foreign_keys`: в транзакции эта прагма игнорируется.
-- Миграции M1: `0005_assets` (`asset`), `0006_scenes` (`scene`, `token`, `drawing`, `campaign.active_scene_id`), `0007_chat` (`chat_message`). Номера закреплены за задачами: если задачи мерджатся не по порядку, исполнитель следующей задачи берёт следующий свободный номер и пишет об этом в «Отклонениях».
+- Миграции M1: `0005_assets` (`asset`), `0006_scenes` (`scene`, `token`, `drawing`, `campaign.active_scene_id`), `0007_chat` (`chat_message`), `0008_combat` (`combat`, `combatant`). Номера закреплены за задачами: если задачи мерджатся не по порядку, исполнитель следующей задачи берёт следующий свободный номер и пишет об этом в «Отклонениях».
 - JSON-поля: при изменении формата повышается `schema_version` и пишется функция апгрейда в Go.
