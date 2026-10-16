@@ -1,6 +1,6 @@
 # ADR-0013: Playwright для e2e-тестов
 
-- **Статус:** proposed
+- **Статус:** accepted
 - **Дата:** 2026-10-16
 - **Supersedes:** —
 
