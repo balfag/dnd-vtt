@@ -269,7 +269,17 @@
 ```jsonc
 { "id": "01J…", "sceneId": "01J…", "kind": "freehand", "data": {…}, "color": "#c9a34e", "authorPlayerId": "01J…" }
 ```
-`kind`: `freehand` (`data.points`), `rect`, `circle`, `text` (`data.text`, `data.x`, `data.y`, `data.size`), `template` (`data.shape`: `cone` | `sphere` | `line` | `cube` | `cylinder`, `data.x`, `data.y`, `data.size` в футах, `data.direction` в градусах).
+`data` по `kind` (координаты — конечные числа в пределах ±100000):
+
+| `kind` | `data` |
+|--------|--------|
+| `freehand` | `{ "points": [[x,y],…] }` — 2–2000 точек |
+| `rect` | `{ "x", "y", "w", "h" }` — левый верхний угол, `w`, `h` > 0 |
+| `circle` | `{ "x", "y", "r" }` — центр, `r` > 0 |
+| `text` | `{ "x", "y", "text", "size" }` — `text` 1–500 символов, `size` 8–200 px |
+| `template` | `{ "shape", "x", "y", "size", "direction" }` — `shape`: `cone` \| `sphere` \| `line` \| `cube` \| `cylinder`; `x`, `y` — точка начала (конус, линия) или центр; `size` — 5–1000 футов (длина конуса и линии, радиус сферы и цилиндра, ребро куба); `direction` — градусы по часовой стрелке от оси X, сервер нормализует в `[0, 360)` |
+
+Лишние поля в `data` — `bad_request`. `kind` после создания не меняется.
 
 ### Видимость фишки для игрока
 
