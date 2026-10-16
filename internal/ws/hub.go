@@ -56,6 +56,9 @@ type Hub struct {
 	// then mu, never the other way round; a handler runs without mu.
 	cmdMu    sync.Mutex
 	handlers map[string]handlerEntry
+
+	// snapshotSources are read-only once the hub serves connections.
+	snapshotSources []SnapshotSource
 }
 
 // gameState is the event stream of the active game session.
@@ -348,13 +351,34 @@ func (h *Hub) snapshotLocked(ctx context.Context, cn *conn) (protocol.Snapshot, 
 		}
 		infos = append(infos, playerInfo(p, online[p.ID]))
 	}
+	// An empty table first; the sources fill their parts of it in order.
+	table := protocol.SnapshotTable{Scenes: []protocol.SceneListItem{}}
+	for _, src := range h.snapshotSources {
+		if err := src.FillSnapshot(ctx, viewerLocked(cn), h.state.campaignID, &table); err != nil {
+			return protocol.Snapshot{}, err
+		}
+	}
 	snap.Game = &protocol.SnapshotGame{
 		GameSessionID: h.state.id,
 		StartedAt:     h.state.startedAt.UnixMilli(),
 		Campaign:      protocol.CampaignRef{ID: camp.ID, Name: camp.Name},
 		Players:       infos,
+		SnapshotTable: table,
 	}
 	return snap, nil
+}
+
+// SnapshotSource fills its part of the M1 table in sync.snapshot. It runs
+// under Hub.mu while the snapshot is built and may read the database, but must
+// not call the Hub.
+type SnapshotSource interface {
+	FillSnapshot(ctx context.Context, v Viewer, campaignID string, t *protocol.SnapshotTable) error
+}
+
+// AddSnapshotSource appends s; sources run in the order they were added.
+// Call before serving.
+func (h *Hub) AddSnapshotSource(s SnapshotSource) {
+	h.snapshotSources = append(h.snapshotSources, s)
 }
 
 func playerInfo(p game.Player, online bool) protocol.PlayerInfo {
