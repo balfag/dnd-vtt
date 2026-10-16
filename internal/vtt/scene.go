@@ -130,7 +130,7 @@ type sceneRow struct {
 }
 
 func (r sceneRow) view() protocol.SceneView {
-	v := protocol.SceneView{ID: r.id, Name: r.name, Width: r.width, Height: r.height, Grid: r.grid, Fog: r.fog}
+	v := protocol.SceneView{ID: r.id, Name: r.name, Width: r.width, Height: r.height, Grid: r.grid, Fog: r.fog, Tokens: []protocol.Token{}}
 	if r.background.Valid {
 		v.Background = &protocol.AssetRef{AssetID: r.background.String, URL: "/assets/" + r.background.String}
 	}
@@ -461,7 +461,8 @@ func (s *Service) ReorderScenes(ctx context.Context, campaignID string, ids []st
 	return out, err
 }
 
-// ActivateScene makes the scene the active one of the campaign.
+// ActivateScene makes the scene the active one of the campaign. The view holds
+// every token of the scene; render it per viewer with sceneFor.
 func (s *Service) ActivateScene(ctx context.Context, campaignID, sceneID string) (protocol.SceneView, error) {
 	var view protocol.SceneView
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -473,18 +474,21 @@ func (s *Service) ActivateScene(ctx context.Context, campaignID, sceneID string)
 			return fmt.Errorf("activate scene: %w", err)
 		}
 		view = row.view()
-		return nil
+		view.Tokens, err = listTokens(ctx, tx, sceneID)
+		return err
 	})
 	return view, err
 }
 
-// ViewScene reads a scene of the campaign.
+// ViewScene reads a scene of the campaign with all its tokens, for the GM.
 func (s *Service) ViewScene(ctx context.Context, campaignID, sceneID string) (protocol.SceneView, error) {
 	row, err := loadScene(ctx, s.db, campaignID, sceneID)
 	if err != nil {
 		return protocol.SceneView{}, err
 	}
-	return row.view(), nil
+	view := row.view()
+	view.Tokens, err = listTokens(ctx, s.db, sceneID)
+	return view, err
 }
 
 // BackgroundOfActiveScene reports whether assetID is the background of the

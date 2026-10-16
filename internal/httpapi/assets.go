@@ -148,7 +148,7 @@ func (a *api) deleteAsset(w http.ResponseWriter, r *http.Request) {
 
 // canReadAsset decides who may read an asset: the GM any, a player the
 // background of the active scene of the campaign of the game their login
-// session belongs to. The images of tokens join in #50.
+// session belongs to, and the image of a token of that scene they may see.
 func (a *api) canReadAsset(ctx context.Context, acc auth.Account, sess auth.Session, as asset.Asset) (bool, error) {
 	if acc.IsGM {
 		return true, nil
@@ -163,7 +163,21 @@ func (a *api) canReadAsset(ctx context.Context, acc auth.Account, sess auth.Sess
 	if gs.ID != sess.GameSessionID || gs.CampaignID != as.CampaignID {
 		return false, nil
 	}
-	return a.d.VTT.BackgroundOfActiveScene(ctx, as.CampaignID, as.ID)
+	isBackground, err := a.d.VTT.BackgroundOfActiveScene(ctx, as.CampaignID, as.ID)
+	if err != nil || isBackground {
+		return isBackground, err
+	}
+	p, err := a.d.Game.PlayerForAccount(ctx, as.CampaignID, acc.ID)
+	if errors.Is(err, game.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if p.Removed {
+		return false, nil
+	}
+	return a.d.VTT.PlayerCanSeeTokenImage(ctx, as.CampaignID, p.ID, as.ID)
 }
 
 // serveAsset answers 404 for an asset the account may not read, so the

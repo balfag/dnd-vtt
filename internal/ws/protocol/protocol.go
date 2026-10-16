@@ -167,7 +167,7 @@ type Fog struct {
 	Ops     json.RawMessage `json:"ops"` // JSON array, "[]" for a new scene
 }
 
-// SceneView is a scene as a client sees it. Tokens and drawings join in #50 and #52.
+// SceneView is a scene as a client sees it. Drawings join in #52.
 type SceneView struct {
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
@@ -176,6 +176,23 @@ type SceneView struct {
 	Grid       Grid      `json:"grid"`
 	Background *AssetRef `json:"background"` // null: no background
 	Fog        Fog       `json:"fog"`
+	Tokens     []Token   `json:"tokens"` // visible to the viewer, by z then id; never null
+}
+
+// SceneInfo is a scene without its tokens and drawings: the data of scene.changed.
+type SceneInfo struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+	Grid       Grid      `json:"grid"`
+	Background *AssetRef `json:"background"` // null: no background
+	Fog        Fog       `json:"fog"`
+}
+
+// Info returns the scene without its tokens.
+func (s SceneView) Info() SceneInfo {
+	return SceneInfo{ID: s.ID, Name: s.Name, Width: s.Width, Height: s.Height, Grid: s.Grid, Background: s.Background, Fog: s.Fog}
 }
 
 // SceneListItem is a scene in the list of the GM.
@@ -234,7 +251,7 @@ type ScenesChanged struct {
 
 // SceneChanged is the data of scene.changed.
 type SceneChanged struct {
-	Scene SceneView `json:"scene"`
+	Scene SceneInfo `json:"scene"`
 }
 
 // SceneActivated is the data of scene.activated.
@@ -245,4 +262,155 @@ type SceneActivated struct {
 // SceneViewAck is the data of the ack to scene.view.
 type SceneViewAck struct {
 	Scene SceneView `json:"scene"`
+}
+
+// Message types of the tokens of M1.
+const (
+	TypeTokenCreate   = "token.create"
+	TypeTokenUpdate   = "token.update"
+	TypeTokenMove     = "token.move"
+	TypeTokenDrag     = "token.drag"
+	TypeTokenDelete   = "token.delete"
+	TypeTokenChanged  = "token.changed"
+	TypeTokenRemoved  = "token.removed"
+	TypeTokenDragging = "token.dragging"
+)
+
+// TokenBar is a resource bar of a token (hit points and the like).
+type TokenBar struct {
+	Key        string `json:"key"`
+	Value      int    `json:"value"`
+	Max        int    `json:"max"`
+	Visibility string `json:"visibility"` // all | owners | gm
+}
+
+// Token is a token as a client sees it.
+type Token struct {
+	ID             string     `json:"id"`
+	SceneID        string     `json:"sceneId"`
+	Layer          string     `json:"layer"` // map | tokens | gm
+	X              float64    `json:"x"`
+	Y              float64    `json:"y"`
+	W              float64    `json:"w"`
+	H              float64    `json:"h"`
+	Rotation       float64    `json:"rotation"`
+	Z              int        `json:"z"`
+	Name           string     `json:"name"`
+	NameVisibility string     `json:"nameVisibility"` // all | hover | gm
+	Image          *AssetRef  `json:"image"`          // null: none
+	Hidden         bool       `json:"hidden"`
+	Locked         bool       `json:"locked"`
+	Owners         []string   `json:"owners"`     // never null
+	Bars           []TokenBar `json:"bars"`       // never null
+	Conditions     []string   `json:"conditions"` // never null
+}
+
+// TokenFields are the settable fields; nil means "not given". ImageAssetID is
+// raw to tell absent from null (null removes the image). Decoding tells an
+// absent Owners, Bars or Conditions (nil) from an empty list (non-nil, clears).
+type TokenFields struct {
+	Layer          *string         `json:"layer,omitempty"`
+	X              *float64        `json:"x,omitempty"`
+	Y              *float64        `json:"y,omitempty"`
+	W              *float64        `json:"w,omitempty"`
+	H              *float64        `json:"h,omitempty"`
+	Rotation       *float64        `json:"rotation,omitempty"`
+	Z              *int            `json:"z,omitempty"`
+	Name           *string         `json:"name,omitempty"`
+	NameVisibility *string         `json:"nameVisibility,omitempty"`
+	ImageAssetID   json.RawMessage `json:"imageAssetId,omitempty"`
+	Hidden         *bool           `json:"hidden,omitempty"`
+	Locked         *bool           `json:"locked,omitempty"`
+	Owners         []string        `json:"owners,omitempty"`
+	Bars           []TokenBar      `json:"bars,omitempty"`
+	Conditions     []string        `json:"conditions,omitempty"`
+}
+
+// tokenFieldsWire is TokenFields for encoding: the lists are pointers so an
+// empty list is written and only a nil one is left out.
+type tokenFieldsWire struct {
+	Layer          *string         `json:"layer,omitempty"`
+	X              *float64        `json:"x,omitempty"`
+	Y              *float64        `json:"y,omitempty"`
+	W              *float64        `json:"w,omitempty"`
+	H              *float64        `json:"h,omitempty"`
+	Rotation       *float64        `json:"rotation,omitempty"`
+	Z              *int            `json:"z,omitempty"`
+	Name           *string         `json:"name,omitempty"`
+	NameVisibility *string         `json:"nameVisibility,omitempty"`
+	ImageAssetID   json.RawMessage `json:"imageAssetId,omitempty"`
+	Hidden         *bool           `json:"hidden,omitempty"`
+	Locked         *bool           `json:"locked,omitempty"`
+	Owners         *[]string       `json:"owners,omitempty"`
+	Bars           *[]TokenBar     `json:"bars,omitempty"`
+	Conditions     *[]string       `json:"conditions,omitempty"`
+}
+
+func (f TokenFields) wire() tokenFieldsWire {
+	w := tokenFieldsWire{
+		Layer: f.Layer, X: f.X, Y: f.Y, W: f.W, H: f.H, Rotation: f.Rotation, Z: f.Z,
+		Name: f.Name, NameVisibility: f.NameVisibility, ImageAssetID: f.ImageAssetID,
+		Hidden: f.Hidden, Locked: f.Locked,
+	}
+	if f.Owners != nil {
+		w.Owners = &f.Owners
+	}
+	if f.Bars != nil {
+		w.Bars = &f.Bars
+	}
+	if f.Conditions != nil {
+		w.Conditions = &f.Conditions
+	}
+	return w
+}
+
+// TokenCreate is the data of token.create.
+type TokenCreate struct {
+	SceneID string `json:"sceneId"`
+	TokenFields
+}
+
+// MarshalJSON writes empty lists of the fields (TokenFields has no method of
+// its own: it would be promoted and break decoding).
+func (c TokenCreate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		SceneID string `json:"sceneId"`
+		tokenFieldsWire
+	}{c.SceneID, c.wire()})
+}
+
+// TokenCreateAck is the data of the ack to token.create.
+type TokenCreateAck struct {
+	TokenID string `json:"tokenId"`
+}
+
+// TokenUpdate is the data of token.update.
+type TokenUpdate struct {
+	TokenID string `json:"tokenId"`
+	TokenFields
+}
+
+// MarshalJSON is TokenCreate.MarshalJSON for token.update.
+func (u TokenUpdate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		TokenID string `json:"tokenId"`
+		tokenFieldsWire
+	}{u.TokenID, u.wire()})
+}
+
+// TokenMove is the data of token.move, token.drag and token.dragging.
+type TokenMove struct {
+	TokenID string  `json:"tokenId"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+}
+
+// TokenRef is the data of token.delete and token.removed.
+type TokenRef struct {
+	TokenID string `json:"tokenId"`
+}
+
+// TokenChanged is the data of token.changed.
+type TokenChanged struct {
+	Token Token `json:"token"`
 }

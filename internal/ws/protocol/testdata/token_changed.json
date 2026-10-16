@@ -1,0 +1,51 @@
+{
+  "t": "token.changed",
+  "seq": 24,
+  "d": {
+    "token": {
+      "id": "01J00000000000000000000TK1",
+      "sceneId": "01J00000000000000000000SC2",
+      "layer": "tokens",
+      "x": 350,
+      "y": 210.5,
+      "w": 1,
+      "h": 1,
+      "rotation": 90,
+      "z": 3,
+      "name": "Гоблин",
+      "nameVisibility": "gm",
+      "image": {
+        "assetId": "01J00000000000000000000AS2",
+        "url": "/assets/01J00000000000000000000AS2"
+      },
+      "hidden": false,
+      "locked": false,
+      "owners": [
+        "01J00000000000000000000PL2"
+      ],
+      "bars": [
+        {
+          "key": "hp",
+          "value": 7,
+          "max": 7,
+          "visibility": "owners"
+        },
+        {
+          "key": "ac",
+          "value": 15,
+          "max": 15,
+          "visibility": "all"
+        },
+        {
+          "key": "secret",
+          "value": 1,
+          "max": 3,
+          "visibility": "gm"
+        }
+      ],
+      "conditions": [
+        "prone"
+      ]
+    }
+  }
+}

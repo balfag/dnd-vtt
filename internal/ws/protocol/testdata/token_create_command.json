@@ -1,0 +1,23 @@
+{
+  "t": "token.create",
+  "id": "c-6",
+  "d": {
+    "sceneId": "01J00000000000000000000SC2",
+    "x": 350,
+    "y": 210.5,
+    "name": "Гоблин",
+    "nameVisibility": "gm",
+    "imageAssetId": "01J00000000000000000000AS2",
+    "owners": [
+      "01J00000000000000000000PL2"
+    ],
+    "bars": [
+      {
+        "key": "hp",
+        "value": 7,
+        "max": 7,
+        "visibility": "owners"
+      }
+    ]
+  }
+}
