@@ -20,6 +20,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
+	"github.com/balfag/dnd-vtt/internal/vtt"
 	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/web"
 )
@@ -35,6 +36,7 @@ type App struct {
 	game    *game.Service
 	hub     *ws.Hub
 	assets  *asset.Service
+	vtt     *vtt.Service
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -57,14 +59,19 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 			logger.Info("dev campaign created")
 		}
 	}
+	hub := ws.NewHub(gameSvc, logger, ws.Options{})
+	vttSvc := vtt.NewService(db, vtt.Options{})
+	vtt.Register(hub, vttSvc)
+	hub.AddSnapshotSource(vttSvc)
 	return &App{
 		cfg:         cfg,
 		logger:      logger,
 		version:     version,
 		auth:        authSvc,
 		game:        gameSvc,
-		hub:         ws.NewHub(gameSvc, logger, ws.Options{}),
+		hub:         hub,
 		assets:      asset.NewService(db, cfg.DataDir, asset.Options{}),
+		vtt:         vttSvc,
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -83,6 +90,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			Game:    a.game,
 			Hub:     a.hub,
 			Assets:  a.assets,
+			VTT:     a.vtt,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
