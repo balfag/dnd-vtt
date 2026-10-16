@@ -172,10 +172,16 @@
   color: var(--chalk);
 }
 
+/* The danger is told by the frame and the verb; the text keeps the contrast of --chalk. */
 .button--danger {
   border: 1px solid var(--seal);
   background: transparent;
-  color: var(--seal);
+  color: var(--chalk);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: rgba(194, 84, 104, 0.18);
+  filter: none;
 }
 
 .button:disabled {

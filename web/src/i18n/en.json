@@ -103,8 +103,8 @@
     "remove": "Remove from campaign",
     "empty": "No players yet. Send them the game link.",
     "resetTitle": "Password reset: {{name}}",
-    "resetHint": "Send the link to {{name}}. It works once, until {{time}}.",
-    "removeConfirm": "Remove {{name}} from the campaign? They leave the game and cannot come back with the link.",
+    "resetHint": "The link for {{name}}. It works once, until {{time}}.",
+    "removeConfirm": "Remove {{name}} from the campaign? Joining with the game link will no longer work.",
     "removed": "Participant removed"
   },
   "ui": {
