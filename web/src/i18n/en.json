@@ -1,10 +1,76 @@
 {
   "app": {
-    "title": "DnD VTT",
-    "health": {
-      "loading": "Checking the server connection…",
-      "ok": "Server is online, version {{version}}",
-      "error": "Server is unavailable"
+    "title": "DnD VTT"
+  },
+  "common": {
+    "signOut": "Sign out",
+    "login": "Login",
+    "password": "Password",
+    "passwordRepeat": "Repeat the password",
+    "displayName": "Name in the game"
+  },
+  "validation": {
+    "login": "3–32 characters: Latin letters, digits, “.”, “_”, “-”",
+    "password": "8 to 128 characters",
+    "passwordMismatch": "Passwords do not match",
+    "displayName": "1 to 64 characters"
+  },
+  "setup": {
+    "context": "First run",
+    "title": "You run this table",
+    "lead": "Choose the GM login and password. You can use them to sign in from another device too.",
+    "submit": "Create the GM account",
+    "noToken": "Open the first-run link shown by the app on this computer."
+  },
+  "login": {
+    "title": "GM sign-in",
+    "submit": "Sign in",
+    "playersHint": "Players sign in with the game link the GM sends."
+  },
+  "play": {
+    "title": "The GM is waiting at the table",
+    "tabSignIn": "Sign in",
+    "tabRegister": "I’m new here",
+    "submitSignIn": "Join the game",
+    "submitRegister": "Create an account and join",
+    "forgot": "Forgot the password? Ask the GM for a reset link.",
+    "linkDeadTitle": "This link no longer works",
+    "linkDead": "The game has ended or the GM changed the link. Ask the GM for a new one."
+  },
+  "reset": {
+    "title": "New password",
+    "submit": "Save the password",
+    "done": "Password changed. Sign in with the game link from the GM.",
+    "linkDead": "The reset link has expired or was already used. Ask the GM for a new one."
+  },
+  "home": {
+    "gm": {
+      "title": "Welcome, {{login}}",
+      "next": "The campaigns screen is coming in the next version."
+    },
+    "gmLinkExpired": "The GM sign-in link has expired. Restart the app or sign in with your password.",
+    "gmLinkLogin": "Sign in with a password",
+    "player": {
+      "title": "You are at the table, {{name}}",
+      "waiting": "The map will appear here soon. Keep this tab open."
     }
+  },
+  "notFound": {
+    "title": "This page does not exist",
+    "home": "Go to the start"
+  },
+  "errors": {
+    "bad_request": "Check the form fields.",
+    "invalid_credentials": "Wrong login or password.",
+    "unauthorized": "Please sign in again.",
+    "forbidden": "This action is not allowed.",
+    "no_active_game": "There is no game right now. Wait for a link from the GM.",
+    "removed": "The GM has removed you from this campaign.",
+    "not_found": "Not found.",
+    "conflict": "This login is taken.",
+    "rate_limited": "Too many attempts. Wait a minute.",
+    "internal": "Something failed on the GM’s server. Try again.",
+    "network": "No connection to the GM’s server.",
+    "unknown": "Something went wrong. Try again."
   }
 }
