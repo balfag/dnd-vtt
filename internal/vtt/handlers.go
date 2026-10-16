@@ -85,7 +85,7 @@ func scenesChanged(scenes []protocol.SceneListItem) ws.Renderer {
 // sceneChanged shows the GM every change and a player only that of the scene
 // that was active when it changed.
 func sceneChanged(scene protocol.SceneView, wasActive bool) ws.Renderer {
-	d := protocol.SceneChanged{Scene: scene}
+	d := protocol.SceneChanged{Scene: scene.Info()}
 	return func(v ws.Viewer) (string, any, bool) {
 		return protocol.TypeSceneChanged, d, v.IsGM || wasActive
 	}

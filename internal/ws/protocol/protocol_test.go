@@ -125,7 +125,7 @@ func examples(t *testing.T) map[string]Envelope {
 		"scenes_changed": with(mustNew(t, TypeScenesChanged, ScenesChanged{
 			Scenes: []SceneListItem{{ID: tavern.ID, Name: tavern.Name, Sort: 0}, {ID: crypt.ID, Name: crypt.Name, Sort: 1}},
 		}), func(e *Envelope) { e.Seq = 20 }),
-		"scene_changed":   with(mustNew(t, TypeSceneChanged, SceneChanged{Scene: tavern}), func(e *Envelope) { e.Seq = 21 }),
+		"scene_changed":   with(mustNew(t, TypeSceneChanged, SceneChanged{Scene: tavern.Info()}), func(e *Envelope) { e.Seq = 21 }),
 		"scene_activated": with(mustNew(t, TypeSceneActivated, SceneActivated{Scene: cryptForPlayer}), func(e *Envelope) { e.Seq = 22 }),
 		"scene_view_ack":  with(mustNew(t, TypeAck, SceneViewAck{Scene: tavern}), func(e *Envelope) { e.Re = "c-5" }),
 		"snapshot_gm_no_game": mustNew(t, TypeSnapshot, Snapshot{

@@ -132,6 +132,8 @@ export interface SceneView {
   /** Only the tokens the viewer may see. */
   tokens: Token[]
 }
+/** SceneInfo is a scene without its tokens: scene.changed has no tokens, the client keeps its own. */
+export type SceneInfo = Omit<SceneView, 'tokens'>
 export interface SceneListItem {
   id: string
   name: string
@@ -169,7 +171,7 @@ export type ScenesChangedMessage = {
   seq: number
   d: { scenes: SceneListItem[] }
 }
-export type SceneChangedMessage = { t: 'scene.changed'; seq: number; d: { scene: SceneView } }
+export type SceneChangedMessage = { t: 'scene.changed'; seq: number; d: { scene: SceneInfo } }
 export type SceneActivatedMessage = { t: 'scene.activated'; seq: number; d: { scene: SceneView } }
 export type TokenChangedMessage = { t: 'token.changed'; seq: number; d: { token: Token } }
 export type TokenRemovedMessage = { t: 'token.removed'; seq: number; d: { tokenId: string } }
@@ -294,6 +296,20 @@ function isSceneView(v: unknown): v is SceneView {
   )
 }
 
+function isSceneInfo(v: unknown): v is SceneInfo {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.width === 'number' &&
+    typeof v.height === 'number' &&
+    isGrid(v.grid) &&
+    (v.background === null || isAssetRef(v.background)) &&
+    isFog(v.fog) &&
+    !('tokens' in v)
+  )
+}
+
 function isSceneListItem(v: unknown): v is SceneListItem {
   return (
     isObject(v) && typeof v.id === 'string' && typeof v.name === 'string' && isInteger(v.sort, 0)
@@ -396,7 +412,7 @@ export function isSceneChanged(v: unknown): v is SceneChangedMessage {
     v.t === MessageType.SceneChanged &&
     isInteger(v.seq, 1) &&
     isObject(v.d) &&
-    isSceneView(v.d.scene)
+    isSceneInfo(v.d.scene)
   )
 }
 

@@ -271,6 +271,11 @@ describe('guards reject damaged messages', () => {
       corrupt(sceneChanged, ['d', 'scene', 'grid', 'color'], '#9AA8B3'),
     ],
     [
+      'scene.changed carries tokens',
+      isSceneChanged,
+      corrupt(sceneChanged, ['d', 'scene', 'tokens'], []),
+    ],
+    [
       'scene fog ops is not an array',
       isSceneActivated,
       corrupt(sceneActivated, ['d', 'scene', 'fog', 'ops'], {}),

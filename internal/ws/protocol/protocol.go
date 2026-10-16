@@ -179,6 +179,22 @@ type SceneView struct {
 	Tokens     []Token   `json:"tokens"` // visible to the viewer, by z then id; never null
 }
 
+// SceneInfo is a scene without its tokens and drawings: the data of scene.changed.
+type SceneInfo struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+	Grid       Grid      `json:"grid"`
+	Background *AssetRef `json:"background"` // null: no background
+	Fog        Fog       `json:"fog"`
+}
+
+// Info returns the scene without its tokens.
+func (s SceneView) Info() SceneInfo {
+	return SceneInfo{ID: s.ID, Name: s.Name, Width: s.Width, Height: s.Height, Grid: s.Grid, Background: s.Background, Fog: s.Fog}
+}
+
 // SceneListItem is a scene in the list of the GM.
 type SceneListItem struct {
 	ID   string `json:"id"`
@@ -235,7 +251,7 @@ type ScenesChanged struct {
 
 // SceneChanged is the data of scene.changed.
 type SceneChanged struct {
-	Scene SceneView `json:"scene"`
+	Scene SceneInfo `json:"scene"`
 }
 
 // SceneActivated is the data of scene.activated.

@@ -316,6 +316,9 @@ func TestUpdateSceneIsShownToPlayersOnlyWhenActive(t *testing.T) {
 	recv(t, gm) // the ack
 	env := recv(t, player)
 	wantType(t, env, protocol.TypeSceneChanged)
+	if strings.Contains(string(env.D), `"tokens"`) {
+		t.Errorf("scene.changed carries tokens: %s", env.D)
+	}
 	var d protocol.SceneChanged
 	if err := json.Unmarshal(env.D, &d); err != nil || d.Scene.Name != "Renamed active" || d.Scene.ID != active.SceneID {
 		t.Errorf("player got %s, want the renamed active scene", env.D)
