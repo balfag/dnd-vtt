@@ -162,6 +162,22 @@
   filter: brightness(1.08);
 }
 
+.button--inline {
+  width: auto;
+}
+
+.button--secondary {
+  border: 1px solid var(--fog);
+  background: transparent;
+  color: var(--chalk);
+}
+
+.button--danger {
+  border: 1px solid var(--seal);
+  background: transparent;
+  color: var(--seal);
+}
+
 .button:disabled {
   opacity: 0.6;
   cursor: default;
@@ -202,4 +218,76 @@
   color: var(--chalk);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* Copy field: a read-only value with its button. */
+.copy-field {
+  display: grid;
+  gap: 4px;
+}
+
+.copy-field__row {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-field__row .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Modal dialog. */
+.dialog {
+  width: min(30rem, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--slate);
+  color: var(--chalk);
+}
+
+.dialog::backdrop {
+  background: rgba(13, 19, 24, 0.6);
+}
+
+.dialog__body {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.dialog__title {
+  margin: 0;
+  font: 700 24px/1.1 var(--serif);
+}
+
+.dialog__content {
+  display: grid;
+  gap: 12px;
+}
+
+.dialog__content p {
+  margin: 0;
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Toast: a short confirmation at the bottom left. */
+.toast-region {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+}
+
+.toast {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--verdigris);
+  background: var(--board);
 }

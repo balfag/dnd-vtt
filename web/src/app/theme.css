@@ -12,6 +12,8 @@
   --ink-on-verdigris: #10201b;
   --brass: #c9a34e;
   --seal: #c25468;
+  /* --fog at 22%: dividers and frames that must not compete with the content. */
+  --line: rgba(154, 168, 179, 0.22);
 
   --serif: 'Alegreya', Georgia, serif;
   --sans: 'Alegreya Sans', system-ui, sans-serif;
