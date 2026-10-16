@@ -38,6 +38,8 @@ type table struct {
 	camp   game.Campaign
 	gm     identity
 	player identity
+	boris  identity // a second player
+	gs     game.GameSession
 
 	mu  sync.Mutex
 	who identity
@@ -98,6 +100,21 @@ func newTable(t *testing.T) *table {
 		t.Fatal(err)
 	}
 	tb.player = identity{acc, sess}
+	tb.gs = gs
+
+	bAcc, _, err := gameSvc.RegisterPlayer(ctx, gs, "boris", "player-password", "Boris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bToken, _, err := authSvc.CreatePlayerSession(ctx, bAcc.ID, gs.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bAcc, bSess, err := authSvc.ResolveSession(ctx, bToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb.boris = identity{bAcc, bSess}
 
 	tb.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tb.mu.Lock()
@@ -299,6 +316,9 @@ func TestUpdateSceneIsShownToPlayersOnlyWhenActive(t *testing.T) {
 	recv(t, gm) // the ack
 	env := recv(t, player)
 	wantType(t, env, protocol.TypeSceneChanged)
+	if strings.Contains(string(env.D), `"tokens"`) {
+		t.Errorf("scene.changed carries tokens: %s", env.D)
+	}
 	var d protocol.SceneChanged
 	if err := json.Unmarshal(env.D, &d); err != nil || d.Scene.Name != "Renamed active" || d.Scene.ID != active.SceneID {
 		t.Errorf("player got %s, want the renamed active scene", env.D)

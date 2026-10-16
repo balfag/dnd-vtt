@@ -361,3 +361,62 @@ func TestPlayerOfAnotherCampaignDoesNotReadTheBackground(t *testing.T) {
 		t.Errorf("background of a campaign without a game = %d, want 404", got)
 	}
 }
+
+func TestPlayerReadsImagesOfVisibleTokensOnly(t *testing.T) {
+	f := newAssetFixture(t, asset.Options{})
+	ctx := context.Background()
+	sceneA, err := f.vtt.CreateScene(ctx, f.campaignID, protocol.SceneCreate{Name: "A"}) // active
+	if err != nil {
+		t.Fatal(err)
+	}
+	sceneB, err := f.vtt.CreateScene(ctx, f.campaignID, protocol.SceneCreate{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, link := f.startGame(f.gm, f.campaignID)
+	bob, me := f.playerSession(link, "bob")
+	if me.Player == nil {
+		t.Fatal("bob has no participant")
+	}
+
+	x, y := 100.0, 100.0
+	width := 20 // every image differs, or the upload would be a repeat
+	token := func(scene string, name string, fields protocol.TokenFields) assetJSON {
+		t.Helper()
+		width++
+		img := f.mustUpload(name+".png", testPNG(t, width, 20))
+		fields.X, fields.Y = &x, &y
+		fields.ImageAssetID = json.RawMessage(`"` + img.ID + `"`)
+		if _, err := f.vtt.CreateToken(ctx, f.campaignID, protocol.TokenCreate{SceneID: scene, TokenFields: fields}); err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+	yes := true
+	gmLayer := "gm"
+	visible := token(sceneA.SceneID, "visible", protocol.TokenFields{})
+	hidden := token(sceneA.SceneID, "hidden", protocol.TokenFields{Hidden: &yes})
+	ownHidden := token(sceneA.SceneID, "own-hidden", protocol.TokenFields{Hidden: &yes, Owners: []string{me.Player.ID}})
+	gmOnly := token(sceneA.SceneID, "gm-layer", protocol.TokenFields{Layer: &gmLayer})
+	inactive := token(sceneB.SceneID, "inactive", protocol.TokenFields{})
+
+	status := func(a assetJSON) int { return f.do(http.MethodGet, a.URL, "", withCookie(bob)).Code }
+	for _, tt := range []struct {
+		name string
+		img  assetJSON
+		want int
+	}{
+		{"visible token", visible, http.StatusOK},
+		{"hidden token", hidden, http.StatusNotFound},
+		{"own hidden token", ownHidden, http.StatusOK},
+		{"token on the gm layer", gmOnly, http.StatusNotFound},
+		{"token of an inactive scene", inactive, http.StatusNotFound},
+	} {
+		if got := status(tt.img); got != tt.want {
+			t.Errorf("%s = %d, want %d", tt.name, got, tt.want)
+		}
+	}
+	if got := f.do(http.MethodGet, hidden.URL, "", withCookie(f.gm)).Code; got != http.StatusOK {
+		t.Errorf("GM reads the image of a hidden token: %d", got)
+	}
+}
