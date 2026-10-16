@@ -46,11 +46,11 @@
 | Миграции | Встроенные `.sql` + свой раннер в `internal/store` | Версионирование схемы без лишней зависимости, правила — в [data-model.md](data-model.md#миграции) |
 | WebRTC | `pion/webrtc` v4, `pion/turn` | Встраиваемый SFU и TURN |
 | Клиент | TypeScript, React, Vite | Массовый стек, хорошо знаком агентам |
-| Холст | PixiJS v8 | WebGL-рендер тысяч объектов, панорама и зум |
+| Холст | PixiJS v8 ([ADR-0012](../adr/0012-pixijs-scene-canvas.md)) | WebGL-рендер тысяч объектов, панорама и зум |
 | Состояние клиента | Zustand | Простое глобальное хранилище |
 | Редактор вики | TipTap (ProseMirror) | Блочный редактор с расширениями (упоминания, таблицы) |
 | i18n | i18next + react-i18next | Стандарт |
-| Тесты | `go test`; Vitest; Playwright (e2e, позже) | |
+| Тесты | `go test`; Vitest; Playwright для e2e ([ADR-0013](../adr/0013-playwright-e2e.md)) | |
 | Пакетный менеджер | pnpm | Быстрый, строгий lock-файл |
 
 ## Планируемая структура кода
