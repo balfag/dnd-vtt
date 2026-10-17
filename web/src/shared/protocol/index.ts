@@ -29,6 +29,16 @@ export const MessageType = {
   FogHide: 'fog.hide',
   FogReset: 'fog.reset',
   FogChanged: 'fog.changed',
+  DrawingCreate: 'drawing.create',
+  DrawingUpdate: 'drawing.update',
+  DrawingDelete: 'drawing.delete',
+  DrawingChanged: 'drawing.changed',
+  DrawingRemoved: 'drawing.removed',
+  PingPlace: 'ping.place',
+  PingShown: 'ping.shown',
+  RulerUpdate: 'ruler.update',
+  RulerClear: 'ruler.clear',
+  RulerShown: 'ruler.shown',
   ChatSend: 'chat.send',
   RollRequest: 'roll.request',
   ChatHistory: 'chat.history',
@@ -149,7 +159,37 @@ export interface Token {
   bars: TokenBar[]
   conditions: string[]
 }
-/** SceneView is a scene as the client sees it; drawings join later. */
+export type DrawingKind = 'freehand' | 'rect' | 'circle' | 'text' | 'template'
+export type TemplateShape = 'cone' | 'sphere' | 'line' | 'cube' | 'cylinder'
+/** DrawingDataByKind is the data of a drawing by its kind; coordinates are finite, within ±100000. */
+export interface DrawingDataByKind {
+  /** 2–2000 points. */
+  freehand: { points: [number, number][] }
+  /** The top left corner; w, h > 0. */
+  rect: { x: number; y: number; w: number; h: number }
+  /** The center; r > 0. */
+  circle: { x: number; y: number; r: number }
+  /** text is 1–500 characters, size 8–200 px. */
+  text: { x: number; y: number; text: string; size: number }
+  /**
+   * x, y is the origin (cone, line) or the center; size is 5–1000 ft (the length of a
+   * cone and a line, the radius of a sphere and a cylinder, the edge of a cube);
+   * direction is in degrees clockwise from the X axis, [0, 360) as the server sends it.
+   */
+  template: { shape: TemplateShape; x: number; y: number; size: number; direction: number }
+}
+/** DrawingContent is the kind of a drawing with the data that goes with it. */
+export type DrawingContent = {
+  [K in DrawingKind]: { kind: K; data: DrawingDataByKind[K] }
+}[DrawingKind]
+/** Drawing is a drawing or an area template of a scene. */
+export type Drawing = DrawingContent & {
+  id: string
+  sceneId: string
+  color: string
+  authorPlayerId: string
+}
+/** SceneView is a scene as the client sees it. */
 export interface SceneView {
   id: string
   name: string
@@ -160,9 +200,11 @@ export interface SceneView {
   fog: Fog
   /** Only the tokens the viewer may see. */
   tokens: Token[]
+  /** All the drawings of the scene, by id. */
+  drawings: Drawing[]
 }
-/** SceneInfo is a scene without its tokens: scene.changed has no tokens, the client keeps its own. */
-export type SceneInfo = Omit<SceneView, 'tokens'>
+/** SceneInfo is a scene without its tokens and drawings: scene.changed has neither, the client keeps its own. */
+export type SceneInfo = Omit<SceneView, 'tokens' | 'drawings'>
 export interface SceneListItem {
   id: string
   name: string
@@ -288,6 +330,19 @@ export type TokenRemovedMessage = { t: 'token.removed'; seq: number; d: { tokenI
 export type TokenDraggingMessage = {
   t: 'token.dragging'
   d: { tokenId: string; x: number; y: number }
+}
+export type DrawingChangedMessage = { t: 'drawing.changed'; seq: number; d: { drawing: Drawing } }
+export type DrawingRemovedMessage = { t: 'drawing.removed'; seq: number; d: { drawingId: string } }
+export type DrawingCreateAckMessage = { t: 'ack'; re: string; d: { drawingId: string } }
+/** PingShownMessage is transient: it has no seq. focus asks the client to move the camera. */
+export type PingShownMessage = {
+  t: 'ping.shown'
+  d: { playerId: string; sceneId: string; x: number; y: number; focus: boolean }
+}
+/** RulerShownMessage is transient: it has no seq. points is empty when the ruler is cleared. */
+export type RulerShownMessage = {
+  t: 'ruler.shown'
+  d: { playerId: string; sceneId: string; points: [number, number][] }
 }
 export type TokenCreateAckMessage = { t: 'ack'; re: string; d: { tokenId: string } }
 export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
@@ -456,6 +511,79 @@ export function isToken(v: unknown): v is Token {
   )
 }
 
+function isPoint(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length === 2 && isCoord(v[0]) && isCoord(v[1])
+}
+
+const templateShapes: readonly unknown[] = ['cone', 'sphere', 'line', 'cube', 'cylinder']
+
+function isTextLength(v: unknown): v is string {
+  return typeof v === 'string' && Array.from(v).length >= 1 && Array.from(v).length <= 500
+}
+
+function isInRange(v: unknown, min: number, max: number): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+}
+
+/** isDrawingData checks the data of a drawing of the kind by the table of protocol.md. */
+export function isDrawingData(kind: unknown, v: unknown): boolean {
+  if (!isObject(v)) return false
+  switch (kind) {
+    case 'freehand':
+      return (
+        hasExactKeys(v, ['points']) &&
+        Array.isArray(v.points) &&
+        v.points.length >= 2 &&
+        v.points.length <= 2000 &&
+        v.points.every(isPoint)
+      )
+    case 'rect':
+      return (
+        hasExactKeys(v, ['x', 'y', 'w', 'h']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isPositiveCoord(v.w) &&
+        isPositiveCoord(v.h)
+      )
+    case 'circle':
+      return (
+        hasExactKeys(v, ['x', 'y', 'r']) && isCoord(v.x) && isCoord(v.y) && isPositiveCoord(v.r)
+      )
+    case 'text':
+      return (
+        hasExactKeys(v, ['x', 'y', 'text', 'size']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isTextLength(v.text) &&
+        isInRange(v.size, 8, 200)
+      )
+    case 'template':
+      return (
+        hasExactKeys(v, ['shape', 'x', 'y', 'size', 'direction']) &&
+        templateShapes.includes(v.shape) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isInRange(v.size, 5, 1000) &&
+        isInRange(v.direction, 0, 360) &&
+        v.direction < 360
+      )
+    default:
+      return false
+  }
+}
+
+export function isDrawing(v: unknown): v is Drawing {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.sceneId === 'string' &&
+    typeof v.color === 'string' &&
+    colorPattern.test(v.color) &&
+    typeof v.authorPlayerId === 'string' &&
+    isDrawingData(v.kind, v.data)
+  )
+}
+
 function isSceneView(v: unknown): v is SceneView {
   return (
     isObject(v) &&
@@ -467,7 +595,9 @@ function isSceneView(v: unknown): v is SceneView {
     (v.background === null || isAssetRef(v.background)) &&
     isFog(v.fog) &&
     Array.isArray(v.tokens) &&
-    v.tokens.every(isToken)
+    v.tokens.every(isToken) &&
+    Array.isArray(v.drawings) &&
+    v.drawings.every(isDrawing)
   )
 }
 
@@ -481,7 +611,8 @@ function isSceneInfo(v: unknown): v is SceneInfo {
     isGrid(v.grid) &&
     (v.background === null || isAssetRef(v.background)) &&
     isFog(v.fog) &&
-    !('tokens' in v)
+    !('tokens' in v) &&
+    !('drawings' in v)
   )
 }
 
@@ -740,6 +871,63 @@ export function isTokenDragging(v: unknown): v is TokenDraggingMessage {
   )
 }
 
+export function isDrawingChanged(v: unknown): v is DrawingChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.DrawingChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    isDrawing(v.d.drawing)
+  )
+}
+
+export function isDrawingRemoved(v: unknown): v is DrawingRemovedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.DrawingRemoved &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.drawingId === 'string'
+  )
+}
+
+export function isDrawingCreateAck(v: unknown): v is DrawingCreateAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    typeof v.d.drawingId === 'string'
+  )
+}
+
+export function isPingShown(v: unknown): v is PingShownMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.PingShown &&
+    v.seq === undefined &&
+    isObject(v.d) &&
+    typeof v.d.playerId === 'string' &&
+    typeof v.d.sceneId === 'string' &&
+    typeof v.d.x === 'number' &&
+    typeof v.d.y === 'number' &&
+    typeof v.d.focus === 'boolean'
+  )
+}
+
+export function isRulerShown(v: unknown): v is RulerShownMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.RulerShown &&
+    v.seq === undefined &&
+    isObject(v.d) &&
+    typeof v.d.playerId === 'string' &&
+    typeof v.d.sceneId === 'string' &&
+    Array.isArray(v.d.points) &&
+    v.d.points.every(isPoint)
+  )
+}
+
 export function isTokenCreateAck(v: unknown): v is TokenCreateAckMessage {
   return (
     isObject(v) &&
@@ -910,6 +1098,47 @@ export function fogHideCommand(id: string, sceneId: string, shape: Shape): Envel
 /** fogResetCommand removes every operation; enabled stays. */
 export function fogResetCommand(id: string, sceneId: string): Envelope {
   return { t: MessageType.FogReset, id, d: { sceneId } }
+}
+
+/** drawingCreateCommand adds a drawing; content is the kind with the data that goes with it. */
+export function drawingCreateCommand(
+  id: string,
+  sceneId: string,
+  content: DrawingContent,
+  color: string,
+): Envelope {
+  return { t: MessageType.DrawingCreate, id, d: { sceneId, ...content, color } }
+}
+
+/** drawingUpdateCommand changes the data (of the kind of the drawing) and/or the color. */
+export function drawingUpdateCommand(
+  id: string,
+  drawingId: string,
+  changes: { data?: DrawingContent['data']; color?: string },
+): Envelope {
+  return { t: MessageType.DrawingUpdate, id, d: { drawingId, ...changes } }
+}
+
+export function drawingDeleteCommand(id: string, drawingId: string): Envelope {
+  return { t: MessageType.DrawingDelete, id, d: { drawingId } }
+}
+
+/** pingPlaceMessage has no id: the server never answers it. focus is for the GM only. */
+export function pingPlaceMessage(sceneId: string, x: number, y: number, focus?: boolean): Envelope {
+  return {
+    t: MessageType.PingPlace,
+    d: focus === undefined ? { sceneId, x, y } : { sceneId, x, y, focus },
+  }
+}
+
+/** rulerUpdateMessage has no id; the server takes 1–50 points and shows them to the others. */
+export function rulerUpdateMessage(sceneId: string, points: [number, number][]): Envelope {
+  return { t: MessageType.RulerUpdate, d: { sceneId, points } }
+}
+
+/** rulerClearMessage has no id. */
+export function rulerClearMessage(sceneId: string): Envelope {
+  return { t: MessageType.RulerClear, d: { sceneId } }
 }
 
 /** chatSendCommand sends a text message; a non-empty to makes it private. */
