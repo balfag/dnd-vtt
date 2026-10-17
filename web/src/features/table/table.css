@@ -49,6 +49,20 @@
   white-space: nowrap;
 }
 
+.topbar__scene--button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.topbar__scene--button:hover {
+  background: var(--board);
+  color: var(--chalk);
+}
+
 .topbar__players {
   display: flex;
   gap: 16px;
@@ -214,6 +228,10 @@
   transform: translateX(-50%);
 }
 
+.table__stage:has(.prep-note) .connection-note {
+  top: 76px;
+}
+
 .table__empty {
   position: absolute;
   top: 50%;
@@ -301,11 +319,11 @@
     visibility: hidden;
   }
 
-  .table[data-section='chat'] .sidepanel {
+  .table:not([data-section='map']) .sidepanel {
     visibility: visible;
   }
 
-  .table[data-section='chat'] .rail {
+  .table:not([data-section='map']) .rail {
     visibility: hidden;
   }
 
