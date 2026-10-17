@@ -286,6 +286,12 @@
     grid-column: 1;
   }
 
+  /* The stage is placed by hand: the rail is out of the flow and auto-placement drops the stage below the grid. */
+  .table__stage {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   /* The panel covers the map; the map stays laid out so the canvas keeps its size and camera. */
   .sidepanel {
     grid-column: 1;
