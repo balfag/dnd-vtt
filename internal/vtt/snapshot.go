@@ -25,6 +25,9 @@ func (s *Service) FillSnapshot(ctx context.Context, v ws.Viewer, campaignID stri
 			return err
 		}
 		view.Tokens = all
+		if view.Drawings, err = listDrawings(ctx, s.db, active); err != nil {
+			return err
+		}
 		view = sceneFor(view, v, sceneState{Active: true, Fog: view.Fog})
 		t.ActiveSceneID = &active
 		t.Scene = &view
