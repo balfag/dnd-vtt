@@ -1,0 +1,8 @@
+{
+  "t": "combat.setHidden",
+  "id": "c-22",
+  "d": {
+    "combatantId": "01J00000000000000000000CB2",
+    "hidden": true
+  }
+}

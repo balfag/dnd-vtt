@@ -33,6 +33,16 @@ export const MessageType = {
   RollRequest: 'roll.request',
   ChatHistory: 'chat.history',
   ChatMessage: 'chat.message',
+  CombatStart: 'combat.start',
+  CombatEnd: 'combat.end',
+  CombatAdd: 'combat.add',
+  CombatRemove: 'combat.remove',
+  CombatSetInitiative: 'combat.setInitiative',
+  CombatRollInitiative: 'combat.rollInitiative',
+  CombatSetHidden: 'combat.setHidden',
+  CombatNext: 'combat.next',
+  CombatPrev: 'combat.prev',
+  CombatChanged: 'combat.changed',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -210,6 +220,24 @@ export interface ChatMessage {
   /** Roll messages only. */
   roll?: ChatRoll
 }
+/** Combatant is a participant of the tracker; name is empty when the viewer may not see it. */
+export interface Combatant {
+  id: string
+  tokenId: string
+  name: string
+  /** null: not set. */
+  initiative: number | null
+  hidden: boolean
+}
+/** Combat is the initiative tracker of a scene as the viewer sees it. */
+export interface Combat {
+  sceneId: string
+  round: number
+  /** null: before the first combat.next, or the turn is of a combatant hidden from the viewer. */
+  turnCombatantId: string | null
+  /** In turn order. */
+  combatants: Combatant[]
+}
 export interface SnapshotGame {
   gameSessionId: string
   startedAt: number
@@ -221,6 +249,8 @@ export interface SnapshotGame {
   scene: SceneView | null
   /** The last 50 messages visible to the viewer, ascending. */
   chat: ChatMessage[]
+  /** The tracker of the active scene for the viewer; null: none. */
+  combat: Combat | null
 }
 export interface Snapshot {
   seq: number
@@ -263,6 +293,12 @@ export type TokenCreateAckMessage = { t: 'ack'; re: string; d: { tokenId: string
 export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
 export type ChatMessageEvent = { t: 'chat.message'; seq: number; d: ChatMessage }
 export type ChatHistoryAckMessage = { t: 'ack'; re: string; d: { messages: ChatMessage[] } }
+/** CombatChangedMessage carries the whole tracker after a change; combat is null when the fight is over. */
+export type CombatChangedMessage = {
+  t: 'combat.changed'
+  seq: number
+  d: { sceneId: string; combat: Combat | null }
+}
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
 
@@ -533,6 +569,29 @@ function isChatMessageData(v: unknown): v is ChatMessage {
   )
 }
 
+function isCombatant(v: unknown): v is Combatant {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.tokenId === 'string' &&
+    typeof v.name === 'string' &&
+    (v.initiative === null ||
+      (typeof v.initiative === 'number' && Number.isInteger(v.initiative))) &&
+    typeof v.hidden === 'boolean'
+  )
+}
+
+function isCombat(v: unknown): v is Combat {
+  return (
+    isObject(v) &&
+    typeof v.sceneId === 'string' &&
+    isInteger(v.round, 1) &&
+    (v.turnCombatantId === null || typeof v.turnCombatantId === 'string') &&
+    Array.isArray(v.combatants) &&
+    v.combatants.every(isCombatant)
+  )
+}
+
 function isSnapshotGame(v: unknown): v is SnapshotGame {
   return (
     isObject(v) &&
@@ -548,7 +607,8 @@ function isSnapshotGame(v: unknown): v is SnapshotGame {
     v.scenes.every(isSceneListItem) &&
     (v.scene === null || isSceneView(v.scene)) &&
     Array.isArray(v.chat) &&
-    v.chat.every(isChatMessageData)
+    v.chat.every(isChatMessageData) &&
+    (v.combat === null || isCombat(v.combat))
   )
 }
 
@@ -717,6 +777,17 @@ export function isChatHistoryAck(v: unknown): v is ChatHistoryAckMessage {
   )
 }
 
+export function isCombatChanged(v: unknown): v is CombatChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.CombatChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.sceneId === 'string' &&
+    (v.d.combat === null || isCombat(v.d.combat))
+  )
+}
+
 export function isPong(v: unknown): v is PongMessage {
   return isObject(v) && v.t === MessageType.Pong && typeof v.re === 'string'
 }
@@ -866,4 +937,58 @@ export function chatHistoryCommand(id: string, before: string, limit?: number): 
     id,
     d: limit === undefined ? { before } : { before, limit },
   }
+}
+
+/** combatCommand is combat.start, combat.end, combat.next or combat.prev of a scene. */
+export function combatCommand(
+  type:
+    | typeof MessageType.CombatStart
+    | typeof MessageType.CombatEnd
+    | typeof MessageType.CombatNext
+    | typeof MessageType.CombatPrev,
+  id: string,
+  sceneId: string,
+): Envelope {
+  return { t: type, id, d: { sceneId } }
+}
+
+export function combatStartCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatStart, id, sceneId)
+}
+
+export function combatEndCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatEnd, id, sceneId)
+}
+
+export function combatAddCommand(id: string, sceneId: string, tokenIds: string[]): Envelope {
+  return { t: MessageType.CombatAdd, id, d: { sceneId, tokenIds } }
+}
+
+export function combatRemoveCommand(id: string, combatantId: string): Envelope {
+  return { t: MessageType.CombatRemove, id, d: { combatantId } }
+}
+
+/** combatSetInitiativeCommand sets the initiative; null clears it. The value is always sent. */
+export function combatSetInitiativeCommand(
+  id: string,
+  combatantId: string,
+  value: number | null,
+): Envelope {
+  return { t: MessageType.CombatSetInitiative, id, d: { combatantId, value } }
+}
+
+export function combatRollInitiativeCommand(id: string, combatantIds: string[]): Envelope {
+  return { t: MessageType.CombatRollInitiative, id, d: { combatantIds } }
+}
+
+export function combatSetHiddenCommand(id: string, combatantId: string, hidden: boolean): Envelope {
+  return { t: MessageType.CombatSetHidden, id, d: { combatantId, hidden } }
+}
+
+export function combatNextCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatNext, id, sceneId)
+}
+
+export function combatPrevCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatPrev, id, sceneId)
 }

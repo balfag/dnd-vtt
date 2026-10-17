@@ -29,6 +29,9 @@ func (s *Service) FillSnapshot(ctx context.Context, v ws.Viewer, campaignID stri
 		t.ActiveSceneID = &active
 		t.Scene = &view
 	}
+	if t.Combat, err = activeCombat(ctx, s.db, campaignID, v); err != nil {
+		return err
+	}
 	if v.IsGM {
 		t.Scenes, err = listScenes(ctx, s.db, campaignID)
 		if err != nil {

@@ -134,7 +134,8 @@
           }
         ]
       },
-      "chat": []
+      "chat": [],
+      "combat": null
     }
   }
 }

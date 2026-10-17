@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type {
   ChatMessage,
   PlayerInfo,
@@ -40,6 +40,7 @@ function snapshot(seq = 4): Snapshot {
       scenes: [],
       scene: null,
       chat: [],
+      combat: null,
     },
   }
 }
