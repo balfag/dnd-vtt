@@ -67,7 +67,9 @@
     "rate_limited": "Too many attempts. Wait a minute.",
     "internal": "Something failed on the GM’s server. Try again.",
     "network": "No connection to the GM’s server.",
-    "unknown": "Something went wrong. Try again."
+    "unknown": "Something went wrong. Try again.",
+    "too_large": "The file is larger than 50 MB",
+    "unsupported_media_type": "Use a PNG, JPEG, WebP or GIF image"
   },
   "campaigns": {
     "title": "Campaigns",
@@ -142,6 +144,10 @@
       "map": "Map",
       "chat": "Chat",
       "chatUnread": "Chat, {{count}} unread"
+    },
+    "prep": {
+      "note": "You are preparing <b>{{name}}</b>; players see another scene",
+      "noActive": "Players do not see any scene yet"
     }
   },
   "ui": {
@@ -194,6 +200,54 @@
       "unknownCommand": "Unknown command. Use /r, /gmr, /sr, /br or /w",
       "formula": "Could not read “{{formula}}”. Example: 2d20kh1+5",
       "tooFast": "Too fast — wait a second"
+    }
+  },
+  "scenes": {
+    "tab": "Scenes",
+    "live": "live",
+    "showToPlayers": "Show to players",
+    "menu": "Actions for “{{name}}”",
+    "rename": "Rename",
+    "settings": "Scene settings",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "delete": "Delete",
+    "deleteConfirm": "Delete “{{name}}” with its tokens and drawings?",
+    "deleteActive": "Players see this scene now. Show them another one first.",
+    "new": "New scene",
+    "newPlaceholder": "Scene name",
+    "empty": "No scenes yet. Create the first one — players will see it right away.",
+    "field": {
+      "name": "Name",
+      "width": "Width, px",
+      "height": "Height, px"
+    },
+    "size": {
+      "fromBg": "Match the background"
+    },
+    "bg": {
+      "label": "Background",
+      "upload": "Upload an image",
+      "none": "No background",
+      "uploading": "Uploading: {{percent}}%",
+      "empty": "No uploaded images yet."
+    },
+    "grid": {
+      "label": "Grid",
+      "type": "Type",
+      "square": "Squares",
+      "hexPointy": "Hexes, pointy top",
+      "hexFlat": "Hexes, flat top",
+      "size": "Cell size, px",
+      "unitFt": "Feet per cell",
+      "offsetX": "Offset X, px",
+      "offsetY": "Offset Y, px",
+      "color": "Line colour",
+      "visible": "Show the grid"
+    },
+    "save": "Save the scene",
+    "error": {
+      "range": "From {{min}} to {{max}}"
     }
   }
 }

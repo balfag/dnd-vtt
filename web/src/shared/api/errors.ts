@@ -11,6 +11,8 @@ export const errorCodes = [
   'not_found',
   'conflict',
   'rate_limited',
+  'too_large',
+  'unsupported_media_type',
   'internal',
   'network',
 ] as const

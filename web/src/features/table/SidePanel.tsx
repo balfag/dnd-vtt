@@ -25,15 +25,23 @@ function remember(id: string) {
   }
 }
 
+interface SidePanelProps {
+  tabs: SidePanelTab[]
+  /** selected, when given, is the tab to show instead of the remembered one. */
+  selected?: string
+  onSelect?: (id: string) => void
+}
+
 /** SidePanel is the right-hand panel: a tab list and the content of the selected tab. */
-export function SidePanel({ tabs }: { tabs: SidePanelTab[] }) {
+export function SidePanel({ tabs, selected: requested, onSelect }: SidePanelProps) {
   const [chosen, setChosen] = useState<string | null>(remembered)
   const refs = useRef(new Map<string, HTMLButtonElement>())
-  const selected = tabs.find((tab) => tab.id === chosen)?.id ?? tabs[0]?.id
+  const selected = tabs.find((tab) => tab.id === (requested ?? chosen))?.id ?? tabs[0]?.id
 
   function select(id: string) {
     setChosen(id)
     remember(id)
+    onSelect?.(id)
   }
 
   function move(from: number, step: number) {

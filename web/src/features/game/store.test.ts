@@ -284,6 +284,113 @@ describe('game store', () => {
       expect(sceneOf(store)).toEqual(scene)
     })
 
+    function asGm(store: StoreApi<GameState>, activeId: string | null = 's1') {
+      const game = store.getState().game
+      if (game === null) throw new Error('no game')
+      const snap: Snapshot = {
+        seq: store.getState().lastSeq,
+        me: { accountId: 'a1', isGm: true, playerId: 'p1' },
+        game: {
+          ...game,
+          activeSceneId: activeId,
+          combat: null,
+          scenes: [...list, { id: 's3', name: 'Cellar', sort: 2 }],
+        },
+      }
+      store.getState().applySnapshot(snap)
+    }
+    const crypt: SceneView = { ...scene, id: 's2', name: 'Crypt', tokens: [] }
+    const cellar: SceneView = { ...scene, id: 's3', name: 'Cellar', tokens: [] }
+
+    it('a snapshot makes the view the active scene', () => {
+      const store = withScene()
+      expect(store.getState().game?.viewSceneId).toBe('s1')
+      const bare = createGameStore()
+      bare.getState().applySnapshot(snapshot())
+      expect(bare.getState().game?.viewSceneId).toBeNull()
+    })
+
+    it('setViewedScene shows the scene and remembers its id', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(crypt)
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s1')
+    })
+
+    it('a GM who looked at the old active scene follows the activation', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)?.id).toBe('s2')
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a GM who looked at the scene being activated gets it refreshed', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene({ ...crypt, name: 'old' })
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a GM who prepares a third scene keeps it on the canvas', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(cellar)
+      expect(store.getState().game?.viewSceneId).toBe('s3')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a player always follows the activation', () => {
+      const store = withScene()
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+    })
+
+    it('scenes.changed without the viewed scene empties the canvas', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      const next = [{ id: 's1', name: 'Tavern', sort: 0 }]
+      store.getState().applyEvent({ t: 'scenes.changed', seq: 5, d: { scenes: next } })
+      expect(sceneOf(store)).toBeNull()
+      expect(store.getState().game?.viewSceneId).toBeNull()
+      expect(store.getState().game?.activeSceneId).toBe('s1')
+    })
+
+    it('scenes.changed keeps the viewed scene that stays in the list', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      const next = [{ id: 's3', name: 'Cellar', sort: 0 }, ...list]
+      store.getState().applyEvent({ t: 'scenes.changed', seq: 5, d: { scenes: next } })
+      expect(sceneOf(store)).toEqual(cellar)
+    })
+
+    it('a GM snapshot of the same game remembers the view from before it', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      asGm(store)
+      expect(store.getState().viewBeforeSync).toBe('s3')
+      expect(store.getState().game?.viewSceneId).toBe('s1')
+      store.getState().clearViewBeforeSync()
+      expect(store.getState().viewBeforeSync).toBeNull()
+    })
+
+    it('a player snapshot remembers no view', () => {
+      const store = withScene()
+      store.getState().applySnapshot(snapshot())
+      expect(store.getState().viewBeforeSync).toBeNull()
+    })
     it('a malformed scene event only advances lastSeq', () => {
       const store = withScene()
       const before = store.getState().game

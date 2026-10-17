@@ -13,7 +13,8 @@ export class ApiError extends Error {
   }
 }
 
-function errorCodeOf(body: unknown): string {
+/** errorCodeOf reads error.code of an API error body. */
+export function errorCodeOf(body: unknown): string {
   if (typeof body === 'object' && body !== null && 'error' in body) {
     const err = body.error
     if (typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string') {
