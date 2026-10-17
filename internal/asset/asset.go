@@ -61,6 +61,7 @@ type Service struct {
 	dataDir string
 	now     func() time.Time
 	maxSize int64
+	locks   keyLock // per campaign and sha256: Upload and Delete of the same file
 }
 
 func NewService(db *sql.DB, dataDir string, opts Options) *Service {
@@ -201,6 +202,9 @@ func (s *Service) Upload(ctx context.Context, campaignID, originalName, kind str
 	}
 
 	sum := hex.EncodeToString(hash.Sum(nil))
+	// Held until return: a Delete of the same file must not remove it between
+	// the rename and the insert.
+	defer s.locks.lock(fileKey(campaignID, sum))()
 	if existing, err := s.bySHA(ctx, campaignID, sum); err == nil {
 		return existing, false, nil
 	} else if !errors.Is(err, ErrNotFound) {
@@ -252,6 +256,8 @@ func (s *Service) Upload(ctx context.Context, campaignID, originalName, kind str
 	}
 	return a, true, nil
 }
+
+func fileKey(campaignID, sum string) string { return campaignID + "/" + sum }
 
 func (s *Service) bySHA(ctx context.Context, campaignID, sum string) (Asset, error) {
 	a, err := scanAsset(s.db.QueryRowContext(ctx, assetSelect+` WHERE campaign_id = ? AND sha256 = ?`, campaignID, sum))
@@ -321,6 +327,8 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// The key is taken before the transaction, never inside it.
+	defer s.locks.lock(fileKey(a.CampaignID, a.SHA256))()
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -342,6 +350,13 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete asset: commit: %w", err)
 	}
 
+	// The lock keeps a new row for this file from appearing, but the check is
+	// cheap and guards against future changes. A row for the file means keep it.
+	if _, err := s.bySHA(ctx, a.CampaignID, a.SHA256); err == nil {
+		return nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
 	// The row is gone, so a file that cannot be removed is only an orphan on
 	// disk, and the service has no logger to say so: the error is dropped.
 	_ = os.Remove(s.Path(a))
