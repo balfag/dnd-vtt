@@ -292,6 +292,7 @@ describe('game store', () => {
         game: {
           ...game,
           activeSceneId: activeId,
+          combat: null,
           scenes: [...list, { id: 's3', name: 'Cellar', sort: 2 }],
         },
       }
