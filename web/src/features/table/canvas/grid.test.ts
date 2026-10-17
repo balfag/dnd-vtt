@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Grid } from '../../../shared/protocol'
 import type { Point } from './camera'
-import { cellAt, cellCenter, cellPolygon, cellsInRect, type Cell } from './grid'
+import {
+  cellAt,
+  cellCenter,
+  cellPolygon,
+  cellsInRect,
+  clipSegment,
+  hexEdges,
+  intersect,
+  squareLines,
+  type Cell,
+} from './grid'
 
 function gridOf(type: Grid['type']): Grid {
   return {
@@ -138,5 +148,85 @@ describe('square grid', () => {
     const g = gridOf('square')
     expect(cellAt(g, { x: 13.5 + 1, y: -21 + 1 })).toEqual({ col: 0, row: 0 })
     expect(cellAt(g, { x: 13.5 - 1, y: -21 - 1 })).toEqual({ col: -1, row: -1 })
+  })
+})
+
+describe('hexEdges', () => {
+  it.each(['hexPointy', 'hexFlat'] as const)(
+    '%s: every edge once, all six edges of inner cells',
+    (type) => {
+      const g = gridOf(type)
+      const edges = hexEdges(g, { x: -400, y: -400, w: 800, h: 800 })
+      const same = (a: Point, b: Point) => dist(a, b) < 1e-6
+      const has = (a: Point, b: Point) =>
+        edges.filter(([p, q]) => (same(p, a) && same(q, b)) || (same(p, b) && same(q, a))).length
+      for (let i = 0; i < edges.length; i += 7) {
+        const e = edges[i]
+        if (e === undefined) continue
+        expect(has(e[0], e[1])).toBe(1)
+      }
+      for (const c of [
+        { col: 0, row: 0 },
+        { col: -1, row: 1 },
+        { col: 2, row: -2 },
+      ]) {
+        const poly = cellPolygon(g, c)
+        for (let i = 0; i < 6; i++) {
+          const a = poly[i]
+          const b = poly[(i + 1) % 6]
+          if (a === undefined || b === undefined) throw new Error('missing vertex')
+          expect(has(a, b)).toBe(1)
+        }
+      }
+    },
+  )
+})
+
+describe('squareLines', () => {
+  it('lists the lines inside the rect, spanning it', () => {
+    const g = gridOf('square')
+    const r = { x: 0, y: 0, w: 200, h: 100 }
+    const lines = squareLines(g, r)
+    // x = 13.5 + 70k in [0, 200]: 83.5 153.5 and 13.5; y = -21 + 70k in [0, 100]: 49
+    expect(lines).toHaveLength(3 + 1)
+    for (const [a, b] of lines) {
+      expect(a.x === b.x || a.y === b.y).toBe(true)
+    }
+  })
+})
+
+describe('clipSegment', () => {
+  const r = { x: 0, y: 0, w: 100, h: 50 }
+
+  it('keeps a segment inside', () => {
+    expect(clipSegment({ x: 10, y: 10 }, { x: 90, y: 40 }, r)).toEqual([
+      { x: 10, y: 10 },
+      { x: 90, y: 40 },
+    ])
+  })
+
+  it('cuts a segment that leaves the rect', () => {
+    const got = clipSegment({ x: -50, y: 25 }, { x: 150, y: 25 }, r)
+    expect(got).toEqual([
+      { x: 0, y: 25 },
+      { x: 100, y: 25 },
+    ])
+  })
+
+  it('drops a segment that misses the rect', () => {
+    expect(clipSegment({ x: -10, y: -10 }, { x: -5, y: 100 }, r)).toBeNull()
+    expect(clipSegment({ x: 0, y: 60 }, { x: 100, y: 60 }, r)).toBeNull()
+  })
+})
+
+describe('intersect', () => {
+  it('returns the overlap or null', () => {
+    expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 })).toEqual({
+      x: 5,
+      y: 5,
+      w: 5,
+      h: 5,
+    })
+    expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 5, h: 5 })).toBeNull()
   })
 })

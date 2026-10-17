@@ -150,3 +150,86 @@ export function cellsInRect(g: Grid, r: Rect): Cell[] {
   }
   return cells
 }
+
+export type Segment = [Point, Point]
+
+/** intersect returns the overlap of two rects, or null when it has no area. */
+export function intersect(a: Rect, b: Rect): Rect | null {
+  const x1 = Math.max(a.x, b.x)
+  const y1 = Math.max(a.y, b.y)
+  const x2 = Math.min(a.x + a.w, b.x + b.w)
+  const y2 = Math.min(a.y + a.h, b.y + b.h)
+  return x2 > x1 && y2 > y1 ? { x: x1, y: y1, w: x2 - x1, h: y2 - y1 } : null
+}
+
+/** squareLines lists the lines of a square grid that cross the rect, each spanning the rect. */
+export function squareLines(g: Grid, r: Rect): Segment[] {
+  const s = g.sizePx
+  const lines: Segment[] = []
+  const c0 = Math.ceil((r.x - g.offsetX) / s)
+  const c1 = Math.floor((r.x + r.w - g.offsetX) / s)
+  for (let col = c0; col <= c1; col++) {
+    const x = g.offsetX + col * s
+    lines.push([
+      { x, y: r.y },
+      { x, y: r.y + r.h },
+    ])
+  }
+  const r0 = Math.ceil((r.y - g.offsetY) / s)
+  const r1 = Math.floor((r.y + r.h - g.offsetY) / s)
+  for (let row = r0; row <= r1; row++) {
+    const y = g.offsetY + row * s
+    lines.push([
+      { x: r.x, y },
+      { x: r.x + r.w, y },
+    ])
+  }
+  return lines
+}
+
+/**
+ * hexEdges lists the edges of the hexes in the rect, each edge once: a hex owns its first
+ * three edges (vertex 0→1→2→3), the other three belong to its neighbours. Stroking them
+ * as one path keeps the alpha of a shared edge the same as any other.
+ */
+export function hexEdges(g: Grid, r: Rect): Segment[] {
+  const edges: Segment[] = []
+  for (const cell of cellsInRect(g, r)) {
+    const [a, b, c, d] = cellPolygon(g, cell)
+    if (a === undefined || b === undefined || c === undefined || d === undefined) continue
+    edges.push([a, b], [b, c], [c, d])
+  }
+  return edges
+}
+
+/** clipSegment cuts a segment to the rect (Liang–Barsky); null when nothing is left. */
+export function clipSegment(a: Point, b: Point, r: Rect): Segment | null {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  let t0 = 0
+  let t1 = 1
+  const checks: [number, number][] = [
+    [-dx, a.x - r.x],
+    [dx, r.x + r.w - a.x],
+    [-dy, a.y - r.y],
+    [dy, r.y + r.h - a.y],
+  ]
+  for (const [p, q] of checks) {
+    if (p === 0) {
+      if (q < 0) return null
+      continue
+    }
+    const t = q / p
+    if (p < 0) {
+      if (t > t1) return null
+      t0 = Math.max(t0, t)
+    } else {
+      if (t < t0) return null
+      t1 = Math.min(t1, t)
+    }
+  }
+  return [
+    { x: a.x + t0 * dx, y: a.y + t0 * dy },
+    { x: a.x + t1 * dx, y: a.y + t1 * dy },
+  ]
+}
