@@ -27,6 +27,24 @@ export function SelectIcon() {
     </Icon>
   )
 }
+/** RevealFogIcon is a dashed frame with a clear circle: open a place in the fog. */
+export function RevealFogIcon() {
+  return (
+    <Icon>
+      <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="3 3" />
+      <circle cx="12" cy="12" r="4" />
+    </Icon>
+  )
+}
+
+/** HideFogIcon is a cloud: cover a place with fog. */
+export function HideFogIcon() {
+  return (
+    <Icon>
+      <path d="M7 18h10.2a3.8 3.8 0 0 0 .5-7.57A5.5 5.5 0 0 0 7.1 9.4 4.3 4.3 0 0 0 7 18z" />
+    </Icon>
+  )
+}
 export function PlusIcon() {
   return (
     <Icon>

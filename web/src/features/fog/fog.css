@@ -1,0 +1,130 @@
+/* The options of a fog tool: a plate over the map next to the tool strip. Brass: it is the GM's. */
+.fogbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 15rem;
+  max-height: calc(100% - 24px);
+  padding: 12px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brass);
+  background: var(--slate);
+}
+
+.fogbar__title {
+  margin: 0;
+  color: var(--brass);
+  font: 700 18px/1.2 var(--serif);
+}
+
+.fogbar__shapes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fogbar__legend {
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.fogbar__shape,
+.fogbar__row--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.fogbar input[type='radio'],
+.fogbar input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brass);
+}
+
+.fogbar__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fogbar__range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fogbar__range input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--brass);
+}
+
+.fogbar__range output {
+  min-width: 2.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fogbar__hint {
+  margin: 0;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.fogbar__reset {
+  padding: 6px 12px;
+  border: 1px solid var(--brass);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chalk);
+  font: 500 15px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.fogbar__reset:hover {
+  background: var(--board);
+}
+
+.fogbar__count,
+.fogbar__full {
+  margin: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fogbar__count {
+  color: var(--fog);
+}
+
+.fogbar__count[data-full] {
+  color: var(--chalk);
+  font-weight: 500;
+}
+
+.fogbar__full {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 3px solid var(--seal);
+}
+
+/* A narrow screen: the tool strip floats at the left, so the plate moves right of it. */
+@media (max-width: 899px) {
+  .fogbar {
+    left: 68px;
+    width: min(15rem, calc(100% - 80px));
+  }
+}
