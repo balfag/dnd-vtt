@@ -171,6 +171,7 @@
     "section": {
       "map": "Map",
       "chat": "Chat",
+      "combat": "Fight",
       "chatUnread": "Chat, {{count}} unread"
     },
     "prep": {
@@ -229,6 +230,35 @@
       "formula": "Could not read “{{formula}}”. Example: 2d20kh1+5",
       "tooFast": "Too fast — wait a second"
     }
+  },
+  "combat": {
+    "tab": "Fight",
+    "empty": {
+      "gm": "No fight. Select a token on the map and start a fight.",
+      "player": "No fight"
+    },
+    "notActive": "The fight runs on the scene players see",
+    "start": "Start a fight",
+    "end": "End the fight",
+    "endConfirm": "End the fight? The turn order will be removed.",
+    "round": "Round {{n}}",
+    "next": "Next turn",
+    "prev": "Previous turn",
+    "turn": "acting",
+    "hidden": "hidden",
+    "unnamed": "Unnamed",
+    "initiative": "Initiative of {{name}}",
+    "roll": "Roll initiative",
+    "rollOne": "Roll initiative",
+    "rollAll": "Roll for everyone without initiative",
+    "rollMine": "Roll for mine",
+    "hide": "Hide from players",
+    "show": "Show to players",
+    "remove": "Remove from the fight",
+    "addSelected": "Add the selected token",
+    "menu": "Actions for {{name}}",
+    "announceTurn": "{{name}} is acting",
+    "announceMyTurn": "Your turn"
   },
   "scenes": {
     "tab": "Scenes",

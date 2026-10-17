@@ -2,6 +2,7 @@ import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import {
   isChatMessage,
+  isCombatChanged,
   isFogChanged,
   isPresence,
   isSceneActivated,
@@ -13,6 +14,7 @@ import {
   isTokenRemoved,
   MessageType,
   type ChatMessage,
+  type Combat,
   type Envelope,
   type PlayerInfo,
   type SceneListItem,
@@ -46,6 +48,8 @@ export interface GameView {
   chat: ChatMessage[]
   /** True when there is no older history to load. */
   chatHistoryDone: boolean
+  /** The fight of the shown scene; null: none, or not known yet after the shown scene changed. */
+  combat: Combat | null
 }
 
 /** A token another client is dragging now: transient, kept outside the snapshot and seq. */
@@ -133,7 +137,7 @@ export function createGameStore(): StoreApi<GameState> {
     setViewedScene: (scene) => {
       set((state) => {
         if (state.game === null) return {}
-        return { game: { ...state.game, scene, viewSceneId: scene.id } }
+        return { game: { ...state.game, scene, viewSceneId: scene.id, combat: null } }
       })
     },
     clearViewBeforeSync: () => {
@@ -153,7 +157,13 @@ export function createGameStore(): StoreApi<GameState> {
           return {
             lastSeq: e.seq,
             game: follows
-              ? { ...game, scene: next, activeSceneId: next.id, viewSceneId: next.id }
+              ? {
+                  ...game,
+                  scene: next,
+                  activeSceneId: next.id,
+                  viewSceneId: next.id,
+                  combat: null,
+                }
               : { ...game, activeSceneId: next.id },
             dragging: {},
           }
@@ -202,6 +212,11 @@ export function createGameStore(): StoreApi<GameState> {
             lastSeq: e.seq,
             game: gone ? { ...game, scenes, scene: null, viewSceneId: null } : { ...game, scenes },
           }
+        }
+        if (isCombatChanged(e)) {
+          // The GM may look at another scene: its fight is not the one on the screen.
+          if (game.scene?.id !== e.d.sceneId) return { lastSeq: e.seq }
+          return { lastSeq: e.seq, game: { ...game, combat: e.d.combat } }
         }
         if (isChatMessage(e)) {
           if (game.chat.some((m) => m.id === e.d.id)) return { lastSeq: e.seq }

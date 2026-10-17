@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChatMessage,
+  Combat,
   PlayerInfo,
   SceneInfo,
   SceneListItem,
@@ -391,6 +392,114 @@ describe('game store', () => {
       store.getState().applySnapshot(snapshot())
       expect(store.getState().viewBeforeSync).toBeNull()
     })
+
+    describe('combat', () => {
+      const fight: Combat = {
+        sceneId: 's1',
+        round: 2,
+        turnCombatantId: 'c1',
+        combatants: [
+          { id: 'c1', tokenId: 't1', name: 'Orc', initiative: 14, hidden: false },
+          { id: 'c2', tokenId: 't2', name: '', initiative: null, hidden: true },
+        ],
+      }
+
+      function withFight(): StoreApi<GameState> {
+        const store = createGameStore()
+        const snap = snapshot()
+        if (snap.game === null) throw new Error('no game')
+        snap.game = { ...snap.game, activeSceneId: 's1', scenes: list, scene, combat: fight }
+        store.getState().applySnapshot(snap)
+        return store
+      }
+
+      function combatOf(store: StoreApi<GameState>): Combat | null | undefined {
+        return store.getState().game?.combat
+      }
+
+      it('takes the fight from the snapshot', () => {
+        expect(combatOf(withFight())).toEqual(fight)
+      })
+
+      it('combat.changed replaces the fight of the shown scene', () => {
+        const store = withFight()
+        const next: Combat = { ...fight, round: 3, turnCombatantId: 'c2' }
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: next } })
+        expect(combatOf(store)).toEqual(next)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('combat.changed starts a fight where there was none', () => {
+        const store = withScene()
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: fight } })
+        expect(combatOf(store)).toEqual(fight)
+      })
+
+      it('combat.changed of another scene changes nothing', () => {
+        const store = withFight()
+        const before = store.getState().game
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's2', combat: null } })
+        expect(store.getState().game).toBe(before)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('combat.changed with null ends the fight', () => {
+        const store = withFight()
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: null } })
+        expect(combatOf(store)).toBeNull()
+      })
+
+      it('a malformed combat.changed only advances lastSeq', () => {
+        const store = withFight()
+        const before = store.getState().game
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: { round: 1 } } })
+        expect(store.getState().game).toBe(before)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('scene.activated drops the fight until the next combat.changed', () => {
+        const store = withFight()
+        store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+        expect(combatOf(store)).toBeNull()
+        const next: Combat = { ...fight, sceneId: 's2' }
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 6, d: { sceneId: 's2', combat: next } })
+        expect(combatOf(store)).toEqual(next)
+      })
+
+      it('setViewedScene drops the fight', () => {
+        const store = withFight()
+        asGm(store)
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: fight } })
+        expect(combatOf(store)).toEqual(fight)
+        store.getState().setViewedScene(crypt)
+        expect(combatOf(store)).toBeNull()
+      })
+
+      it('a GM who prepares another scene keeps no fight and ignores the active one', () => {
+        const store = withScene()
+        asGm(store)
+        store.getState().setViewedScene(cellar)
+        store
+          .getState()
+          .applyEvent({ t: 'combat.changed', seq: 5, d: { sceneId: 's1', combat: fight } })
+        expect(combatOf(store)).toBeNull()
+      })
+    })
+
     it('a malformed scene event only advances lastSeq', () => {
       const store = withScene()
       const before = store.getState().game
