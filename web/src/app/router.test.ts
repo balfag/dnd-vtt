@@ -7,6 +7,8 @@ describe('matchRoute', () => {
     ['/setup', { name: 'setup' }],
     ['/login', { name: 'login' }],
     ['/login/', { name: 'login' }],
+    ['/table', { name: 'table' }],
+    ['/table/', { name: 'table' }],
     ['/play/abc_DEF-1', { name: 'play', token: 'abc_DEF-1' }],
     ['/play/abc_DEF-1/', { name: 'play', token: 'abc_DEF-1' }],
     ['/reset/x', { name: 'reset', token: 'x' }],
