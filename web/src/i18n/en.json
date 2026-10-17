@@ -107,6 +107,38 @@
     "removeConfirm": "Remove {{name}} from the campaign? Joining with the game link will no longer work.",
     "removed": "Participant removed"
   },
+  "table": {
+    "open": "Open the table",
+    "leave": "Leave the table",
+    "canvas": {
+      "label": "Scene “{{name}}”"
+    },
+    "tool": {
+      "pan": "Move the map"
+    },
+    "zoom": {
+      "in": "Zoom in",
+      "out": "Zoom out",
+      "fit": "Show the whole scene"
+    },
+    "connection": {
+      "reconnecting": "Connection lost, reconnecting…"
+    },
+    "empty": {
+      "player": "The GM has not picked a scene yet. The map will appear here.",
+      "gm": "No scenes yet. You will create them in the Scenes panel."
+    },
+    "ended": {
+      "title": "The game has ended",
+      "text": "The GM ended the game. Ask for a new link when the next one starts."
+    },
+    "removed": {
+      "title": "You were removed from the game",
+      "text": "If this is a mistake, message the GM."
+    },
+    "participants": "Participants",
+    "more": "+{{count}}"
+  },
   "ui": {
     "dialog": {
       "close": "Close",
