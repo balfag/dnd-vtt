@@ -1,0 +1,35 @@
+{
+  "t": "combat.changed",
+  "seq": 31,
+  "d": {
+    "sceneId": "01J00000000000000000000SC2",
+    "combat": {
+      "sceneId": "01J00000000000000000000SC2",
+      "round": 2,
+      "turnCombatantId": "01J00000000000000000000CB2",
+      "combatants": [
+        {
+          "id": "01J00000000000000000000CB1",
+          "tokenId": "01J00000000000000000000TK1",
+          "name": "Гоблин",
+          "initiative": 17,
+          "hidden": false
+        },
+        {
+          "id": "01J00000000000000000000CB2",
+          "tokenId": "01J00000000000000000000TK2",
+          "name": "Тень",
+          "initiative": 12,
+          "hidden": true
+        },
+        {
+          "id": "01J00000000000000000000CB3",
+          "tokenId": "01J00000000000000000000TK3",
+          "name": "",
+          "initiative": null,
+          "hidden": false
+        }
+      ]
+    }
+  }
+}
