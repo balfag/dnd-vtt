@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -449,5 +450,65 @@ func TestDeleteCampaignCascades(t *testing.T) {
 	}
 	if _, err := e.svc.Get(context.Background(), a.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get after the campaign is gone: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteRacingUploadKeepsInvariant(t *testing.T) {
+	e := newEnv(t, Options{})
+	data := pngBytes(t, 3, 3)
+	for i := range 50 {
+		a := e.mustUpload("a.png", data)
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := e.svc.Delete(context.Background(), a.ID); err != nil && !errors.Is(err, ErrNotFound) {
+				t.Errorf("iteration %d: delete: %v", i, err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, _, err := e.upload(e.camp, "a.png", "", data); err != nil {
+				t.Errorf("iteration %d: upload: %v", i, err)
+			}
+		}()
+		close(start)
+		wg.Wait()
+
+		rows, err := e.svc.List(context.Background(), e.camp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, statErr := os.Stat(e.svc.Path(a))
+		switch {
+		case len(rows) > 0 && statErr != nil:
+			t.Fatalf("iteration %d: row exists but file is gone: %v", i, statErr)
+		case len(rows) == 0 && statErr == nil:
+			t.Fatalf("iteration %d: no row but the file is left", i)
+		}
+		for _, r := range rows {
+			if err := e.svc.Delete(context.Background(), r.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestAssetsDirPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not meaningful on Windows")
+	}
+	e := newEnv(t, Options{})
+	e.mustUpload("a.png", pngBytes(t, 2, 2))
+	info, err := os.Stat(filepath.Join(e.dataDir, "campaigns", e.camp, "assets"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("assets dir mode = %o, want 700", got)
 	}
 }
