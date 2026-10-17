@@ -1,5 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest'
 import type {
+  ChatMessage,
   PlayerInfo,
   SceneInfo,
   SceneListItem,
@@ -288,6 +289,102 @@ describe('game store', () => {
       store.getState().applyEvent({ t: 'scenes.changed', seq: 6, d: { scenes: 'x' } })
       expect(store.getState().game).toBe(before)
       expect(store.getState().lastSeq).toBe(6)
+    })
+  })
+
+  describe('chat', () => {
+    function msg(n: number, text = `m${String(n)}`): ChatMessage {
+      return {
+        id: `m${String(n)}`,
+        createdAt: 1000 + n,
+        authorPlayerId: 'p2',
+        kind: 'text',
+        visibility: 'public',
+        text,
+      }
+    }
+    function range(from: number, to: number): ChatMessage[] {
+      const out: ChatMessage[] = []
+      for (let n = from; n <= to; n++) out.push(msg(n))
+      return out
+    }
+    function withChat(chat: ChatMessage[]): StoreApi<GameState> {
+      const store = createGameStore()
+      const snap = snapshot()
+      if (snap.game === null) throw new Error('no game')
+      snap.game = { ...snap.game, chat }
+      store.getState().applySnapshot(snap)
+      return store
+    }
+    function ids(store: StoreApi<GameState>): string[] {
+      return (store.getState().game?.chat ?? []).map((m) => m.id)
+    }
+
+    it('takes the chat from the snapshot', () => {
+      const store = withChat(range(1, 3))
+      expect(ids(store)).toEqual(['m1', 'm2', 'm3'])
+    })
+
+    it('chat.message appends', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: msg(3) })
+      expect(ids(store)).toEqual(['m1', 'm2', 'm3'])
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('chat.message with a known id is not added twice', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: msg(2, 'again') })
+      expect(ids(store)).toEqual(['m1', 'm2'])
+      expect(store.getState().game?.chat[1]?.text).toBe('m2')
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('a malformed chat.message only advances lastSeq', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: { id: 'x' } })
+      expect(ids(store)).toEqual(['m1', 'm2'])
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('prependHistory puts older messages first, in order, without duplicates', () => {
+      const store = withChat(range(5, 7))
+      store.getState().prependHistory([...range(2, 4), msg(5), msg(4)])
+      expect(ids(store)).toEqual(['m2', 'm3', 'm4', 'm5', 'm6', 'm7'])
+    })
+
+    it('prependHistory without a game changes nothing', () => {
+      const store = createGameStore()
+      store.getState().prependHistory(range(1, 2))
+      expect(store.getState().game).toBeNull()
+    })
+
+    it('the history is not done after a snapshot of 50 messages', () => {
+      const store = withChat(range(1, 50))
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
+    })
+
+    it('the history is done after a snapshot of 10 messages', () => {
+      const store = withChat(range(1, 10))
+      expect(store.getState().game?.chatHistoryDone).toBe(true)
+    })
+
+    it('a full page keeps the history open, a short one finishes it', () => {
+      const store = withChat(range(101, 150))
+      store.getState().prependHistory(range(51, 100))
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
+      store.getState().prependHistory(range(41, 50))
+      expect(store.getState().game?.chatHistoryDone).toBe(true)
+      expect(store.getState().game?.chat).toHaveLength(110)
+    })
+
+    it('a new snapshot resets chatHistoryDone', () => {
+      const store = withChat(range(1, 10))
+      const snap = snapshot()
+      if (snap.game === null) throw new Error('no game')
+      snap.game = { ...snap.game, chat: range(1, 50) }
+      store.getState().applySnapshot(snap)
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
     })
   })
 

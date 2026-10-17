@@ -1,14 +1,19 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
 import { GameConnection } from '../../shared/ws/connection'
+import { CommandError } from '../../shared/ws/errors'
 import { gameSocketUrl } from '../../shared/ws/socket'
 import { AuthLayout } from '../../ui/AuthLayout'
 import { Link } from '../../ui/Link'
+import { ChatPanel } from '../chat/ChatPanel'
 import { gameStore, useGame } from '../game/store'
 import { SceneCanvas } from './canvas/SceneCanvas'
 import { ConnectionNote } from './ConnectionNote'
+import { SectionTabs, type Section } from './SectionTabs'
+import { SidePanel } from './SidePanel'
+import { useNarrow } from './useNarrow'
 import { ToolRail } from './ToolRail'
 import { TopBar } from './TopBar'
 import './table.css'
@@ -26,6 +31,10 @@ export default function TableScreen() {
   const { state, refresh, logout } = useSession()
   const signedIn = state.status === 'signedIn'
   const anonymous = state.status === 'anonymous'
+  const connectionRef = useRef<GameConnection | null>(null)
+  const [section, setSection] = useState<Section>('map')
+  const [unread, setUnread] = useState(0)
+  const narrow = useNarrow()
 
   useEffect(() => {
     if (anonymous) navigate('/login', { replace: true })
@@ -39,6 +48,7 @@ export default function TableScreen() {
       url: gameSocketUrl(window.location),
     })
     connection.start()
+    connectionRef.current = connection
     if (import.meta.env.DEV) {
       window.dndvtt = {
         command: (type, data) => connection.command(type, data),
@@ -46,9 +56,16 @@ export default function TableScreen() {
     }
     return () => {
       connection.stop()
+      connectionRef.current = null
       if (import.meta.env.DEV) delete window.dndvtt
     }
   }, [signedIn])
+
+  const command = useCallback((type: string, data?: unknown): Promise<unknown> => {
+    return (
+      connectionRef.current?.command(type, data) ?? Promise.reject(new CommandError('disconnected'))
+    )
+  }, [])
 
   const connection = useGame((s) => s.connection)
   const game = useGame((s) => s.game)
@@ -57,6 +74,17 @@ export default function TableScreen() {
   const isGm = state.status === 'signedIn' && state.me.isGm
   // A synced connection without a game: the game is over, or has not started.
   const noGame = synced && game === null
+
+  // Count what the chat gets while the map is shown on a narrow screen.
+  useEffect(() => {
+    if (!narrow || section !== 'map') return
+    return gameStore.subscribe((now, before) => {
+      const last = now.game?.chat[now.game.chat.length - 1]
+      if (last === undefined || last.id === before.game?.chat[before.game.chat.length - 1]?.id)
+        return
+      if (last.authorPlayerId !== now.me?.playerId) setUnread((n) => n + 1)
+    })
+  }, [narrow, section])
 
   useEffect(() => {
     if (closedReason === 'unauthorized') void refresh()
@@ -94,7 +122,7 @@ export default function TableScreen() {
   const emptyText = isGm ? t('table.empty.gm') : t('table.empty.player')
 
   return (
-    <div className="table">
+    <div className="table" data-section={section}>
       <TopBar
         campaignName={game?.campaign.name ?? ''}
         sceneName={scene?.name ?? null}
@@ -106,11 +134,22 @@ export default function TableScreen() {
         }}
       />
       <ToolRail />
-      <main className="table__stage">
+      <main className="table__stage" inert={narrow && section === 'chat'}>
         <SceneCanvas scene={scene} emptyText={emptyText} />
         <ConnectionNote />
         {game !== null && scene === null && <p className="table__empty">{emptyText}</p>}
       </main>
+      <SidePanel
+        tabs={[{ id: 'chat', label: t('chat.tab'), content: <ChatPanel command={command} /> }]}
+      />
+      <SectionTabs
+        selected={section}
+        unread={unread}
+        onSelect={(next) => {
+          setSection(next)
+          if (next === 'chat') setUnread(0)
+        }}
+      />
     </div>
   )
 }

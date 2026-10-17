@@ -137,7 +137,12 @@
       "text": "If this is a mistake, message the GM."
     },
     "participants": "Participants",
-    "more": "+{{count}}"
+    "more": "+{{count}}",
+    "section": {
+      "map": "Map",
+      "chat": "Chat",
+      "chatUnread": "Chat, {{count}} unread"
+    }
   },
   "ui": {
     "dialog": {
@@ -151,6 +156,44 @@
       "button": "Copy the link",
       "done": "Link copied",
       "manual": "Copy the selected link manually: Ctrl+C"
+    }
+  },
+  "chat": {
+    "tab": "Chat",
+    "input": {
+      "label": "Message or roll",
+      "placeholder": "Message or /r 2d20kh1+5",
+      "hint": "Enter to send, /r to roll, /w Name: to whisper"
+    },
+    "quick": {
+      "label": "Quick rolls",
+      "adv": "With advantage",
+      "dis": "With disadvantage"
+    },
+    "private": "Private: {{names}}",
+    "vis": {
+      "gm": "GM only",
+      "self": "to self",
+      "blind": "blind"
+    },
+    "roll": {
+      "hidden": "the GM has the result"
+    },
+    "die": {
+      "rerolled": "Rerolled, was {{from}}"
+    },
+    "newMessages": "New messages",
+    "empty": "Messages and rolls appear here. Say something.",
+    "error": {
+      "empty": "Type a message",
+      "noFormula": "Add a formula after /r, for example 1d20+3",
+      "labelTooLong": "A roll label is up to 100 characters",
+      "noPlayer": "No participant named “{{name}}”",
+      "self": "You cannot whisper to yourself",
+      "whisperFormat": "Format: /w Name, Name: text",
+      "unknownCommand": "Unknown command. Use /r, /gmr, /sr, /br or /w",
+      "formula": "Could not read “{{formula}}”. Example: 2d20kh1+5",
+      "tooFast": "Too fast — wait a second"
     }
   }
 }
