@@ -18,6 +18,8 @@ export interface TokenModel {
   /** By token id; a token without a placement stays where the server has it. */
   placements: ReadonlyMap<string, TokenPlacement>
   selectedId: string | null
+  /** The token of the combatant whose turn it is: it gets a ring. */
+  turnTokenId: string | null
   hoverId: string | null
   /** The start of the drag in progress: the token drawn faintly where it was. */
   ghost: { token: Token; x: number; y: number } | null
@@ -55,6 +57,9 @@ const barGap = 2
 const dashLen = 8
 const dashGap = 5
 const selectPad = 5
+// The turn ring: 2 px on the screen, its inner edge this far outside the token's outline.
+const turnRingWidth = 2
+const turnRingGap = 3
 
 function hit(node: Container): void {
   node.eventMode = 'none'
@@ -153,6 +158,7 @@ class TokenView {
   private sprite: Sprite | null = null
   private spriteAsset: string | null = null
   private readonly ring = new Graphics()
+  private readonly turnRing = new Graphics()
   private readonly letter: Text
   private readonly name: Label
   private readonly bars = new Graphics()
@@ -179,11 +185,21 @@ class TokenView {
     this.letter.anchor.set(0.5)
     this.name = new Label(colors)
     this.art.addChild(this.mask)
-    this.root.addChild(this.fill, this.art, this.ring, this.letter, this.bars, this.name.root)
+    this.root.addChild(
+      this.fill,
+      this.art,
+      this.ring,
+      this.turnRing,
+      this.letter,
+      this.bars,
+      this.name.root,
+    )
     this.root.label = `token:${id}`
     if (interactive) this.root.eventMode = 'static'
     else hit(this.root)
-    for (const child of [this.fill, this.art, this.ring, this.letter, this.bars]) hit(child)
+    for (const child of [this.fill, this.art, this.ring, this.turnRing, this.letter, this.bars]) {
+      hit(child)
+    }
   }
 
   draw(
@@ -195,6 +211,7 @@ class TokenView {
       texture: Texture | null
       showName: boolean
       withBars: boolean
+      turn: boolean
       alpha: number
     },
   ): void {
@@ -215,6 +232,14 @@ class TokenView {
     if (style.dashed) dashedEllipse(this.ring, Math.max(rx - sw / 2, 1), Math.max(ry - sw / 2, 1))
     else this.ring.ellipse(0, 0, Math.max(rx - sw / 2, 1), Math.max(ry - sw / 2, 1))
     this.ring.stroke({ width: sw, color: style.stroke })
+
+    // The ring is outside the outline: the stroke above lies inside the ellipse.
+    this.turnRing.clear()
+    if (opts.turn) {
+      const out = turnRingGap + turnRingWidth / 2
+      this.turnRing.ellipse(0, 0, rx + out, ry + out)
+      this.turnRing.stroke({ width: turnRingWidth, color: this.colors.verdigris })
+    }
 
     const showLetter = opts.texture === null && style.letter !== ''
     this.letter.visible = showLetter
@@ -451,6 +476,7 @@ export class TokenLayer {
         texture: this.textureOf(t.image),
         showName,
         withBars: true,
+        turn: m.turnTokenId === t.id,
         alpha: 1,
       })
     }
@@ -469,6 +495,7 @@ export class TokenLayer {
           texture: this.textureOf(ghost.token.image),
           showName: false,
           withBars: false,
+          turn: false,
           alpha: ghostAlpha,
         },
       )

@@ -9,6 +9,8 @@ import { gameSocketUrl } from '../../shared/ws/socket'
 import { AuthLayout } from '../../ui/AuthLayout'
 import { Link } from '../../ui/Link'
 import { ChatPanel } from '../chat/ChatPanel'
+import { CombatPanel } from '../combat/CombatPanel'
+import { turnChange } from '../combat/turn'
 import { FogToolbar, type FogToolState } from '../fog/FogToolbar'
 import { gameStore, useGame, viewScene } from '../game/store'
 import { ScenesPanel } from '../scenes/ScenesPanel'
@@ -170,6 +172,23 @@ export default function TableScreen() {
     })
   }, [narrow, section])
 
+  // A new turn is read aloud; the viewer's own turn says so.
+  useEffect(() => {
+    return gameStore.subscribe((now, before) => {
+      if (now.game?.combat === before.game?.combat) return
+      const me = { isGM: now.me?.isGm === true, playerId: now.me?.playerId ?? null }
+      const change = turnChange(
+        before.game?.combat ?? null,
+        now.game?.combat ?? null,
+        now.game?.scene?.tokens ?? [],
+        me,
+      )
+      if (change === null) return
+      const name = change.name === '' ? t('combat.unnamed') : change.name
+      announce(change.mine ? t('combat.announceMyTurn') : t('combat.announceTurn', { name }), false)
+    })
+  }, [announce, t])
+
   useEffect(() => {
     if (closedReason === 'unauthorized') void refresh()
   }, [closedReason, refresh])
@@ -261,6 +280,7 @@ export default function TableScreen() {
       <SidePanel
         tabs={[
           { id: 'chat', label: t('chat.tab'), content: <ChatPanel command={command} /> },
+          { id: 'combat', label: t('combat.tab'), content: <CombatPanel command={command} /> },
           ...(isGm
             ? [{ id: 'scenes', label: t('scenes.tab'), content: <ScenesPanel command={command} /> }]
             : []),
@@ -268,7 +288,7 @@ export default function TableScreen() {
         selected={panelTab}
         onSelect={(id) => {
           setPanelTab(id)
-          if (narrow) setSection(id === 'scenes' ? 'scenes' : 'chat')
+          if (narrow) setSection(id === 'scenes' || id === 'combat' ? id : 'chat')
         }}
       />
       <SectionTabs

@@ -1,0 +1,199 @@
+/* The fight panel: the round and the turn buttons on top, rows with dividers, the actions below. */
+.combat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.combat__empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--fog);
+}
+
+.combat__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 12px 8px 12px 16px;
+}
+
+.combat__round {
+  flex: 1 1 6rem;
+  margin: 0;
+  font: 700 18px/1.2 var(--serif);
+}
+
+.combat__head .button {
+  padding: 6px 12px;
+  font-size: 16px;
+}
+
+.combat__list {
+  flex: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.combat__list:focus {
+  outline: none;
+}
+
+.combat__foot {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.combat__foot .error-note {
+  justify-self: stretch;
+}
+
+.combat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 8px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.combat-row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+/* The one who acts: a verdigris strip at the left edge, and the word. */
+.combat-row--turn {
+  background: var(--board);
+  box-shadow: inset 3px 0 0 var(--verdigris);
+}
+
+.combat-row__init {
+  flex: none;
+  width: 44px;
+  padding: 0 0 0 16px;
+  border: 0;
+  background: none;
+  color: var(--chalk);
+  font: 700 20px/1 var(--serif);
+  text-align: left;
+  box-sizing: content-box;
+}
+
+.combat-row__init--edit {
+  align-self: stretch;
+  cursor: pointer;
+}
+
+.combat-row__init--edit:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.combat-row__input {
+  flex: none;
+  width: 3.5rem;
+  margin-left: 12px;
+  padding: 4px 8px;
+  font-size: 17px;
+  box-sizing: border-box;
+}
+
+.combat-row__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--chalk);
+  box-sizing: border-box;
+}
+
+/* A hidden combatant, seen by the GM only: an empty brass circle. */
+.combat-row__dot--hidden {
+  border: 2px solid var(--brass);
+  background: transparent;
+}
+
+.combat-row__main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  align-self: stretch;
+  align-content: center;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--chalk);
+  font: 400 15px/1.35 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.combat-row--hidden .combat-row__main,
+.combat-row--hidden .combat-row__init {
+  color: var(--fog);
+}
+
+.combat-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat-row__turn {
+  color: var(--verdigris);
+  font-size: 14px;
+}
+
+.combat-row__hidden {
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.combat-row__roll,
+.combat__more {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chalk);
+  cursor: pointer;
+}
+
+.combat-row__roll:hover,
+.combat__more:hover,
+.combat__more[aria-expanded='true'] {
+  background: var(--slate);
+}
+
+.combat-row--turn .combat-row__roll:hover,
+.combat-row--turn .combat__more:hover {
+  background: var(--line);
+}
+
+@media (max-width: 899px) {
+  .combat-row {
+    min-height: 56px;
+  }
+
+  .combat-row__roll,
+  .combat__more {
+    width: 44px;
+    height: 44px;
+  }
+
+  .combat__head .button {
+    padding: 10px 14px;
+  }
+}

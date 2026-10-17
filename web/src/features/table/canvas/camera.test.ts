@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ZOOM,
   MIN_ZOOM,
+  centerOn,
   fit,
   pan,
   screenToWorld,
@@ -18,6 +19,16 @@ describe('camera', () => {
     const back = screenToWorld(cam, worldToScreen(cam, p))
     expect(back.x).toBeCloseTo(p.x, 9)
     expect(back.y).toBeCloseTo(p.y, 9)
+  })
+
+  it('centerOn puts the point in the middle of the viewport and keeps the zoom', () => {
+    const viewport = { width: 800, height: 600 }
+    const p = { x: 900, y: 450 }
+    const next = centerOn(cam, p, viewport)
+    expect(next.zoom).toBe(cam.zoom)
+    const at = worldToScreen(next, p)
+    expect(at.x).toBeCloseTo(400, 9)
+    expect(at.y).toBeCloseTo(300, 9)
   })
 
   it('zoomAt keeps the world point under the cursor', () => {

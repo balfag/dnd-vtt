@@ -1,10 +1,10 @@
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export type Section = 'map' | 'chat' | 'scenes'
+export type Section = 'map' | 'chat' | 'combat' | 'scenes'
 
 interface SectionTabsProps {
-  /** isGm adds the scenes section. */
+  /** isGm adds the scenes section; the fight is for everyone. */
   isGm: boolean
   selected: Section
   onSelect: (section: Section) => void
@@ -15,7 +15,7 @@ interface SectionTabsProps {
 /** SectionTabs are the bottom tabs of a narrow screen: the map or the side panel. */
 export function SectionTabs({ isGm, selected, onSelect, unread }: SectionTabsProps) {
   const { t } = useTranslation()
-  const sections: Section[] = isGm ? ['map', 'chat', 'scenes'] : ['map', 'chat']
+  const sections: Section[] = isGm ? ['map', 'chat', 'combat', 'scenes'] : ['map', 'chat', 'combat']
   const refs = useRef(new Map<Section, HTMLButtonElement>())
 
   function move(from: number, step: number) {
