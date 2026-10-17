@@ -3,6 +3,7 @@ import type { AssetRef, Grid, SceneView } from '../../../shared/protocol'
 import { worldToScreen, screenToWorld, type Camera } from './camera'
 import { clipSegment, hexEdges, intersect, squareLines } from './grid'
 import { tileRects } from './tiles'
+import { TokenLayer, type TokenModel } from './TokenLayer'
 
 const maxTileSide = 4096
 const gridAlpha = 0.28
@@ -12,8 +13,12 @@ const minCellScreenPx = 4
 
 export interface SceneLayers {
   background: Container
+  mapTokens: Container
   grid: Container
+  tokens: Container
+  gmTokens: Container
   edge: Container
+  overlay: Container
 }
 
 function cssColor(host: HTMLElement, name: string, fallback: string): string {
@@ -21,16 +26,18 @@ function cssColor(host: HTMLElement, name: string, fallback: string): string {
   return value === '' ? fallback : value
 }
 
-/** SceneRenderer draws the scene surface with PixiJS: background, grid and the scene edge. */
+/** SceneRenderer draws the scene with PixiJS: background, tokens, grid and the scene edge. */
 export class SceneRenderer {
   readonly layers: SceneLayers
 
   private readonly app: Application
   private readonly boardColor: string
   private readonly fogColor: string
+  private readonly slateColor: string
   private readonly board = new Graphics()
   private readonly gridShape = new Graphics()
   private readonly edgeShape = new Graphics()
+  private readonly tokenLayer: TokenLayer
   private readonly resizeObserver: ResizeObserver
   private readonly maxTile: number
   private scene: SceneView | null = null
@@ -44,11 +51,35 @@ export class SceneRenderer {
     this.app = app
     this.boardColor = cssColor(host, '--board', '#2e3d49')
     this.fogColor = cssColor(host, '--fog', '#9aa8b3')
-    this.layers = { background: new Container(), grid: new Container(), edge: new Container() }
+    this.slateColor = cssColor(host, '--slate', '#23303a')
+    this.tokenLayer = new TokenLayer(app, {
+      chalk: cssColor(host, '--chalk', '#ece7db'),
+      slate: this.slateColor,
+      line: cssColor(host, '--line', '#3a4a57'),
+      verdigris: cssColor(host, '--verdigris', '#4fa58e'),
+      seal: cssColor(host, '--seal', '#c25468'),
+    })
+    this.layers = {
+      background: new Container(),
+      mapTokens: this.tokenLayer.layers.map,
+      grid: new Container(),
+      tokens: this.tokenLayer.layers.tokens,
+      gmTokens: this.tokenLayer.layers.gm,
+      edge: new Container(),
+      overlay: this.tokenLayer.layers.overlay,
+    }
     this.layers.background.addChild(this.board)
     this.layers.grid.addChild(this.gridShape)
     this.layers.edge.addChild(this.edgeShape)
-    app.stage.addChild(this.layers.background, this.layers.grid, this.layers.edge)
+    app.stage.addChild(
+      this.layers.background,
+      this.layers.mapTokens,
+      this.layers.grid,
+      this.layers.tokens,
+      this.layers.gmTokens,
+      this.layers.edge,
+      this.layers.overlay,
+    )
 
     const renderer = app.renderer
     let maxSide = maxTileSide
@@ -58,8 +89,9 @@ export class SceneRenderer {
     }
     this.maxTile = maxSide
 
-    app.ticker.add(() => {
+    app.ticker.add((ticker) => {
       this.flush()
+      if (!this.destroyed) this.tokenLayer.tick(ticker.deltaMS)
     })
     renderer.on('resize', () => {
       this.gridDirty = true
@@ -92,8 +124,19 @@ export class SceneRenderer {
   setCamera(c: Camera): void {
     this.camera = c
     this.applyCamera()
+    this.tokenLayer.setCamera(c)
     this.gridDirty = true
     this.edgeDirty = true
+  }
+
+  /** setTokens gives the token layer what to draw; call it whenever the tokens, selection or drag change. */
+  setTokens(model: TokenModel): void {
+    if (!this.destroyed) this.tokenLayer.setModel(model)
+  }
+
+  /** tokenAt is the id of the topmost token under the point (viewport coordinates), or null. */
+  tokenAt(p: { x: number; y: number }): string | null {
+    return this.destroyed ? null : this.tokenLayer.tokenAt(p)
   }
 
   /** setScene shows the scene; the same scene id updates only what changed. */
@@ -126,6 +169,7 @@ export class SceneRenderer {
     this.destroyed = true
     this.loadId++
     this.resizeObserver.disconnect()
+    this.tokenLayer.destroy()
     this.app.destroy(true, { children: true, texture: true })
   }
 

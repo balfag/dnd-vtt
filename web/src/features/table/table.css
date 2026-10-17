@@ -151,11 +151,15 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  cursor: grab;
   touch-action: none;
   user-select: none;
 }
 
+.canvas__host[data-cursor='grab'] {
+  cursor: grab;
+}
+
+.canvas__host[data-cursor='grabbing'],
 .canvas__host[data-panning] {
   cursor: grabbing;
 }
@@ -212,6 +216,10 @@
   background: var(--slate);
   font-size: 15px;
   transform: translateX(-50%);
+}
+
+.connection-note--below {
+  top: 56px;
 }
 
 .table__empty {

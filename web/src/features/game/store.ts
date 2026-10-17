@@ -187,9 +187,7 @@ function withoutDrag(
   tokenId: string,
 ): Record<string, RemoteDrag> {
   if (!(tokenId in dragging)) return dragging
-  const rest = { ...dragging }
-  delete rest[tokenId]
-  return rest
+  return Object.fromEntries(Object.entries(dragging).filter(([id]) => id !== tokenId))
 }
 
 function liveDrags(dragging: Record<string, RemoteDrag>, now: number): Record<string, RemoteDrag> {

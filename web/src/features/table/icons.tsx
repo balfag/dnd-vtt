@@ -1,4 +1,4 @@
-﻿// Tool icons: one line of 1.6px, drawn in currentColor, no icon library.
+// Tool icons: one line of 1.6px, drawn in currentColor, no icon library.
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -19,18 +19,14 @@ function Icon({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** PanIcon is an open hand: move the map. */
-export function PanIcon() {
+/** SelectIcon is an arrow: select and move tokens. */
+export function SelectIcon() {
   return (
     <Icon>
-      <path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11" />
-      <path d="M11 10.5V5a1.5 1.5 0 0 1 3 0v5.5" />
-      <path d="M14 10.5V6.5a1.5 1.5 0 0 1 3 0V13" />
-      <path d="M8 12.5 6.4 11a1.5 1.5 0 0 0-2.2 2l3.3 5.2A4 4 0 0 0 10.9 20H13a4 4 0 0 0 4-4v-3" />
+      <path d="M6 4l12 7.2-5.2 1.4 3 5.4-2.4 1.3-3-5.4L6 18z" />
     </Icon>
   )
 }
-
 export function PlusIcon() {
   return (
     <Icon>

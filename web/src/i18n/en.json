@@ -114,7 +114,7 @@
       "label": "Scene “{{name}}”"
     },
     "tool": {
-      "pan": "Move the map"
+      "select": "Select and move"
     },
     "zoom": {
       "in": "Zoom in",
@@ -137,7 +137,13 @@
       "text": "If this is a mistake, message the GM."
     },
     "participants": "Participants",
-    "more": "+{{count}}"
+    "more": "+{{count}}",
+    "token": {
+      "distance": "{{ft}} ft",
+      "selected": "Selected token “{{name}}”",
+      "unnamed": "Selected an unnamed token",
+      "moveFailed": "The token could not be moved and went back"
+    }
   },
   "ui": {
     "dialog": {
