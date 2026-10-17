@@ -138,6 +138,19 @@
   cursor: pointer;
 }
 
+.rail__separator {
+  width: 28px;
+  height: 0;
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* The GM's tools are brass, like everything only the GM sees. */
+.rail__button--gm {
+  color: var(--brass);
+}
+
 .rail__button:hover {
   background: var(--board);
 }
@@ -171,6 +184,10 @@
 
 .canvas__host[data-cursor='grab'] {
   cursor: grab;
+}
+
+.canvas__host[data-cursor='crosshair'] {
+  cursor: crosshair;
 }
 
 .canvas__host[data-cursor='grabbing'],

@@ -109,6 +109,28 @@
     "removeConfirm": "Remove {{name}} from the campaign? Joining with the game link will no longer work.",
     "removed": "Participant removed"
   },
+  "fog": {
+    "title": "Fog",
+    "tool": {
+      "reveal": "Reveal fog",
+      "hide": "Hide with fog"
+    },
+    "shape": {
+      "label": "Shape",
+      "rect": "Rectangle",
+      "polygon": "Polygon",
+      "brush": "Brush"
+    },
+    "brush": {
+      "size": "Brush radius, cells"
+    },
+    "enabled": "Fog on this scene",
+    "reset": "Hide everything",
+    "resetConfirm": "Cover the whole scene with fog? You will have to reveal it again.",
+    "ops": "Operations: {{count}} of 500",
+    "opsFull": "The fog takes no more changes. Use “Hide everything” and reveal again with larger shapes.",
+    "polygonHint": "Click the corners. Enter or double-click to close, Escape to cancel"
+  },
   "table": {
     "open": "Open the table",
     "leave": "Leave the table",

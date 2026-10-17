@@ -9,6 +9,7 @@ import { gameSocketUrl } from '../../shared/ws/socket'
 import { AuthLayout } from '../../ui/AuthLayout'
 import { Link } from '../../ui/Link'
 import { ChatPanel } from '../chat/ChatPanel'
+import { FogToolbar, type FogToolState } from '../fog/FogToolbar'
 import { gameStore, useGame, viewScene } from '../game/store'
 import { ScenesPanel } from '../scenes/ScenesPanel'
 import { SceneCanvas } from './canvas/SceneCanvas'
@@ -18,7 +19,7 @@ import { SectionTabs, type Section } from './SectionTabs'
 import { SidePanel } from './SidePanel'
 import { TableAnnouncer, type Announcement } from './TableAnnouncer'
 import { useNarrow } from './useNarrow'
-import { ToolRail } from './ToolRail'
+import { ToolRail, type TableTool } from './ToolRail'
 import { TopBar } from './TopBar'
 import './table.css'
 
@@ -58,6 +59,17 @@ function useKeepSceneView(
   }, [on, command, scenes, activeId, hasScene])
 }
 
+/** typesText tells that the key goes into a text field, a dialog or a menu rather than to a tool. */
+function typesText(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable || target.closest('dialog') !== null) return true
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true
+  return (
+    target instanceof HTMLInputElement &&
+    !['radio', 'checkbox', 'range', 'button'].includes(target.type)
+  )
+}
+
 /** TableScreen is the table: the game connection, the top bar, the tools and the scene canvas. */
 export default function TableScreen() {
   const { t } = useTranslation()
@@ -70,6 +82,11 @@ export default function TableScreen() {
   const [panelTab, setPanelTab] = useState<string | undefined>(undefined)
   const [unread, setUnread] = useState(0)
   const narrow = useNarrow()
+  const [tool, setTool] = useState<TableTool>('select')
+  const [fogOptions, setFogOptions] = useState<Pick<FogToolState, 'shape' | 'radiusCells'>>({
+    shape: 'rect',
+    radiusCells: 1,
+  })
 
   useEffect(() => {
     if (anonymous) navigate('/login', { replace: true })
@@ -121,6 +138,27 @@ export default function TableScreen() {
 
   useKeepSceneView(command, isGm && synced)
 
+  // Tool keys (V, F, Shift+F); the fog tools are the GM's.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || typesText(e.target)) return
+      const key = e.key.toLowerCase()
+      if (key === 'v') {
+        setTool('select')
+      } else if (key === 'f' && isGm) {
+        const next = e.shiftKey ? 'hide' : 'reveal'
+        setTool((now) => (now === next ? 'select' : next))
+      } else {
+        return
+      }
+      e.preventDefault()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [isGm])
+
   // Count what the chat gets while the chat is not shown on a narrow screen.
   useEffect(() => {
     if (!narrow || section === 'chat') return
@@ -166,6 +204,8 @@ export default function TableScreen() {
 
   const scene = game?.scene ?? null
   const preparing = isGm && scene !== null && scene.id !== game?.activeSceneId
+  const fogTool: FogToolState | null =
+    isGm && scene !== null && tool !== 'select' ? { mode: tool, ...fogOptions } : null
   const emptyText = isGm ? t('table.empty.gm') : t('table.empty.player')
 
   return (
@@ -183,7 +223,7 @@ export default function TableScreen() {
           else void logout()
         }}
       />
-      <ToolRail />
+      <ToolRail tool={isGm ? tool : 'select'} onTool={setTool} isGm={isGm} />
       <main className="table__stage" inert={narrow && section !== 'map'}>
         <SceneCanvas
           scene={scene}
@@ -192,7 +232,19 @@ export default function TableScreen() {
           me={{ isGM: isGm, playerId: snapshotMe?.playerId ?? null }}
           connection={connection}
           announce={announce}
+          fogTool={fogTool}
         />
+        {fogTool !== null && scene !== null && (
+          <FogToolbar
+            scene={scene}
+            tool={fogTool}
+            onChange={(next) => {
+              setFogOptions({ shape: next.shape, radiusCells: next.radiusCells })
+            }}
+            command={command}
+            announce={announce}
+          />
+        )}
         {preparing && (
           <PrepFrame
             viewedName={scene.name}
