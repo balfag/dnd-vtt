@@ -233,3 +233,53 @@ export function clipSegment(a: Point, b: Point, r: Rect): Segment | null {
     { x: a.x + t1 * dx, y: a.y + t1 * dy },
   ]
 }
+
+function isOddSize(n: number): boolean {
+  return Math.round(n) % 2 === 1
+}
+
+function snapAxis(origin: number, v: number, s: number, size: number): number {
+  const u = (v - origin) / s
+  return origin + (isOddSize(size) ? Math.floor(u) + 0.5 : Math.round(u)) * s
+}
+
+/**
+ * snapTokenCenter snaps a token centre: square grid — odd size to a cell centre,
+ * even size to a cell corner (per axis); hex grids — to the nearest cell centre.
+ */
+export function snapTokenCenter(g: Grid, p: Point, size: { w: number; h: number }): Point {
+  if (g.type === 'square') {
+    return {
+      x: snapAxis(g.offsetX, p.x, g.sizePx, size.w),
+      y: snapAxis(g.offsetY, p.y, g.sizePx, size.h),
+    }
+  }
+  return cellCenter(g, cellAt(g, p))
+}
+
+/** hexSteps is the number of steps between two cells of the pointy lattice (odd rows shifted right). */
+function hexSteps(a: Cell, b: Cell): number {
+  const cube = (c: Cell) => ({ q: c.col - (c.row - (isOdd(c.row) ? 1 : 0)) / 2, r: c.row })
+  const ca = cube(a)
+  const cb = cube(b)
+  const dq = ca.q - cb.q
+  const dr = ca.r - cb.r
+  return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2
+}
+
+/**
+ * cellDistanceFt is the 5e 2024 distance in feet: square — max(|dc|, |dr|) cells
+ * (every diagonal is one cell); hex — hex steps; times g.unitFt.
+ */
+export function cellDistanceFt(g: Grid, a: Point, b: Point): number {
+  const ca = cellAt(g, a)
+  const cb = cellAt(g, b)
+  if (g.type === 'square') {
+    return Math.max(Math.abs(ca.col - cb.col), Math.abs(ca.row - cb.row)) * g.unitFt
+  }
+  // A flat grid is the pointy lattice with the axes swapped.
+  const flat = g.type === 'hexFlat'
+  const la = flat ? { col: ca.row, row: ca.col } : ca
+  const lb = flat ? { col: cb.row, row: cb.col } : cb
+  return hexSteps(la, lb) * g.unitFt
+}
