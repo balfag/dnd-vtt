@@ -28,10 +28,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // changeOrigin stays off: the server's CSRF check compares Origin with
+    // Host, and rewriting Host to the Go port would make every POST fail.
     proxy: {
-      '/api': `http://${goServer}`,
-      '/assets': `http://${goServer}`,
-      '/ws': { target: `ws://${goServer}`, ws: true },
+      '/api': { target: `http://${goServer}`, changeOrigin: false },
+      '/assets': { target: `http://${goServer}`, changeOrigin: false },
+      '/ws': { target: `ws://${goServer}`, ws: true, changeOrigin: false },
     },
   },
   test: {
