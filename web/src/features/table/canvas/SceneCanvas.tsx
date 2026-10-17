@@ -6,7 +6,8 @@ import type { GameConnection } from '../../../shared/ws/connection'
 import { gameStore } from '../../game/store'
 import { createMoves } from '../moves'
 import { ZoomControls } from '../ZoomControls'
-import { fit, screenToWorld, type Camera, type Point } from './camera'
+import { canvasBridge } from './canvasBridge'
+import { centerOn, fit, screenToWorld, type Camera, type Point } from './camera'
 import { canMove, endDrag, moveDrag, startDrag, type DragState } from './drag'
 import { cellDistanceFt } from './grid'
 import {
@@ -176,12 +177,15 @@ export function SceneCanvas({
         placements.set(tk.id, { ...(remote ?? server), smooth: true })
       }
     }
+    const combat = gameStore.getState().game?.combat ?? null
+    const turn = combat?.combatants.find((c) => c.id === combat.turnCombatantId)
     renderer.setTokens({
       scene: sc,
       players: playersRef.current,
       isGM: meRef.current.isGM,
       placements,
       selectedId: selectedId.current,
+      turnTokenId: turn?.tokenId ?? null,
       hoverId: hoverId.current,
       ghost,
       distance,
@@ -203,9 +207,17 @@ export function SceneCanvas({
     }
     if (selectedId.current !== null && !scene?.tokens.some((tk) => tk.id === selectedId.current)) {
       selectedId.current = null
+      canvasBridge.getState().setSelected(null)
     }
     refresh()
   }, [renderer, scene, apply, refresh])
+
+  // The selection belongs to the canvas: nothing stays selected for the panels when it is gone.
+  useEffect(() => {
+    return () => {
+      canvasBridge.getState().setSelected(null)
+    }
+  }, [])
 
   useEffect(() => {
     refresh()
@@ -226,6 +238,7 @@ export function SceneCanvas({
         }
       }
       if (next !== null && state.dragging !== prev.dragging) refresh()
+      if (state.game?.combat !== prev.game?.combat) refresh()
     })
     const timer = setInterval(() => {
       gameStore.getState().pruneDragging(Date.now())
@@ -262,6 +275,7 @@ export function SceneCanvas({
     function select(id: string | null) {
       if (selectedId.current === id) return
       selectedId.current = id
+      canvasBridge.getState().setSelected(id)
       refresh()
     }
     function cancelDrag() {
@@ -479,6 +493,19 @@ export function SceneCanvas({
       if (e.key === ' ') spaceHeld = false
     }
 
+    // A panel asks to look at a token: select it and bring it to the middle, if it is on the scene.
+    let lastFocus = canvasBridge.getState().focus?.n ?? 0
+    const unsubscribeFocus = canvasBridge.subscribe((state) => {
+      const request = state.focus
+      if (request === null || request.n === lastFocus) return
+      lastFocus = request.n
+      const tk = tokenById(request.tokenId)
+      if (tk === null) return
+      select(tk.id)
+      const at = moves.current.position(tk)
+      apply(centerOn(cameraRef.current, at, renderer.viewport()))
+    })
+
     host.addEventListener('wheel', wheel, { passive: false })
     host.addEventListener('pointerdown', down)
     host.addEventListener('pointermove', move)
@@ -489,6 +516,7 @@ export function SceneCanvas({
     document.addEventListener('keydown', key)
     document.addEventListener('keyup', keyUp)
     return () => {
+      unsubscribeFocus()
       host.removeEventListener('wheel', wheel)
       host.removeEventListener('pointerdown', down)
       host.removeEventListener('pointermove', move)

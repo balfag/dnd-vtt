@@ -35,6 +35,19 @@ export function pan(c: Camera, dxScreen: number, dyScreen: number): Camera {
   return { x: c.x - dxScreen / c.zoom, y: c.y - dyScreen / c.zoom, zoom: c.zoom }
 }
 
+/** centerOn puts the world point in the middle of the viewport; the zoom stays. */
+export function centerOn(
+  c: Camera,
+  world: Point,
+  viewport: { width: number; height: number },
+): Camera {
+  return {
+    x: world.x - viewport.width / 2 / c.zoom,
+    y: world.y - viewport.height / 2 / c.zoom,
+    zoom: c.zoom,
+  }
+}
+
 /** fit shows the whole scene centred with a 24px margin, zoom clamped. */
 export function fit(
   scene: { width: number; height: number },
