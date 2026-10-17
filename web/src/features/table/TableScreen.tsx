@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
 import { GameConnection } from '../../shared/ws/connection'
-import { MessageType } from '../../shared/protocol'
-import { CommandError } from '../../shared/ws/errors'
+import { MessageType, type Token } from '../../shared/protocol'
+import { CommandError, commandErrorKey } from '../../shared/ws/errors'
 import { gameSocketUrl } from '../../shared/ws/socket'
 import { AuthLayout } from '../../ui/AuthLayout'
+import { Button } from '../../ui/Button'
+import { Dialog } from '../../ui/Dialog'
 import { Link } from '../../ui/Link'
 import { ChatPanel } from '../chat/ChatPanel'
 import { CombatPanel } from '../combat/CombatPanel'
@@ -14,7 +16,11 @@ import { turnChange } from '../combat/turn'
 import { FogToolbar, type FogToolState } from '../fog/FogToolbar'
 import { gameStore, useGame, viewScene } from '../game/store'
 import { ScenesPanel } from '../scenes/ScenesPanel'
-import { SceneCanvas } from './canvas/SceneCanvas'
+import { PlaceTokenPopover } from '../tokens/PlaceTokenPopover'
+import { runTokenAction, type TokenAction } from '../tokens/tokenActions'
+import { TokenContextMenu } from '../tokens/TokenContextMenu'
+import { TokenDialog } from '../tokens/TokenDialog'
+import { SceneCanvas, type PlaceToolState } from './canvas/SceneCanvas'
 import { ConnectionNote } from './ConnectionNote'
 import { PrepFrame } from './PrepFrame'
 import { SectionTabs, type Section } from './SectionTabs'
@@ -85,6 +91,12 @@ export default function TableScreen() {
   const [unread, setUnread] = useState(0)
   const narrow = useNarrow()
   const [tool, setTool] = useState<TableTool>('select')
+  // The image of the tokens the place tool puts; it is kept while the tool is in hand.
+  const [placeImage, setPlaceImage] = useState<PlaceToolState['image']>(null)
+  // The token a dialog works on, as it was when the dialog opened; open goes false first, so the focus can return.
+  const [editing, setEditing] = useState<{ token: Token; key: number; open: boolean } | null>(null)
+  const [menu, setMenu] = useState<{ tokenId: string; at: { x: number; y: number } } | null>(null)
+  const [deleting, setDeleting] = useState<{ token: Token; open: boolean } | null>(null)
   const [fogOptions, setFogOptions] = useState<Pick<FogToolState, 'shape' | 'radiusCells'>>({
     shape: 'rect',
     radiusCells: 1,
@@ -140,13 +152,20 @@ export default function TableScreen() {
 
   useKeepSceneView(command, isGm && synced)
 
-  // Tool keys (V, F, Shift+F); the fog tools are the GM's.
+  // Tool keys (V, K, F, Shift+F); the place tool and the fog tools are the GM's.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || typesText(e.target)) return
+      // Escape lets go of the place tool; the canvas takes the same key to drop the selection.
+      if (e.key === 'Escape') {
+        setTool((now) => (now === 'place' ? 'select' : now))
+        return
+      }
       const key = e.key.toLowerCase()
       if (key === 'v') {
         setTool('select')
+      } else if (key === 'k' && isGm) {
+        setTool((now) => (now === 'place' ? 'select' : 'place'))
       } else if (key === 'f' && isGm) {
         const next = e.shiftKey ? 'hide' : 'reveal'
         setTool((now) => (now === next ? 'select' : next))
@@ -199,6 +218,38 @@ export default function TableScreen() {
 
   if (state.status !== 'signedIn') return null
 
+  /** doTokenAction does an action of the GM on a token: a dialog, a confirmation, or a command whose result is announced. */
+  function doTokenAction(action: TokenAction, tokenId: string) {
+    const token = (game?.scene?.tokens ?? []).find((tk) => tk.id === tokenId)
+    if (token === undefined) return
+    if (action === 'properties') {
+      setEditing((e) => ({ token, key: (e?.key ?? 0) + 1, open: true }))
+    } else if (action === 'delete') {
+      setDeleting({ token, open: true })
+    } else {
+      runTokenAction(action, token, game?.scene?.tokens ?? [], command).then(
+        (announcement) => {
+          announce(t(announcement), false)
+        },
+        (err: unknown) => {
+          announce(t(commandErrorKey(err)), true)
+        },
+      )
+    }
+  }
+
+  function deleteToken(tokenId: string) {
+    setDeleting((d) => (d === null ? null : { ...d, open: false }))
+    command(MessageType.TokenDelete, { tokenId }).then(
+      () => {
+        announce(t('tokens.announce.deleted'), false)
+      },
+      (err: unknown) => {
+        announce(t(commandErrorKey(err)), true)
+      },
+    )
+  }
+
   if (closedReason === 'gameEnded' || (noGame && !isGm)) {
     return (
       <AuthLayout title={t('table.ended.title')}>
@@ -224,7 +275,14 @@ export default function TableScreen() {
   const scene = game?.scene ?? null
   const preparing = isGm && scene !== null && scene.id !== game?.activeSceneId
   const fogTool: FogToolState | null =
-    isGm && scene !== null && tool !== 'select' ? { mode: tool, ...fogOptions } : null
+    isGm && scene !== null && (tool === 'reveal' || tool === 'hide')
+      ? { mode: tool, ...fogOptions }
+      : null
+  const placeTool: PlaceToolState | null =
+    isGm && scene !== null && tool === 'place' ? { image: placeImage } : null
+  const campaignId = game?.campaign.id ?? ''
+  const tokens = scene?.tokens ?? []
+  const menuToken = menu === null ? null : (tokens.find((tk) => tk.id === menu.tokenId) ?? null)
   const emptyText = isGm ? t('table.empty.gm') : t('table.empty.player')
 
   return (
@@ -252,7 +310,31 @@ export default function TableScreen() {
           connection={connection}
           announce={announce}
           fogTool={fogTool}
+          campaignId={campaignId}
+          placeTool={placeTool}
+          onOpenToken={(id) => {
+            doTokenAction('properties', id)
+          }}
+          onTokenMenu={(id, at) => {
+            setMenu({ tokenId: id, at })
+          }}
+          onTokenAction={doTokenAction}
         />
+        {placeTool !== null && (
+          <PlaceTokenPopover
+            campaignId={campaignId}
+            assetId={placeImage?.assetId ?? null}
+            onChange={(asset) => {
+              setPlaceImage(
+                asset === null ? null : { assetId: asset.id, originalName: asset.originalName },
+              )
+            }}
+            onClose={() => {
+              setTool('select')
+              document.querySelector<HTMLElement>('[data-tool="place"]')?.focus()
+            }}
+          />
+        )}
         {fogTool !== null && scene !== null && (
           <FogToolbar
             scene={scene}
@@ -272,6 +354,63 @@ export default function TableScreen() {
               await command(MessageType.SceneActivate, { sceneId: scene.id })
             }}
           />
+        )}
+        {menu !== null && menuToken !== null && (
+          <TokenContextMenu
+            token={menuToken}
+            at={menu.at}
+            onAction={(action) => {
+              setMenu(null)
+              doTokenAction(action, menuToken.id)
+            }}
+            onClose={() => {
+              setMenu(null)
+              document.querySelector<HTMLElement>('.canvas__host')?.focus()
+            }}
+          />
+        )}
+        {editing !== null && (
+          <TokenDialog
+            key={editing.key}
+            open={editing.open}
+            original={editing.token}
+            players={game?.players ?? []}
+            campaignId={campaignId}
+            command={command}
+            onSaved={() => {
+              announce(t('tokens.announce.saved'), false)
+            }}
+            onClose={() => {
+              setEditing((e) => (e === null ? null : { ...e, open: false }))
+            }}
+          />
+        )}
+        {deleting !== null && (
+          <Dialog
+            title={t('tokens.menu.delete')}
+            open={deleting.open}
+            closeLabel={t('ui.dialog.cancel')}
+            onClose={() => {
+              setDeleting((d) => (d === null ? null : { ...d, open: false }))
+            }}
+            actions={
+              <Button
+                variant="danger"
+                fullWidth={false}
+                onClick={() => {
+                  deleteToken(deleting.token.id)
+                }}
+              >
+                {t('tokens.menu.delete')}
+              </Button>
+            }
+          >
+            <p>
+              {deleting.token.name === ''
+                ? t('tokens.deleteConfirmUnnamed')
+                : t('tokens.deleteConfirm', { name: deleting.token.name })}
+            </p>
+          </Dialog>
         )}
         <ConnectionNote />
         <TableAnnouncer announcement={announcement} />

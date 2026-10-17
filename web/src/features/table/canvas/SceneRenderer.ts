@@ -60,6 +60,7 @@ export class SceneRenderer {
     this.tokenLayer = new TokenLayer(app, {
       chalk: cssColor(host, '--chalk', '#ece7db'),
       slate: this.slateColor,
+      fog: this.fogColor,
       line: cssColor(host, '--line', '#3a4a57'),
       verdigris: cssColor(host, '--verdigris', '#4fa58e'),
       seal: cssColor(host, '--seal', '#c25468'),

@@ -26,6 +26,8 @@ export interface TokenModel {
   /** The distance plaque next to the pointer (screen coordinates). */
   distance: { at: Point; text: string } | null
   reducedMotion: boolean
+  /** The name of a condition by its key. */
+  conditionLabel: (key: string) => string
 }
 
 export interface TokenLayers {
@@ -37,6 +39,7 @@ export interface TokenLayers {
 
 interface Colors {
   chalk: string
+  fog: string
   slate: string
   line: string
   verdigris: string
@@ -57,6 +60,8 @@ const barGap = 2
 const dashLen = 8
 const dashGap = 5
 const selectPad = 5
+// The list of conditions wraps at this width (screen px).
+const conditionsWrap = 240
 // The turn ring: 2 px on the screen, its inner edge this far outside the token's outline.
 const turnRingWidth = 2
 const turnRingGap = 3
@@ -113,11 +118,18 @@ class Label {
 
   private readonly colors: Colors
 
-  constructor(colors: Colors) {
+  constructor(colors: Colors, opts: { fill?: string; wrapWidth?: number } = {}) {
     this.colors = colors
     this.text = new Text({
       text: '',
-      style: { fontFamily: 'Alegreya Sans', fontSize: labelFont, fill: colors.chalk },
+      style: {
+        fontFamily: 'Alegreya Sans',
+        fontSize: labelFont,
+        fill: opts.fill ?? colors.chalk,
+        ...(opts.wrapWidth === undefined
+          ? {}
+          : { wordWrap: true, wordWrapWidth: opts.wrapWidth, align: 'center' as const }),
+      },
     })
     this.text.position.set(labelPadX, labelPadY)
     this.root.addChild(this.bg, this.text)
@@ -161,6 +173,8 @@ class TokenView {
   private readonly turnRing = new Graphics()
   private readonly letter: Text
   private readonly name: Label
+  private readonly conditionCount: Label
+  private readonly conditionList: Label
   private readonly bars = new Graphics()
 
   /** Where the token is now, world coordinates; glides toward its placement. */
@@ -184,6 +198,8 @@ class TokenView {
     })
     this.letter.anchor.set(0.5)
     this.name = new Label(colors)
+    this.conditionCount = new Label(colors)
+    this.conditionList = new Label(colors, { fill: colors.fog, wrapWidth: conditionsWrap })
     this.art.addChild(this.mask)
     this.root.addChild(
       this.fill,
@@ -193,6 +209,8 @@ class TokenView {
       this.letter,
       this.bars,
       this.name.root,
+      this.conditionCount.root,
+      this.conditionList.root,
     )
     this.root.label = `token:${id}`
     if (interactive) this.root.eventMode = 'static'
@@ -213,6 +231,8 @@ class TokenView {
       withBars: boolean
       turn: boolean
       alpha: number
+      /** The conditions to show: a count at the edge, and the names while the list is on. */
+      conditions: { keys: readonly string[]; label: (key: string) => string; list: boolean }
     },
   ): void {
     const c = worldToScreen(camera, { x: this.x, y: this.y })
@@ -254,6 +274,8 @@ class TokenView {
       this.name.root.position.set(-this.name.width() / 2, ry + labelGap)
     }
 
+    this.drawConditions(opts.conditions, rx, ry, opts.showName ? this.name.height() + labelGap : 0)
+
     this.bars.clear()
     if (opts.withBars) {
       const width = rx * 2
@@ -267,6 +289,31 @@ class TokenView {
             .fill(ratio <= 0.25 ? this.colors.seal : this.colors.verdigris)
         }
       })
+    }
+  }
+
+  /** drawConditions shows how many conditions the token has, and on request their names under the name plaque. */
+  private drawConditions(
+    c: { keys: readonly string[]; label: (key: string) => string; list: boolean },
+    rx: number,
+    ry: number,
+    nameSpace: number,
+  ): void {
+    const count = this.conditionCount
+    count.root.visible = c.keys.length > 0
+    if (c.keys.length > 0) {
+      count.set(String(c.keys.length))
+      // The plaque sits on the ring at the bottom right.
+      count.root.position.set(
+        rx * Math.SQRT1_2 - count.width() / 2,
+        ry * Math.SQRT1_2 - count.height() / 2,
+      )
+    }
+    const list = this.conditionList
+    list.root.visible = c.list && c.keys.length > 0
+    if (list.root.visible) {
+      list.set(c.keys.map(c.label).join(', '))
+      list.root.position.set(-list.width() / 2, ry + labelGap + nameSpace)
     }
   }
 
@@ -478,6 +525,11 @@ export class TokenLayer {
         withBars: true,
         turn: m.turnTokenId === t.id,
         alpha: 1,
+        conditions: {
+          keys: t.conditions,
+          label: m.conditionLabel,
+          list: m.hoverId === t.id || m.selectedId === t.id,
+        },
       })
     }
 
@@ -497,6 +549,7 @@ export class TokenLayer {
           withBars: false,
           turn: false,
           alpha: ghostAlpha,
+          conditions: { keys: [], label: m.conditionLabel, list: false },
         },
       )
     }
