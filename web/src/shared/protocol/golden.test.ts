@@ -6,6 +6,18 @@ import chatMessageRoll from '../../../../internal/ws/protocol/testdata/chat_mess
 import chatMessageRollBlindAuthor from '../../../../internal/ws/protocol/testdata/chat_message_roll_blind_author.json'
 import chatMessageText from '../../../../internal/ws/protocol/testdata/chat_message_text.json'
 import chatSendExample from '../../../../internal/ws/protocol/testdata/chat_send_command.json'
+import combatChangedEnded from '../../../../internal/ws/protocol/testdata/combat_changed_ended.json'
+import combatChangedGm from '../../../../internal/ws/protocol/testdata/combat_changed_gm.json'
+import combatChangedPlayer from '../../../../internal/ws/protocol/testdata/combat_changed_player.json'
+import combatAddExample from '../../../../internal/ws/protocol/testdata/combat_add_command.json'
+import combatEndExample from '../../../../internal/ws/protocol/testdata/combat_end_command.json'
+import combatNextExample from '../../../../internal/ws/protocol/testdata/combat_next_command.json'
+import combatPrevExample from '../../../../internal/ws/protocol/testdata/combat_prev_command.json'
+import combatRemoveExample from '../../../../internal/ws/protocol/testdata/combat_remove_command.json'
+import combatRollInitiativeExample from '../../../../internal/ws/protocol/testdata/combat_roll_initiative_command.json'
+import combatSetHiddenExample from '../../../../internal/ws/protocol/testdata/combat_set_hidden_command.json'
+import combatSetInitiativeExample from '../../../../internal/ws/protocol/testdata/combat_set_initiative_command.json'
+import combatStartExample from '../../../../internal/ws/protocol/testdata/combat_start_command.json'
 import errorBadRequest from '../../../../internal/ws/protocol/testdata/error_bad_request.json'
 import fogChangedGm from '../../../../internal/ws/protocol/testdata/fog_changed_gm.json'
 import fogChangedPlayer from '../../../../internal/ws/protocol/testdata/fog_changed_player.json'
@@ -44,6 +56,15 @@ import tokenUpdateExample from '../../../../internal/ws/protocol/testdata/token_
 import {
   chatHistoryCommand,
   chatSendCommand,
+  combatAddCommand,
+  combatEndCommand,
+  combatNextCommand,
+  combatPrevCommand,
+  combatRemoveCommand,
+  combatRollInitiativeCommand,
+  combatSetHiddenCommand,
+  combatSetInitiativeCommand,
+  combatStartCommand,
   fogHideCommand,
   fogResetCommand,
   fogRevealCommand,
@@ -51,6 +72,7 @@ import {
   helloCommand,
   isChatHistoryAck,
   isChatMessage,
+  isCombatChanged,
   isEnvelope,
   isFogChanged,
   isErrorMessage,
@@ -97,6 +119,9 @@ describe('server examples pass their guards', () => {
     ['fog_changed_gm', fogChangedGm, isFogChanged],
     ['fog_changed_player', fogChangedPlayer, isFogChanged],
     ['fog_changed_player_empty', fogChangedPlayerEmpty, isFogChanged],
+    ['combat_changed_gm', combatChangedGm, isCombatChanged],
+    ['combat_changed_player', combatChangedPlayer, isCombatChanged],
+    ['combat_changed_ended', combatChangedEnded, isCombatChanged],
     ['token_changed', tokenChanged, isTokenChanged],
     ['token_changed_player', tokenChangedPlayer, isTokenChanged],
     ['token_removed', tokenRemoved, isTokenRemoved],
@@ -135,6 +160,15 @@ describe('server examples pass their guards', () => {
       chatSendExample,
       rollRequestExample,
       chatHistoryCommandExample,
+      combatAddExample,
+      combatEndExample,
+      combatNextExample,
+      combatPrevExample,
+      combatRemoveExample,
+      combatRollInitiativeExample,
+      combatSetHiddenExample,
+      combatSetInitiativeExample,
+      combatStartExample,
     ]) {
       expect(isEnvelope(example)).toBe(true)
     }
@@ -306,6 +340,39 @@ describe('command builders match the examples', () => {
       id: 'c-3',
       d: { before: 'M1' },
     })
+  })
+
+  it('combat commands', () => {
+    const scene = '01J00000000000000000000SC2'
+    const goblin = '01J00000000000000000000CB1'
+    const shadow = '01J00000000000000000000CB2'
+    expect(combatStartCommand('c-16', scene)).toStrictEqual(combatStartExample)
+    expect(combatEndCommand('c-17', scene)).toStrictEqual(combatEndExample)
+    expect(
+      combatAddCommand('c-18', scene, ['01J00000000000000000000TK1', '01J00000000000000000000TK2']),
+    ).toStrictEqual(combatAddExample)
+    expect(combatRemoveCommand('c-19', goblin)).toStrictEqual(combatRemoveExample)
+    expect(combatSetInitiativeCommand('c-20', goblin, 17)).toStrictEqual(combatSetInitiativeExample)
+    expect(combatRollInitiativeCommand('c-21', [goblin, shadow])).toStrictEqual(
+      combatRollInitiativeExample,
+    )
+    expect(combatSetHiddenCommand('c-22', shadow, true)).toStrictEqual(combatSetHiddenExample)
+    expect(combatNextCommand('c-23', scene)).toStrictEqual(combatNextExample)
+    expect(combatPrevCommand('c-24', scene)).toStrictEqual(combatPrevExample)
+  })
+
+  it('a null initiative is sent, not left out', () => {
+    expect(combatSetInitiativeCommand('c-1', 'C1', null)).toStrictEqual({
+      t: 'combat.setInitiative',
+      id: 'c-1',
+      d: { combatantId: 'C1', value: null },
+    })
+  })
+
+  it('the tracker frames differ for the GM and the player', () => {
+    expect(combatChangedGm.d.combat.turnCombatantId).toBe('01J00000000000000000000CB2')
+    expect(combatChangedPlayer.d.combat.turnCombatantId).toBeNull()
+    expect(combatChangedEnded.d.combat).toBeNull()
   })
 
   it('a blind roll of its author has no result', () => {
@@ -506,6 +573,22 @@ describe('guards reject damaged messages', () => {
       'snapshot chat has a damaged message',
       isSnapshot,
       corrupt(snapshotPlayer, ['d', 'game', 'chat', '0', 'visibility'], 'friends'),
+    ],
+    ['combat round is 0', isCombatChanged, corrupt(combatChangedGm, ['d', 'combat', 'round'], 0)],
+    [
+      'combatant initiative is a string',
+      isCombatChanged,
+      corrupt(combatChangedGm, ['d', 'combat', 'combatants', '0', 'initiative'], '17'),
+    ],
+    [
+      'combat combatants is null',
+      isCombatChanged,
+      corrupt(combatChangedGm, ['d', 'combat', 'combatants'], null),
+    ],
+    [
+      'snapshot combat is missing',
+      isSnapshot,
+      corrupt(snapshotPlayer, ['d', 'game', 'combat'], undefined, true),
     ],
     ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
     ['noop has data', isNoop, corrupt(noop, ['d'], {})],

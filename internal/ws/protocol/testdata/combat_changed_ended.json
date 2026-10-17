@@ -1,0 +1,8 @@
+{
+  "t": "combat.changed",
+  "seq": 32,
+  "d": {
+    "sceneId": "01J00000000000000000000SC2",
+    "combat": null
+  }
+}

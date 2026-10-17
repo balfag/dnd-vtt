@@ -40,6 +40,7 @@ function snapshot(seq = 4): Snapshot {
       scenes: [],
       scene: null,
       chat: [],
+      combat: null,
     },
   }
 }

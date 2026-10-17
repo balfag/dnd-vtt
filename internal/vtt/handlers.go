@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/balfag/dnd-vtt/internal/dice"
 	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
 
-// Register adds the scene.*, token.* and fog.* handlers to hub.
-func Register(hub *ws.Hub, s *Service) {
-	h := &handlers{s: s}
+// Register adds the scene.*, token.*, fog.* and combat.* handlers to hub; roller
+// rolls the initiative.
+func Register(hub *ws.Hub, s *Service, roller dice.Roller) {
+	h := &handlers{s: s, roller: roller}
 	for t, fn := range map[string]ws.Handler{
 		protocol.TypeSceneCreate:   h.create,
 		protocol.TypeSceneUpdate:   h.update,
@@ -39,11 +41,27 @@ func Register(hub *ws.Hub, s *Service) {
 	} {
 		hub.Handle(t, fn, ws.HandlerOptions{})
 	}
+	for t, fn := range map[string]ws.Handler{
+		protocol.TypeCombatStart:          h.combatStart,
+		protocol.TypeCombatEnd:            h.combatEnd,
+		protocol.TypeCombatAdd:            h.combatAdd,
+		protocol.TypeCombatRemove:         h.combatRemove,
+		protocol.TypeCombatSetInitiative:  h.combatSetInitiative,
+		protocol.TypeCombatRollInitiative: h.combatRollInitiative,
+		protocol.TypeCombatSetHidden:      h.combatSetHidden,
+		protocol.TypeCombatNext:           h.combatNext,
+		protocol.TypeCombatPrev:           h.combatPrev,
+	} {
+		hub.Handle(t, fn, ws.HandlerOptions{})
+	}
 	// Dragging is frequent and has no reply: over the limit it is just dropped.
 	hub.Handle(protocol.TypeTokenDrag, h.tokenDrag, ws.HandlerOptions{RatePerSec: 30, Silent: true})
 }
 
-type handlers struct{ s *Service }
+type handlers struct {
+	s      *Service
+	roller dice.Roller
+}
 
 // decode reads the data of a command strictly: unknown fields are an error.
 func decode(cmd ws.Command, dst any) error {
@@ -122,6 +140,9 @@ func (h *handlers) create(ctx context.Context, cmd ws.Command, em ws.Emitter) (a
 	em.Emit(scenesChanged(res.Scenes))
 	if res.Activated != nil {
 		em.Emit(sceneActivated(*res.Activated))
+		if err := h.emitSceneCombat(ctx, cmd.CampaignID, res.Activated.ID, em); err != nil {
+			return nil, err
+		}
 	}
 	return protocol.SceneCreateAck{SceneID: res.SceneID}, nil
 }
@@ -187,7 +208,22 @@ func (h *handlers) activate(ctx context.Context, cmd ws.Command, em ws.Emitter) 
 		return nil, commandError(err)
 	}
 	em.Emit(sceneActivated(scene))
+	if err := h.emitSceneCombat(ctx, cmd.CampaignID, scene.ID, em); err != nil {
+		return nil, err
+	}
 	return nil, nil
+}
+
+// emitSceneCombat sends the fight of a freshly activated scene, if it has one.
+func (h *handlers) emitSceneCombat(ctx context.Context, campaignID, sceneID string, em ws.Emitter) error {
+	res, err := h.s.SceneCombat(ctx, campaignID, sceneID)
+	if err != nil {
+		return err
+	}
+	if res != nil {
+		em.Emit(combatChanged(*res))
+	}
+	return nil
 }
 
 func (h *handlers) view(ctx context.Context, cmd ws.Command, _ ws.Emitter) (any, error) {
@@ -322,6 +358,9 @@ func (h *handlers) tokenDelete(ctx context.Context, cmd ws.Command, em ws.Emitte
 		return nil, commandError(err)
 	}
 	em.Emit(tokenRemoved(res.Token.ID, res.State))
+	if res.Combat != nil {
+		em.Emit(combatChanged(*res.Combat)) // the fight lost a participant, maybe the turn
+	}
 	return nil, nil
 }
 

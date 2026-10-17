@@ -227,6 +227,7 @@ type SnapshotTable struct {
 	Scenes        []SceneListItem `json:"scenes"`        // GM only; [] for players, never null
 	Scene         *SceneView      `json:"scene"`         // the active scene rendered for the viewer; null: none
 	Chat          []ChatMessage   `json:"chat"`          // last 50 visible to the viewer, ascending; never null
+	Combat        *Combat         `json:"combat"`        // the tracker of the active scene for the viewer; null: none
 }
 
 // SceneCreate is the data of scene.create.
@@ -529,4 +530,71 @@ type ChatMessage struct {
 	To             []string  `json:"to,omitempty"`   // private only
 	Text           string    `json:"text,omitempty"` // text and system
 	Roll           *ChatRoll `json:"roll,omitempty"` // roll only
+}
+
+// Message types of the initiative tracker of M1.
+const (
+	TypeCombatStart          = "combat.start"
+	TypeCombatEnd            = "combat.end"
+	TypeCombatAdd            = "combat.add"
+	TypeCombatRemove         = "combat.remove"
+	TypeCombatSetInitiative  = "combat.setInitiative"
+	TypeCombatRollInitiative = "combat.rollInitiative"
+	TypeCombatSetHidden      = "combat.setHidden"
+	TypeCombatNext           = "combat.next"
+	TypeCombatPrev           = "combat.prev"
+	TypeCombatChanged        = "combat.changed"
+)
+
+// Combatant is a participant of the tracker, as a viewer sees it.
+type Combatant struct {
+	ID         string `json:"id"`
+	TokenID    string `json:"tokenId"`
+	Name       string `json:"name"`
+	Initiative *int   `json:"initiative"` // null: not set
+	Hidden     bool   `json:"hidden"`
+}
+
+// Combat is the tracker of a scene.
+type Combat struct {
+	SceneID         string      `json:"sceneId"`
+	Round           int         `json:"round"`
+	TurnCombatantID *string     `json:"turnCombatantId"` // null: before the first combat.next, or hidden from the viewer
+	Combatants      []Combatant `json:"combatants"`      // turn order, never null
+}
+
+// CombatChanged is the data of combat.changed.
+type CombatChanged struct {
+	SceneID string  `json:"sceneId"`
+	Combat  *Combat `json:"combat"` // null: the fight is over
+}
+
+// CombatAdd is the data of combat.add. combat.start, end, next and prev use SceneRef.
+type CombatAdd struct {
+	SceneID  string   `json:"sceneId"`
+	TokenIDs []string `json:"tokenIds"`
+}
+
+// CombatantRef is the data of combat.remove.
+type CombatantRef struct {
+	CombatantID string `json:"combatantId"`
+}
+
+// CombatSetInitiative is the data of combat.setInitiative. Value is required:
+// a null clears the initiative, an absent field is bad_request, so handlers
+// check it in the raw data.
+type CombatSetInitiative struct {
+	CombatantID string `json:"combatantId"`
+	Value       *int   `json:"value"` // null clears; the field is required
+}
+
+// CombatRollInitiative is the data of combat.rollInitiative.
+type CombatRollInitiative struct {
+	CombatantIDs []string `json:"combatantIds"`
+}
+
+// CombatSetHidden is the data of combat.setHidden.
+type CombatSetHidden struct {
+	CombatantID string `json:"combatantId"`
+	Hidden      bool   `json:"hidden"`
 }
