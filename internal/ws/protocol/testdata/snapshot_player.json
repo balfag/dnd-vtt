@@ -88,7 +88,8 @@
               "prone"
             ]
           }
-        ]
+        ],
+        "drawings": []
       },
       "chat": [
         {
@@ -137,7 +138,28 @@
             }
           }
         }
-      ]
+      ],
+      "combat": {
+        "sceneId": "01J00000000000000000000SC2",
+        "round": 2,
+        "turnCombatantId": null,
+        "combatants": [
+          {
+            "id": "01J00000000000000000000CB1",
+            "tokenId": "01J00000000000000000000TK1",
+            "name": "Гоблин",
+            "initiative": 17,
+            "hidden": false
+          },
+          {
+            "id": "01J00000000000000000000CB3",
+            "tokenId": "01J00000000000000000000TK3",
+            "name": "",
+            "initiative": null,
+            "hidden": false
+          }
+        ]
+      }
     }
   }
 }

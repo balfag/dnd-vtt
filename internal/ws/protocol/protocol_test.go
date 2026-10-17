@@ -50,6 +50,7 @@ func examples(t *testing.T) map[string]Envelope {
 		Background: &AssetRef{AssetID: "01J00000000000000000000AS1", URL: "/assets/01J00000000000000000000AS1"},
 		Fog:        Fog{Enabled: false, Ops: []FogOp{}},
 		Tokens:     []Token{},
+		Drawings:   []Drawing{},
 	}
 	goblinImage := &AssetRef{AssetID: "01J00000000000000000000AS2", URL: "/assets/01J00000000000000000000AS2"}
 	goblin := Token{
@@ -72,11 +73,22 @@ func examples(t *testing.T) map[string]Envelope {
 		{Op: "reveal", Shape: Shape{Type: ShapeRect, X: 0, Y: 0, W: 1400, H: 1050}},
 		{Op: "hide", Shape: Shape{Type: ShapePolygon, Points: [][2]float64{{300, 200}, {700, 200}, {500, 600.5}}}},
 	}
+	ring := Drawing{
+		ID: "01J00000000000000000000DR1", SceneID: "01J00000000000000000000SC2", Kind: "template",
+		Data:  json.RawMessage(`{"shape":"cone","x":350,"y":210.5,"size":15,"direction":45}`),
+		Color: "#e53935", AuthorPlayerID: "01J00000000000000000000PL2",
+	}
+	label := Drawing{
+		ID: "01J00000000000000000000DR2", SceneID: "01J00000000000000000000SC2", Kind: "text",
+		Data:  json.RawMessage(`{"x":120,"y":80,"text":"Ловушка","size":24}`),
+		Color: "#c9a34e", AuthorPlayerID: "01J00000000000000000000PL1",
+	}
 	crypt := SceneView{
 		ID: "01J00000000000000000000SC2", Name: "Склеп", Width: 2800, Height: 2100, Grid: hexGrid,
 		Background: nil,
 		Fog:        Fog{Enabled: true, Ops: cryptOps},
 		Tokens:     []Token{goblin},
+		Drawings:   []Drawing{ring, label},
 	}
 	tavernForPlayer := tavern
 	tavernForPlayer.Tokens = []Token{goblinForPlayer}
@@ -108,6 +120,21 @@ func examples(t *testing.T) map[string]Envelope {
 		Kind: "roll", Visibility: "blind", Roll: &ChatRoll{Formula: "2d20kh1+5", Label: "Скрытность"},
 	}
 
+	gobCombatant := "01J00000000000000000000CB1"
+	secretCombatant := "01J00000000000000000000CB2"
+	combatGM := Combat{
+		SceneID: crypt.ID, Round: 2, TurnCombatantID: &secretCombatant,
+		Combatants: []Combatant{
+			{ID: gobCombatant, TokenID: goblin.ID, Name: "Гоблин", Initiative: intPtr(17), Hidden: false},
+			{ID: secretCombatant, TokenID: "01J00000000000000000000TK2", Name: "Тень", Initiative: intPtr(12), Hidden: true},
+			{ID: "01J00000000000000000000CB3", TokenID: "01J00000000000000000000TK3", Name: "", Initiative: nil, Hidden: false},
+		},
+	}
+	combatPlayer := Combat{
+		SceneID: crypt.ID, Round: 2, TurnCombatantID: nil,
+		Combatants: []Combatant{combatGM.Combatants[0], combatGM.Combatants[2]},
+	}
+
 	return map[string]Envelope{
 		"hello_command": with(mustNew(t, TypeHello, Hello{GameSessionID: "01J00000000000000000000GS1", LastSeq: 17}),
 			func(e *Envelope) { e.ID = "c-1" }),
@@ -128,7 +155,7 @@ func examples(t *testing.T) map[string]Envelope {
 					{ID: "01J00000000000000000000PL1", DisplayName: "master", Color: "#e53935", Role: "gm", Online: true},
 					{ID: "01J00000000000000000000PL2", DisplayName: "Анна", Color: "#1e88e5", Role: "player", Online: true},
 				},
-				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavernForPlayer, Chat: []ChatMessage{chatText, chatRoll}},
+				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavernForPlayer, Chat: []ChatMessage{chatText, chatRoll}, Combat: &combatPlayer},
 			},
 		}),
 		"snapshot_gm_scenes": mustNew(t, TypeSnapshot, Snapshot{
@@ -146,6 +173,7 @@ func examples(t *testing.T) map[string]Envelope {
 					Scenes:        []SceneListItem{{ID: tavern.ID, Name: tavern.Name, Sort: 0}, {ID: crypt.ID, Name: crypt.Name, Sort: 1}},
 					Scene:         &crypt,
 					Chat:          []ChatMessage{},
+					Combat:        nil,
 				},
 			},
 		}),
@@ -219,7 +247,54 @@ func examples(t *testing.T) map[string]Envelope {
 		"chat_message_roll_blind_author": with(mustNew(t, TypeChatMessage, chatBlindAuthor), func(e *Envelope) { e.Seq = 30 }),
 		"chat_history_ack": with(mustNew(t, TypeAck, ChatHistoryAck{Messages: []ChatMessage{chatText, chatPrivate, chatRoll}}),
 			func(e *Envelope) { e.Re = "c-15" }),
-		"noop":              with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
+		"combat_start_command": with(mustNew(t, TypeCombatStart, SceneRef{SceneID: crypt.ID}),
+			func(e *Envelope) { e.ID = "c-16" }),
+		"combat_end_command": with(mustNew(t, TypeCombatEnd, SceneRef{SceneID: crypt.ID}),
+			func(e *Envelope) { e.ID = "c-17" }),
+		"combat_add_command": with(mustNew(t, TypeCombatAdd, CombatAdd{SceneID: crypt.ID, TokenIDs: []string{goblin.ID, "01J00000000000000000000TK2"}}),
+			func(e *Envelope) { e.ID = "c-18" }),
+		"combat_remove_command": with(mustNew(t, TypeCombatRemove, CombatantRef{CombatantID: gobCombatant}),
+			func(e *Envelope) { e.ID = "c-19" }),
+		"combat_set_initiative_command": with(mustNew(t, TypeCombatSetInitiative, CombatSetInitiative{CombatantID: gobCombatant, Value: intPtr(17)}),
+			func(e *Envelope) { e.ID = "c-20" }),
+		"combat_roll_initiative_command": with(mustNew(t, TypeCombatRollInitiative, CombatRollInitiative{CombatantIDs: []string{gobCombatant, secretCombatant}}),
+			func(e *Envelope) { e.ID = "c-21" }),
+		"combat_set_hidden_command": with(mustNew(t, TypeCombatSetHidden, CombatSetHidden{CombatantID: secretCombatant, Hidden: true}),
+			func(e *Envelope) { e.ID = "c-22" }),
+		"combat_next_command": with(mustNew(t, TypeCombatNext, SceneRef{SceneID: crypt.ID}),
+			func(e *Envelope) { e.ID = "c-23" }),
+		"combat_prev_command": with(mustNew(t, TypeCombatPrev, SceneRef{SceneID: crypt.ID}),
+			func(e *Envelope) { e.ID = "c-24" }),
+		"combat_changed_gm": with(mustNew(t, TypeCombatChanged, CombatChanged{SceneID: crypt.ID, Combat: &combatGM}),
+			func(e *Envelope) { e.Seq = 31 }),
+		"combat_changed_player": with(mustNew(t, TypeCombatChanged, CombatChanged{SceneID: crypt.ID, Combat: &combatPlayer}),
+			func(e *Envelope) { e.Seq = 31 }),
+		"combat_changed_ended": with(mustNew(t, TypeCombatChanged, CombatChanged{SceneID: crypt.ID, Combat: nil}),
+			func(e *Envelope) { e.Seq = 32 }),
+		"drawing_create_command_freehand": with(mustNew(t, TypeDrawingCreate, DrawingCreate{
+			SceneID: crypt.ID, Kind: "freehand", Data: json.RawMessage(`{"points":[[10,20],[30.5,40],[55,42.5]]}`), Color: "#1e88e5",
+		}), func(e *Envelope) { e.ID = "c-25" }),
+		"drawing_create_command_rect": with(mustNew(t, TypeDrawingCreate, DrawingCreate{
+			SceneID: crypt.ID, Kind: "rect", Data: json.RawMessage(`{"x":100,"y":150,"w":200,"h":120.5}`), Color: "#43a047",
+		}), func(e *Envelope) { e.ID = "c-26" }),
+		"drawing_create_command_circle": with(mustNew(t, TypeDrawingCreate, DrawingCreate{
+			SceneID: crypt.ID, Kind: "circle", Data: json.RawMessage(`{"x":400,"y":300,"r":60}`), Color: "#e53935",
+		}), func(e *Envelope) { e.ID = "c-27" }),
+		"drawing_create_command_text": with(mustNew(t, TypeDrawingCreate, DrawingCreate{
+			SceneID: crypt.ID, Kind: "text", Data: json.RawMessage(`{"x":120,"y":80,"text":"Ловушка","size":24}`), Color: "#c9a34e",
+		}), func(e *Envelope) { e.ID = "c-28" }),
+		"drawing_create_command_template": with(mustNew(t, TypeDrawingCreate, DrawingCreate{
+			SceneID: crypt.ID, Kind: "template", Data: json.RawMessage(`{"shape":"cone","x":350,"y":210.5,"size":15,"direction":45}`), Color: "#e53935",
+		}), func(e *Envelope) { e.ID = "c-29" }),
+		"drawing_changed":      with(mustNew(t, TypeDrawingChanged, DrawingChanged{Drawing: ring}), func(e *Envelope) { e.Seq = 33 }),
+		"drawing_removed":      with(mustNew(t, TypeDrawingRemoved, DrawingRef{DrawingID: ring.ID}), func(e *Envelope) { e.Seq = 34 }),
+		"ping_place_command":   mustNew(t, TypePingPlace, PingPlace{SceneID: crypt.ID, X: 640, Y: 480.5, Focus: true}),
+		"ping_shown":           mustNew(t, TypePingShown, PingShown{PlayerID: "01J00000000000000000000PL1", SceneID: crypt.ID, X: 640, Y: 480.5, Focus: true}),
+		"ruler_update_command": mustNew(t, TypeRulerUpdate, RulerUpdate{SceneID: crypt.ID, Points: [][2]float64{{100, 100}, {250.5, 180}}}),
+		"ruler_shown": mustNew(t, TypeRulerShown, RulerShown{
+			PlayerID: "01J00000000000000000000PL2", SceneID: crypt.ID, Points: [][2]float64{{100, 100}, {250.5, 180}},
+		}),
+		"ruler_shown_cleared": mustNew(t, TypeRulerShown, RulerShown{PlayerID: "01J00000000000000000000PL2", SceneID: crypt.ID, Points: [][2]float64{}}), "noop": with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
 		"ping":              with(mustNew(t, TypePing, nil), func(e *Envelope) { e.ID = "p-5" }),
 		"pong":              with(mustNew(t, TypePong, nil), func(e *Envelope) { e.Re = "p-5" }),
 		"error_bad_request": errReply,
@@ -313,6 +388,34 @@ func TestGolden(t *testing.T) {
 				data = &FogShape{}
 			case TypeFogChanged:
 				data = &FogChanged{}
+			case TypeCombatStart, TypeCombatEnd, TypeCombatNext, TypeCombatPrev:
+				data = &SceneRef{}
+			case TypeCombatAdd:
+				data = &CombatAdd{}
+			case TypeCombatRemove:
+				data = &CombatantRef{}
+			case TypeCombatSetInitiative:
+				data = &CombatSetInitiative{}
+			case TypeCombatRollInitiative:
+				data = &CombatRollInitiative{}
+			case TypeCombatSetHidden:
+				data = &CombatSetHidden{}
+			case TypeCombatChanged:
+				data = &CombatChanged{}
+			case TypeDrawingCreate:
+				data = &DrawingCreate{}
+			case TypeDrawingChanged:
+				data = &DrawingChanged{}
+			case TypeDrawingRemoved, TypeDrawingDelete:
+				data = &DrawingRef{}
+			case TypePingPlace:
+				data = &PingPlace{}
+			case TypePingShown:
+				data = &PingShown{}
+			case TypeRulerUpdate:
+				data = &RulerUpdate{}
+			case TypeRulerShown:
+				data = &RulerShown{}
 			case TypeChatSend:
 				data = &ChatSend{}
 			case TypeRollRequest:

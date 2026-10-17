@@ -1,0 +1,230 @@
+/* The chat panel: a log of rows with dividers, the quick rolls and the input. */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat__scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat__log {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0 16px;
+  overflow-y: auto;
+  list-style: none;
+  overflow-anchor: none;
+}
+
+.chat__empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.chat__new {
+  align-self: flex-start;
+  margin: 0 0 8px 16px;
+  padding: 4px 12px;
+  border: 1px solid var(--verdigris);
+  border-radius: 6px;
+  background: var(--slate);
+  color: var(--chalk);
+  font: 500 15px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.chat__new:hover {
+  background: var(--board);
+}
+
+/* A row of the log. */
+.msg {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.msg--private {
+  padding-left: 10px;
+  border-left: 3px solid var(--fog);
+}
+
+.msg--system {
+  color: var(--fog);
+}
+
+.msg__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.msg__author {
+  font-weight: 500;
+}
+
+.msg__meta {
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.msg__vis {
+  color: var(--brass);
+  font-size: 14px;
+}
+
+.msg__text {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* A roll: the total on the left, the formula and the dice on the right. */
+.roll {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.roll__total {
+  min-width: 1.4em;
+  font: 700 31px/1.1 var(--serif);
+  font-variant-numeric: tabular-nums;
+}
+
+.roll__total--hidden {
+  color: var(--fog);
+}
+
+.roll__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.roll__formula,
+.roll__hidden {
+  color: var(--fog);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.roll__terms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.roll__term {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll__sign {
+  color: var(--fog);
+}
+
+.die {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-width: 1.9em;
+  padding: 0 6px;
+  border: 1px solid var(--fog);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.die--max {
+  border-color: var(--verdigris);
+  color: var(--verdigris);
+}
+
+.die--dropped {
+  border-color: var(--line);
+  color: var(--fog);
+  text-decoration: line-through;
+}
+
+.die__was {
+  color: var(--fog);
+  font-size: 12px;
+}
+
+.die__boom {
+  font-weight: 500;
+}
+
+/* Quick rolls and the input. */
+.composer {
+  flex: none;
+  padding: 8px 16px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.composer__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.composer__die {
+  min-width: 40px;
+  min-height: 32px;
+  padding: 2px 8px;
+  border: 1px solid var(--fog);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chalk);
+  font: 500 15px/1.2 var(--sans);
+  cursor: pointer;
+}
+
+.composer__die:hover {
+  background: var(--board);
+}
+
+.composer__input {
+  font-size: 15px;
+}
+
+.composer__note {
+  margin: 4px 0 0;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.composer__note--error {
+  padding-left: 9px;
+  border-left: 3px solid var(--seal);
+  color: var(--chalk);
+}
+
+@media (max-width: 899px) {
+  .composer__die {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .composer__input {
+    font-size: 17px;
+  }
+}

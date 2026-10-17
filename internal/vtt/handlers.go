@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/balfag/dnd-vtt/internal/dice"
 	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
 
-// Register adds the scene.*, token.* and fog.* handlers to hub.
-func Register(hub *ws.Hub, s *Service) {
-	h := &handlers{s: s}
+// Register adds the scene.*, token.*, fog.*, drawing.*, combat.*, ping and ruler handlers to hub; roller
+// rolls the initiative.
+func Register(hub *ws.Hub, s *Service, roller dice.Roller) {
+	h := &handlers{s: s, roller: roller}
 	for t, fn := range map[string]ws.Handler{
 		protocol.TypeSceneCreate:   h.create,
 		protocol.TypeSceneUpdate:   h.update,
@@ -39,11 +41,38 @@ func Register(hub *ws.Hub, s *Service) {
 	} {
 		hub.Handle(t, fn, ws.HandlerOptions{})
 	}
+	for t, fn := range map[string]ws.Handler{
+		protocol.TypeCombatStart:          h.combatStart,
+		protocol.TypeCombatEnd:            h.combatEnd,
+		protocol.TypeCombatAdd:            h.combatAdd,
+		protocol.TypeCombatRemove:         h.combatRemove,
+		protocol.TypeCombatSetInitiative:  h.combatSetInitiative,
+		protocol.TypeCombatRollInitiative: h.combatRollInitiative,
+		protocol.TypeCombatSetHidden:      h.combatSetHidden,
+		protocol.TypeCombatNext:           h.combatNext,
+		protocol.TypeCombatPrev:           h.combatPrev,
+	} {
+		hub.Handle(t, fn, ws.HandlerOptions{})
+	}
+	for t, fn := range map[string]ws.Handler{
+		protocol.TypeDrawingCreate: h.drawingCreate,
+		protocol.TypeDrawingUpdate: h.drawingUpdate,
+		protocol.TypeDrawingDelete: h.drawingDelete,
+	} {
+		hub.Handle(t, fn, ws.HandlerOptions{})
+	}
 	// Dragging is frequent and has no reply: over the limit it is just dropped.
 	hub.Handle(protocol.TypeTokenDrag, h.tokenDrag, ws.HandlerOptions{RatePerSec: 30, Silent: true})
+	// Pings and rulers are transient: over the limit they are dropped, errors are not sent.
+	hub.Handle(protocol.TypePingPlace, h.pingPlace, ws.HandlerOptions{RatePerSec: 5, Silent: true})
+	hub.Handle(protocol.TypeRulerUpdate, h.rulerUpdate, ws.HandlerOptions{RatePerSec: 30, Silent: true})
+	hub.Handle(protocol.TypeRulerClear, h.rulerClear, ws.HandlerOptions{})
 }
 
-type handlers struct{ s *Service }
+type handlers struct {
+	s      *Service
+	roller dice.Roller
+}
 
 // decode reads the data of a command strictly: unknown fields are an error.
 func decode(cmd ws.Command, dst any) error {
@@ -122,6 +151,9 @@ func (h *handlers) create(ctx context.Context, cmd ws.Command, em ws.Emitter) (a
 	em.Emit(scenesChanged(res.Scenes))
 	if res.Activated != nil {
 		em.Emit(sceneActivated(*res.Activated))
+		if err := h.emitSceneCombat(ctx, cmd.CampaignID, res.Activated.ID, em); err != nil {
+			return nil, err
+		}
 	}
 	return protocol.SceneCreateAck{SceneID: res.SceneID}, nil
 }
@@ -187,7 +219,22 @@ func (h *handlers) activate(ctx context.Context, cmd ws.Command, em ws.Emitter) 
 		return nil, commandError(err)
 	}
 	em.Emit(sceneActivated(scene))
+	if err := h.emitSceneCombat(ctx, cmd.CampaignID, scene.ID, em); err != nil {
+		return nil, err
+	}
 	return nil, nil
+}
+
+// emitSceneCombat sends the fight of a freshly activated scene, if it has one.
+func (h *handlers) emitSceneCombat(ctx context.Context, campaignID, sceneID string, em ws.Emitter) error {
+	res, err := h.s.SceneCombat(ctx, campaignID, sceneID)
+	if err != nil {
+		return err
+	}
+	if res != nil {
+		em.Emit(combatChanged(*res))
+	}
+	return nil
 }
 
 func (h *handlers) view(ctx context.Context, cmd ws.Command, _ ws.Emitter) (any, error) {
@@ -322,6 +369,9 @@ func (h *handlers) tokenDelete(ctx context.Context, cmd ws.Command, em ws.Emitte
 		return nil, commandError(err)
 	}
 	em.Emit(tokenRemoved(res.Token.ID, res.State))
+	if res.Combat != nil {
+		em.Emit(combatChanged(*res.Combat)) // the fight lost a participant, maybe the turn
+	}
 	return nil, nil
 }
 
@@ -397,4 +447,144 @@ func (h *handlers) fogReset(ctx context.Context, cmd ws.Command, em ws.Emitter) 
 	}
 	em.Emit(fogChanged(res))
 	return nil, nil
+}
+
+// drawingChanged shows the GM every drawing change and a player only that of
+// the scene that was active when it changed.
+func drawingChanged(res DrawingResult) ws.Renderer {
+	d := protocol.DrawingChanged{Drawing: res.Drawing}
+	return func(v ws.Viewer) (string, any, bool) {
+		return protocol.TypeDrawingChanged, d, v.IsGM || res.Active
+	}
+}
+
+func drawingRemoved(res DrawingResult) ws.Renderer {
+	d := protocol.DrawingRef{DrawingID: res.Drawing.ID}
+	return func(v ws.Viewer) (string, any, bool) {
+		return protocol.TypeDrawingRemoved, d, v.IsGM || res.Active
+	}
+}
+
+// needPlayer refuses a caller without a player (a GM outside a game).
+func needPlayer(cmd ws.Command) error {
+	if cmd.Viewer.PlayerID == "" {
+		return ws.Errorf(protocol.CodeForbidden, "only a participant can do this")
+	}
+	return nil
+}
+
+func (h *handlers) drawingCreate(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if err := needPlayer(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.DrawingCreate
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.CreateDrawing(ctx, cmd.CampaignID, cmd.Viewer, in)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(drawingChanged(res))
+	return protocol.DrawingCreateAck{DrawingID: res.Drawing.ID}, nil
+}
+
+func (h *handlers) drawingUpdate(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if err := needPlayer(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.DrawingUpdate
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.UpdateDrawing(ctx, cmd.CampaignID, cmd.Viewer, in)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(drawingChanged(res))
+	return nil, nil
+}
+
+func (h *handlers) drawingDelete(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if err := needPlayer(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.DrawingRef
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.DeleteDrawing(ctx, cmd.CampaignID, cmd.Viewer, in.DrawingID)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(drawingRemoved(res))
+	return nil, nil
+}
+
+// transientScene checks that the caller may point or measure on the scene and
+// returns who gets the result: the GM always, a player when the scene is active.
+func (h *handlers) transientScene(ctx context.Context, cmd ws.Command, sceneID string) (func(ws.Viewer) bool, error) {
+	if err := needPlayer(cmd); err != nil {
+		return nil, err
+	}
+	active, err := h.s.SceneActive(ctx, cmd.CampaignID, sceneID)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	if !cmd.Viewer.IsGM && !active {
+		return nil, errPlayerScene()
+	}
+	return func(v ws.Viewer) bool { return v.IsGM || active }, nil
+}
+
+// pingPlace shows a ping on the scene. Nothing is stored.
+func (h *handlers) pingPlace(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	var in protocol.PingPlace
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	if in.Focus && !cmd.Viewer.IsGM {
+		return nil, ws.Errorf(protocol.CodeForbidden, "only the gm can move the cameras")
+	}
+	if !validCoord(in.X, in.Y) {
+		return nil, ws.Errorf(protocol.CodeBadRequest, "x and y must be within ±%d", maxCoord)
+	}
+	to, err := h.transientScene(ctx, cmd, in.SceneID)
+	if err != nil {
+		return nil, err
+	}
+	em.Transient(protocol.TypePingShown, protocol.PingShown{
+		PlayerID: cmd.Viewer.PlayerID, SceneID: in.SceneID, X: in.X, Y: in.Y, Focus: in.Focus,
+	}, to)
+	return nil, nil
+}
+
+// rulerUpdate shows the ruler of the caller. Nothing is stored.
+func (h *handlers) rulerUpdate(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	var in protocol.RulerUpdate
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	if !validRulerPoints(in.Points) {
+		return nil, ws.Errorf(protocol.CodeBadRequest, "a ruler has 1..%d points within ±%d", maxRulerPoints, maxCoord)
+	}
+	return nil, h.showRuler(ctx, cmd, em, in)
+}
+
+// rulerClear removes the ruler of the caller.
+func (h *handlers) rulerClear(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	var in protocol.SceneRef
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	return nil, h.showRuler(ctx, cmd, em, protocol.RulerUpdate{SceneID: in.SceneID, Points: [][2]float64{}})
+}
+
+func (h *handlers) showRuler(ctx context.Context, cmd ws.Command, em ws.Emitter, in protocol.RulerUpdate) error {
+	to, err := h.transientScene(ctx, cmd, in.SceneID)
+	if err != nil {
+		return err
+	}
+	em.Transient(protocol.TypeRulerShown, protocol.RulerShown{PlayerID: cmd.Viewer.PlayerID, SceneID: in.SceneID, Points: in.Points}, to)
+	return nil
 }

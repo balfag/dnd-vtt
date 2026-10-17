@@ -63,7 +63,7 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 	}
 	hub := ws.NewHub(gameSvc, logger, ws.Options{})
 	vttSvc := vtt.NewService(db, vtt.Options{})
-	vtt.Register(hub, vttSvc)
+	vtt.Register(hub, vttSvc, dice.CryptoRoller())
 	hub.AddSnapshotSource(vttSvc)
 	chatSvc := chat.NewService(db, chat.Options{})
 	chat.Register(hub, chatSvc, dice.CryptoRoller())

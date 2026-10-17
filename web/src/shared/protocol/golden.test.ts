@@ -6,6 +6,30 @@ import chatMessageRoll from '../../../../internal/ws/protocol/testdata/chat_mess
 import chatMessageRollBlindAuthor from '../../../../internal/ws/protocol/testdata/chat_message_roll_blind_author.json'
 import chatMessageText from '../../../../internal/ws/protocol/testdata/chat_message_text.json'
 import chatSendExample from '../../../../internal/ws/protocol/testdata/chat_send_command.json'
+import combatChangedEnded from '../../../../internal/ws/protocol/testdata/combat_changed_ended.json'
+import combatChangedGm from '../../../../internal/ws/protocol/testdata/combat_changed_gm.json'
+import combatChangedPlayer from '../../../../internal/ws/protocol/testdata/combat_changed_player.json'
+import combatAddExample from '../../../../internal/ws/protocol/testdata/combat_add_command.json'
+import combatEndExample from '../../../../internal/ws/protocol/testdata/combat_end_command.json'
+import combatNextExample from '../../../../internal/ws/protocol/testdata/combat_next_command.json'
+import combatPrevExample from '../../../../internal/ws/protocol/testdata/combat_prev_command.json'
+import combatRemoveExample from '../../../../internal/ws/protocol/testdata/combat_remove_command.json'
+import combatRollInitiativeExample from '../../../../internal/ws/protocol/testdata/combat_roll_initiative_command.json'
+import combatSetHiddenExample from '../../../../internal/ws/protocol/testdata/combat_set_hidden_command.json'
+import combatSetInitiativeExample from '../../../../internal/ws/protocol/testdata/combat_set_initiative_command.json'
+import combatStartExample from '../../../../internal/ws/protocol/testdata/combat_start_command.json'
+import drawingChanged from '../../../../internal/ws/protocol/testdata/drawing_changed.json'
+import drawingCreateCircle from '../../../../internal/ws/protocol/testdata/drawing_create_command_circle.json'
+import drawingCreateFreehand from '../../../../internal/ws/protocol/testdata/drawing_create_command_freehand.json'
+import drawingCreateRect from '../../../../internal/ws/protocol/testdata/drawing_create_command_rect.json'
+import drawingCreateTemplate from '../../../../internal/ws/protocol/testdata/drawing_create_command_template.json'
+import drawingCreateText from '../../../../internal/ws/protocol/testdata/drawing_create_command_text.json'
+import drawingRemoved from '../../../../internal/ws/protocol/testdata/drawing_removed.json'
+import pingPlaceExample from '../../../../internal/ws/protocol/testdata/ping_place_command.json'
+import pingShown from '../../../../internal/ws/protocol/testdata/ping_shown.json'
+import rulerShown from '../../../../internal/ws/protocol/testdata/ruler_shown.json'
+import rulerShownCleared from '../../../../internal/ws/protocol/testdata/ruler_shown_cleared.json'
+import rulerUpdateExample from '../../../../internal/ws/protocol/testdata/ruler_update_command.json'
 import errorBadRequest from '../../../../internal/ws/protocol/testdata/error_bad_request.json'
 import fogChangedGm from '../../../../internal/ws/protocol/testdata/fog_changed_gm.json'
 import fogChangedPlayer from '../../../../internal/ws/protocol/testdata/fog_changed_player.json'
@@ -44,6 +68,18 @@ import tokenUpdateExample from '../../../../internal/ws/protocol/testdata/token_
 import {
   chatHistoryCommand,
   chatSendCommand,
+  combatAddCommand,
+  combatEndCommand,
+  combatNextCommand,
+  combatPrevCommand,
+  combatRemoveCommand,
+  combatRollInitiativeCommand,
+  combatSetHiddenCommand,
+  combatSetInitiativeCommand,
+  combatStartCommand,
+  drawingCreateCommand,
+  drawingDeleteCommand,
+  drawingUpdateCommand,
   fogHideCommand,
   fogResetCommand,
   fogRevealCommand,
@@ -51,13 +87,20 @@ import {
   helloCommand,
   isChatHistoryAck,
   isChatMessage,
+  isCombatChanged,
+  isDrawing,
+  isDrawingChanged,
+  isDrawingData,
+  isDrawingRemoved,
   isEnvelope,
   isFogChanged,
   isErrorMessage,
   isHelloAck,
   isNoop,
+  isPingShown,
   isPong,
   isPresence,
+  isRulerShown,
   isShape,
   isSceneActivated,
   isSceneChanged,
@@ -69,7 +112,10 @@ import {
   isTokenDragging,
   isTokenRemoved,
   pingCommand,
+  pingPlaceMessage,
   rollRequestCommand,
+  rulerClearMessage,
+  rulerUpdateMessage,
   sceneCreateCommand,
   sceneReorderCommand,
   sceneRefCommand,
@@ -97,10 +143,18 @@ describe('server examples pass their guards', () => {
     ['fog_changed_gm', fogChangedGm, isFogChanged],
     ['fog_changed_player', fogChangedPlayer, isFogChanged],
     ['fog_changed_player_empty', fogChangedPlayerEmpty, isFogChanged],
+    ['combat_changed_gm', combatChangedGm, isCombatChanged],
+    ['combat_changed_player', combatChangedPlayer, isCombatChanged],
+    ['combat_changed_ended', combatChangedEnded, isCombatChanged],
     ['token_changed', tokenChanged, isTokenChanged],
     ['token_changed_player', tokenChangedPlayer, isTokenChanged],
     ['token_removed', tokenRemoved, isTokenRemoved],
     ['token_dragging', tokenDragging, isTokenDragging],
+    ['drawing_changed', drawingChanged, isDrawingChanged],
+    ['drawing_removed', drawingRemoved, isDrawingRemoved],
+    ['ping_shown', pingShown, isPingShown],
+    ['ruler_shown', rulerShown, isRulerShown],
+    ['ruler_shown_cleared', rulerShownCleared, isRulerShown],
     ['chat_message_text', chatMessageText, isChatMessage],
     ['chat_message_private', chatMessagePrivate, isChatMessage],
     ['chat_message_roll', chatMessageRoll, isChatMessage],
@@ -128,6 +182,13 @@ describe('server examples pass their guards', () => {
       tokenUpdateExample,
       tokenMoveExample,
       tokenDragExample,
+      drawingCreateCircle,
+      drawingCreateFreehand,
+      drawingCreateRect,
+      drawingCreateTemplate,
+      drawingCreateText,
+      pingPlaceExample,
+      rulerUpdateExample,
       fogSet,
       fogRevealRect,
       fogHidePolygon,
@@ -135,6 +196,15 @@ describe('server examples pass their guards', () => {
       chatSendExample,
       rollRequestExample,
       chatHistoryCommandExample,
+      combatAddExample,
+      combatEndExample,
+      combatNextExample,
+      combatPrevExample,
+      combatRemoveExample,
+      combatRollInitiativeExample,
+      combatSetHiddenExample,
+      combatSetInitiativeExample,
+      combatStartExample,
     ]) {
       expect(isEnvelope(example)).toBe(true)
     }
@@ -167,6 +237,74 @@ describe('isShape follows the limits of the server', () => {
     ['unknown type', { type: 'star' }, false],
   ])('%s', (_name, shape, ok) => {
     expect(isShape(shape)).toBe(ok)
+  })
+})
+
+describe('isDrawingData follows the limits of the server', () => {
+  const points = (n: number) => Array.from({ length: n }, () => [1, 2])
+  const text = (n: number, size = 16) => ({ x: 1, y: 2, text: 'a'.repeat(n), size })
+  const template = { shape: 'cone', x: 1, y: 2, size: 15, direction: 45 }
+  it.each([
+    ['freehand of 2', 'freehand', { points: points(2) }, true],
+    ['freehand of 1', 'freehand', { points: points(1) }, false],
+    ['freehand of 2000', 'freehand', { points: points(2000) }, true],
+    ['freehand of 2001', 'freehand', { points: points(2001) }, false],
+    [
+      'freehand point of three',
+      'freehand',
+      {
+        points: [
+          [1, 2, 3],
+          [1, 2],
+        ],
+      },
+      false,
+    ],
+    ['rect', 'rect', { x: 1, y: 2, w: 3, h: 4 }, true],
+    ['rect with w = 0', 'rect', { x: 1, y: 2, w: 0, h: 4 }, false],
+    ['rect with an extra field', 'rect', { x: 1, y: 2, w: 3, h: 4, r: 1 }, false],
+    ['rect over the limit', 'rect', { x: 1e300, y: 2, w: 3, h: 4 }, false],
+    ['circle', 'circle', { x: 1, y: 2, r: 3 }, true],
+    ['circle with r = 0', 'circle', { x: 1, y: 2, r: 0 }, false],
+    ['text of 0', 'text', text(0), false],
+    ['text of 1', 'text', text(1), true],
+    ['text of 500', 'text', text(500), true],
+    ['text of 501', 'text', text(501), false],
+    [
+      'text of 500 characters outside the BMP',
+      'text',
+      { ...text(0), text: '😀'.repeat(500) },
+      true,
+    ],
+    ['text size 7', 'text', text(1, 7), false],
+    ['text size 8', 'text', text(1, 8), true],
+    ['text size 200', 'text', text(1, 200), true],
+    ['text size 201', 'text', text(1, 201), false],
+    ['text with points', 'text', { ...text(1), points: [] }, false],
+    ['template', 'template', template, true],
+    ['template size 4', 'template', { ...template, size: 4 }, false],
+    ['template size 5', 'template', { ...template, size: 5 }, true],
+    ['template size 1000', 'template', { ...template, size: 1000 }, true],
+    ['template size 1001', 'template', { ...template, size: 1001 }, false],
+    ['template direction 360', 'template', { ...template, direction: 360 }, false],
+    ['template direction -90', 'template', { ...template, direction: -90 }, false],
+    ['template of an unknown shape', 'template', { ...template, shape: 'wall' }, false],
+    ['unknown kind', 'arrow', { x: 1, y: 2, w: 3, h: 4 }, false],
+  ])('%s', (_name, kind, data, ok) => {
+    expect(isDrawingData(kind, data)).toBe(ok)
+  })
+
+  it('isDrawing wants a color of the form #rrggbb', () => {
+    const drawing = {
+      id: 'D1',
+      sceneId: 'S1',
+      kind: 'circle',
+      data: { x: 1, y: 2, r: 3 },
+      color: '#e53935',
+      authorPlayerId: 'P1',
+    }
+    expect(isDrawing(drawing)).toBe(true)
+    expect(isDrawing({ ...drawing, color: '#E53935' })).toBe(false)
   })
 })
 
@@ -306,6 +444,124 @@ describe('command builders match the examples', () => {
       id: 'c-3',
       d: { before: 'M1' },
     })
+  })
+
+  it('drawing commands', () => {
+    const scene = '01J00000000000000000000SC2'
+    expect(
+      drawingCreateCommand(
+        'c-25',
+        scene,
+        {
+          kind: 'freehand',
+          data: {
+            points: [
+              [10, 20],
+              [30.5, 40],
+              [55, 42.5],
+            ],
+          },
+        },
+        '#1e88e5',
+      ),
+    ).toStrictEqual(drawingCreateFreehand)
+    expect(
+      drawingCreateCommand(
+        'c-26',
+        scene,
+        { kind: 'rect', data: { x: 100, y: 150, w: 200, h: 120.5 } },
+        '#43a047',
+      ),
+    ).toStrictEqual(drawingCreateRect)
+    expect(
+      drawingCreateCommand(
+        'c-27',
+        scene,
+        { kind: 'circle', data: { x: 400, y: 300, r: 60 } },
+        '#e53935',
+      ),
+    ).toStrictEqual(drawingCreateCircle)
+    expect(
+      drawingCreateCommand(
+        'c-28',
+        scene,
+        { kind: 'text', data: { x: 120, y: 80, text: 'Ловушка', size: 24 } },
+        '#c9a34e',
+      ),
+    ).toStrictEqual(drawingCreateText)
+    expect(
+      drawingCreateCommand(
+        'c-29',
+        scene,
+        { kind: 'template', data: { shape: 'cone', x: 350, y: 210.5, size: 15, direction: 45 } },
+        '#e53935',
+      ),
+    ).toStrictEqual(drawingCreateTemplate)
+    expect(drawingUpdateCommand('c-1', 'D1', { color: '#000000' })).toStrictEqual({
+      t: 'drawing.update',
+      id: 'c-1',
+      d: { drawingId: 'D1', color: '#000000' },
+    })
+    expect(drawingDeleteCommand('c-2', 'D1')).toStrictEqual({
+      t: 'drawing.delete',
+      id: 'c-2',
+      d: { drawingId: 'D1' },
+    })
+  })
+
+  it('ping and ruler messages have no id', () => {
+    const scene = '01J00000000000000000000SC2'
+    expect(pingPlaceMessage(scene, 640, 480.5, true)).toStrictEqual(pingPlaceExample)
+    expect(pingPlaceMessage('S1', 1, 2)).toStrictEqual({
+      t: 'ping.place',
+      d: { sceneId: 'S1', x: 1, y: 2 },
+    })
+    expect(
+      rulerUpdateMessage(scene, [
+        [100, 100],
+        [250.5, 180],
+      ]),
+    ).toStrictEqual(rulerUpdateExample)
+    expect(rulerClearMessage('S1')).toStrictEqual({ t: 'ruler.clear', d: { sceneId: 'S1' } })
+  })
+
+  it('a cleared ruler has an empty list, and the transient frames have no seq', () => {
+    expect(rulerShownCleared.d.points).toEqual([])
+    expect('seq' in rulerShown).toBe(false)
+    expect('seq' in pingShown).toBe(false)
+  })
+
+  it('combat commands', () => {
+    const scene = '01J00000000000000000000SC2'
+    const goblin = '01J00000000000000000000CB1'
+    const shadow = '01J00000000000000000000CB2'
+    expect(combatStartCommand('c-16', scene)).toStrictEqual(combatStartExample)
+    expect(combatEndCommand('c-17', scene)).toStrictEqual(combatEndExample)
+    expect(
+      combatAddCommand('c-18', scene, ['01J00000000000000000000TK1', '01J00000000000000000000TK2']),
+    ).toStrictEqual(combatAddExample)
+    expect(combatRemoveCommand('c-19', goblin)).toStrictEqual(combatRemoveExample)
+    expect(combatSetInitiativeCommand('c-20', goblin, 17)).toStrictEqual(combatSetInitiativeExample)
+    expect(combatRollInitiativeCommand('c-21', [goblin, shadow])).toStrictEqual(
+      combatRollInitiativeExample,
+    )
+    expect(combatSetHiddenCommand('c-22', shadow, true)).toStrictEqual(combatSetHiddenExample)
+    expect(combatNextCommand('c-23', scene)).toStrictEqual(combatNextExample)
+    expect(combatPrevCommand('c-24', scene)).toStrictEqual(combatPrevExample)
+  })
+
+  it('a null initiative is sent, not left out', () => {
+    expect(combatSetInitiativeCommand('c-1', 'C1', null)).toStrictEqual({
+      t: 'combat.setInitiative',
+      id: 'c-1',
+      d: { combatantId: 'C1', value: null },
+    })
+  })
+
+  it('the tracker frames differ for the GM and the player', () => {
+    expect(combatChangedGm.d.combat.turnCombatantId).toBe('01J00000000000000000000CB2')
+    expect(combatChangedPlayer.d.combat.turnCombatantId).toBeNull()
+    expect(combatChangedEnded.d.combat).toBeNull()
   })
 
   it('a blind roll of its author has no result', () => {
@@ -506,6 +762,54 @@ describe('guards reject damaged messages', () => {
       'snapshot chat has a damaged message',
       isSnapshot,
       corrupt(snapshotPlayer, ['d', 'game', 'chat', '0', 'visibility'], 'friends'),
+    ],
+    ['combat round is 0', isCombatChanged, corrupt(combatChangedGm, ['d', 'combat', 'round'], 0)],
+    [
+      'combatant initiative is a string',
+      isCombatChanged,
+      corrupt(combatChangedGm, ['d', 'combat', 'combatants', '0', 'initiative'], '17'),
+    ],
+    [
+      'combat combatants is null',
+      isCombatChanged,
+      corrupt(combatChangedGm, ['d', 'combat', 'combatants'], null),
+    ],
+    [
+      'snapshot combat is missing',
+      isSnapshot,
+      corrupt(snapshotPlayer, ['d', 'game', 'combat'], undefined, true),
+    ],
+    [
+      'drawing data of another kind',
+      isDrawingChanged,
+      corrupt(drawingChanged, ['d', 'drawing', 'kind'], 'rect'),
+    ],
+    [
+      'drawing color in upper case',
+      isDrawingChanged,
+      corrupt(drawingChanged, ['d', 'drawing', 'color'], '#E53935'),
+    ],
+    [
+      'drawing without an author',
+      isDrawingChanged,
+      corrupt(drawingChanged, ['d', 'drawing', 'authorPlayerId'], undefined, true),
+    ],
+    [
+      'scene without drawings',
+      isSceneActivated,
+      corrupt(sceneActivated, ['d', 'scene', 'drawings'], undefined, true),
+    ],
+    [
+      'scene.changed with drawings',
+      isSceneChanged,
+      corrupt(sceneChanged, ['d', 'scene', 'drawings'], []),
+    ],
+    ['ping.shown with a seq', isPingShown, corrupt(pingShown, ['seq'], 5)],
+    ['ruler.shown with null points', isRulerShown, corrupt(rulerShown, ['d', 'points'], null)],
+    [
+      'drawing.removed without a seq',
+      isDrawingRemoved,
+      corrupt(drawingRemoved, ['seq'], undefined, true),
     ],
     ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
     ['noop has data', isNoop, corrupt(noop, ['d'], {})],

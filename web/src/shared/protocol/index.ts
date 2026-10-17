@@ -29,10 +29,30 @@ export const MessageType = {
   FogHide: 'fog.hide',
   FogReset: 'fog.reset',
   FogChanged: 'fog.changed',
+  DrawingCreate: 'drawing.create',
+  DrawingUpdate: 'drawing.update',
+  DrawingDelete: 'drawing.delete',
+  DrawingChanged: 'drawing.changed',
+  DrawingRemoved: 'drawing.removed',
+  PingPlace: 'ping.place',
+  PingShown: 'ping.shown',
+  RulerUpdate: 'ruler.update',
+  RulerClear: 'ruler.clear',
+  RulerShown: 'ruler.shown',
   ChatSend: 'chat.send',
   RollRequest: 'roll.request',
   ChatHistory: 'chat.history',
   ChatMessage: 'chat.message',
+  CombatStart: 'combat.start',
+  CombatEnd: 'combat.end',
+  CombatAdd: 'combat.add',
+  CombatRemove: 'combat.remove',
+  CombatSetInitiative: 'combat.setInitiative',
+  CombatRollInitiative: 'combat.rollInitiative',
+  CombatSetHidden: 'combat.setHidden',
+  CombatNext: 'combat.next',
+  CombatPrev: 'combat.prev',
+  CombatChanged: 'combat.changed',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -139,7 +159,37 @@ export interface Token {
   bars: TokenBar[]
   conditions: string[]
 }
-/** SceneView is a scene as the client sees it; drawings join later. */
+export type DrawingKind = 'freehand' | 'rect' | 'circle' | 'text' | 'template'
+export type TemplateShape = 'cone' | 'sphere' | 'line' | 'cube' | 'cylinder'
+/** DrawingDataByKind is the data of a drawing by its kind; coordinates are finite, within ±100000. */
+export interface DrawingDataByKind {
+  /** 2–2000 points. */
+  freehand: { points: [number, number][] }
+  /** The top left corner; w, h > 0. */
+  rect: { x: number; y: number; w: number; h: number }
+  /** The center; r > 0. */
+  circle: { x: number; y: number; r: number }
+  /** text is 1–500 characters, size 8–200 px. */
+  text: { x: number; y: number; text: string; size: number }
+  /**
+   * x, y is the origin (cone, line) or the center; size is 5–1000 ft (the length of a
+   * cone and a line, the radius of a sphere and a cylinder, the edge of a cube);
+   * direction is in degrees clockwise from the X axis, [0, 360) as the server sends it.
+   */
+  template: { shape: TemplateShape; x: number; y: number; size: number; direction: number }
+}
+/** DrawingContent is the kind of a drawing with the data that goes with it. */
+export type DrawingContent = {
+  [K in DrawingKind]: { kind: K; data: DrawingDataByKind[K] }
+}[DrawingKind]
+/** Drawing is a drawing or an area template of a scene. */
+export type Drawing = DrawingContent & {
+  id: string
+  sceneId: string
+  color: string
+  authorPlayerId: string
+}
+/** SceneView is a scene as the client sees it. */
 export interface SceneView {
   id: string
   name: string
@@ -150,9 +200,11 @@ export interface SceneView {
   fog: Fog
   /** Only the tokens the viewer may see. */
   tokens: Token[]
+  /** All the drawings of the scene, by id. */
+  drawings: Drawing[]
 }
-/** SceneInfo is a scene without its tokens: scene.changed has no tokens, the client keeps its own. */
-export type SceneInfo = Omit<SceneView, 'tokens'>
+/** SceneInfo is a scene without its tokens and drawings: scene.changed has neither, the client keeps its own. */
+export type SceneInfo = Omit<SceneView, 'tokens' | 'drawings'>
 export interface SceneListItem {
   id: string
   name: string
@@ -210,6 +262,24 @@ export interface ChatMessage {
   /** Roll messages only. */
   roll?: ChatRoll
 }
+/** Combatant is a participant of the tracker; name is empty when the viewer may not see it. */
+export interface Combatant {
+  id: string
+  tokenId: string
+  name: string
+  /** null: not set. */
+  initiative: number | null
+  hidden: boolean
+}
+/** Combat is the initiative tracker of a scene as the viewer sees it. */
+export interface Combat {
+  sceneId: string
+  round: number
+  /** null: before the first combat.next, or the turn is of a combatant hidden from the viewer. */
+  turnCombatantId: string | null
+  /** In turn order. */
+  combatants: Combatant[]
+}
 export interface SnapshotGame {
   gameSessionId: string
   startedAt: number
@@ -221,6 +291,8 @@ export interface SnapshotGame {
   scene: SceneView | null
   /** The last 50 messages visible to the viewer, ascending. */
   chat: ChatMessage[]
+  /** The tracker of the active scene for the viewer; null: none. */
+  combat: Combat | null
 }
 export interface Snapshot {
   seq: number
@@ -259,10 +331,29 @@ export type TokenDraggingMessage = {
   t: 'token.dragging'
   d: { tokenId: string; x: number; y: number }
 }
+export type DrawingChangedMessage = { t: 'drawing.changed'; seq: number; d: { drawing: Drawing } }
+export type DrawingRemovedMessage = { t: 'drawing.removed'; seq: number; d: { drawingId: string } }
+export type DrawingCreateAckMessage = { t: 'ack'; re: string; d: { drawingId: string } }
+/** PingShownMessage is transient: it has no seq. focus asks the client to move the camera. */
+export type PingShownMessage = {
+  t: 'ping.shown'
+  d: { playerId: string; sceneId: string; x: number; y: number; focus: boolean }
+}
+/** RulerShownMessage is transient: it has no seq. points is empty when the ruler is cleared. */
+export type RulerShownMessage = {
+  t: 'ruler.shown'
+  d: { playerId: string; sceneId: string; points: [number, number][] }
+}
 export type TokenCreateAckMessage = { t: 'ack'; re: string; d: { tokenId: string } }
 export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
 export type ChatMessageEvent = { t: 'chat.message'; seq: number; d: ChatMessage }
 export type ChatHistoryAckMessage = { t: 'ack'; re: string; d: { messages: ChatMessage[] } }
+/** CombatChangedMessage carries the whole tracker after a change; combat is null when the fight is over. */
+export type CombatChangedMessage = {
+  t: 'combat.changed'
+  seq: number
+  d: { sceneId: string; combat: Combat | null }
+}
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
 
@@ -420,6 +511,79 @@ export function isToken(v: unknown): v is Token {
   )
 }
 
+function isPoint(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length === 2 && isCoord(v[0]) && isCoord(v[1])
+}
+
+const templateShapes: readonly unknown[] = ['cone', 'sphere', 'line', 'cube', 'cylinder']
+
+function isTextLength(v: unknown): v is string {
+  return typeof v === 'string' && Array.from(v).length >= 1 && Array.from(v).length <= 500
+}
+
+function isInRange(v: unknown, min: number, max: number): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+}
+
+/** isDrawingData checks the data of a drawing of the kind by the table of protocol.md. */
+export function isDrawingData(kind: unknown, v: unknown): boolean {
+  if (!isObject(v)) return false
+  switch (kind) {
+    case 'freehand':
+      return (
+        hasExactKeys(v, ['points']) &&
+        Array.isArray(v.points) &&
+        v.points.length >= 2 &&
+        v.points.length <= 2000 &&
+        v.points.every(isPoint)
+      )
+    case 'rect':
+      return (
+        hasExactKeys(v, ['x', 'y', 'w', 'h']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isPositiveCoord(v.w) &&
+        isPositiveCoord(v.h)
+      )
+    case 'circle':
+      return (
+        hasExactKeys(v, ['x', 'y', 'r']) && isCoord(v.x) && isCoord(v.y) && isPositiveCoord(v.r)
+      )
+    case 'text':
+      return (
+        hasExactKeys(v, ['x', 'y', 'text', 'size']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isTextLength(v.text) &&
+        isInRange(v.size, 8, 200)
+      )
+    case 'template':
+      return (
+        hasExactKeys(v, ['shape', 'x', 'y', 'size', 'direction']) &&
+        templateShapes.includes(v.shape) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isInRange(v.size, 5, 1000) &&
+        isInRange(v.direction, 0, 360) &&
+        v.direction < 360
+      )
+    default:
+      return false
+  }
+}
+
+export function isDrawing(v: unknown): v is Drawing {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.sceneId === 'string' &&
+    typeof v.color === 'string' &&
+    colorPattern.test(v.color) &&
+    typeof v.authorPlayerId === 'string' &&
+    isDrawingData(v.kind, v.data)
+  )
+}
+
 function isSceneView(v: unknown): v is SceneView {
   return (
     isObject(v) &&
@@ -431,7 +595,9 @@ function isSceneView(v: unknown): v is SceneView {
     (v.background === null || isAssetRef(v.background)) &&
     isFog(v.fog) &&
     Array.isArray(v.tokens) &&
-    v.tokens.every(isToken)
+    v.tokens.every(isToken) &&
+    Array.isArray(v.drawings) &&
+    v.drawings.every(isDrawing)
   )
 }
 
@@ -445,7 +611,8 @@ function isSceneInfo(v: unknown): v is SceneInfo {
     isGrid(v.grid) &&
     (v.background === null || isAssetRef(v.background)) &&
     isFog(v.fog) &&
-    !('tokens' in v)
+    !('tokens' in v) &&
+    !('drawings' in v)
   )
 }
 
@@ -533,6 +700,29 @@ function isChatMessageData(v: unknown): v is ChatMessage {
   )
 }
 
+function isCombatant(v: unknown): v is Combatant {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.tokenId === 'string' &&
+    typeof v.name === 'string' &&
+    (v.initiative === null ||
+      (typeof v.initiative === 'number' && Number.isInteger(v.initiative))) &&
+    typeof v.hidden === 'boolean'
+  )
+}
+
+function isCombat(v: unknown): v is Combat {
+  return (
+    isObject(v) &&
+    typeof v.sceneId === 'string' &&
+    isInteger(v.round, 1) &&
+    (v.turnCombatantId === null || typeof v.turnCombatantId === 'string') &&
+    Array.isArray(v.combatants) &&
+    v.combatants.every(isCombatant)
+  )
+}
+
 function isSnapshotGame(v: unknown): v is SnapshotGame {
   return (
     isObject(v) &&
@@ -548,7 +738,8 @@ function isSnapshotGame(v: unknown): v is SnapshotGame {
     v.scenes.every(isSceneListItem) &&
     (v.scene === null || isSceneView(v.scene)) &&
     Array.isArray(v.chat) &&
-    v.chat.every(isChatMessageData)
+    v.chat.every(isChatMessageData) &&
+    (v.combat === null || isCombat(v.combat))
   )
 }
 
@@ -680,6 +871,63 @@ export function isTokenDragging(v: unknown): v is TokenDraggingMessage {
   )
 }
 
+export function isDrawingChanged(v: unknown): v is DrawingChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.DrawingChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    isDrawing(v.d.drawing)
+  )
+}
+
+export function isDrawingRemoved(v: unknown): v is DrawingRemovedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.DrawingRemoved &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.drawingId === 'string'
+  )
+}
+
+export function isDrawingCreateAck(v: unknown): v is DrawingCreateAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    typeof v.d.drawingId === 'string'
+  )
+}
+
+export function isPingShown(v: unknown): v is PingShownMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.PingShown &&
+    v.seq === undefined &&
+    isObject(v.d) &&
+    typeof v.d.playerId === 'string' &&
+    typeof v.d.sceneId === 'string' &&
+    typeof v.d.x === 'number' &&
+    typeof v.d.y === 'number' &&
+    typeof v.d.focus === 'boolean'
+  )
+}
+
+export function isRulerShown(v: unknown): v is RulerShownMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.RulerShown &&
+    v.seq === undefined &&
+    isObject(v.d) &&
+    typeof v.d.playerId === 'string' &&
+    typeof v.d.sceneId === 'string' &&
+    Array.isArray(v.d.points) &&
+    v.d.points.every(isPoint)
+  )
+}
+
 export function isTokenCreateAck(v: unknown): v is TokenCreateAckMessage {
   return (
     isObject(v) &&
@@ -714,6 +962,17 @@ export function isChatHistoryAck(v: unknown): v is ChatHistoryAckMessage {
     isObject(v.d) &&
     Array.isArray(v.d.messages) &&
     v.d.messages.every(isChatMessageData)
+  )
+}
+
+export function isCombatChanged(v: unknown): v is CombatChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.CombatChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.sceneId === 'string' &&
+    (v.d.combat === null || isCombat(v.d.combat))
   )
 }
 
@@ -841,6 +1100,47 @@ export function fogResetCommand(id: string, sceneId: string): Envelope {
   return { t: MessageType.FogReset, id, d: { sceneId } }
 }
 
+/** drawingCreateCommand adds a drawing; content is the kind with the data that goes with it. */
+export function drawingCreateCommand(
+  id: string,
+  sceneId: string,
+  content: DrawingContent,
+  color: string,
+): Envelope {
+  return { t: MessageType.DrawingCreate, id, d: { sceneId, ...content, color } }
+}
+
+/** drawingUpdateCommand changes the data (of the kind of the drawing) and/or the color. */
+export function drawingUpdateCommand(
+  id: string,
+  drawingId: string,
+  changes: { data?: DrawingContent['data']; color?: string },
+): Envelope {
+  return { t: MessageType.DrawingUpdate, id, d: { drawingId, ...changes } }
+}
+
+export function drawingDeleteCommand(id: string, drawingId: string): Envelope {
+  return { t: MessageType.DrawingDelete, id, d: { drawingId } }
+}
+
+/** pingPlaceMessage has no id: the server never answers it. focus is for the GM only. */
+export function pingPlaceMessage(sceneId: string, x: number, y: number, focus?: boolean): Envelope {
+  return {
+    t: MessageType.PingPlace,
+    d: focus === undefined ? { sceneId, x, y } : { sceneId, x, y, focus },
+  }
+}
+
+/** rulerUpdateMessage has no id; the server takes 1–50 points and shows them to the others. */
+export function rulerUpdateMessage(sceneId: string, points: [number, number][]): Envelope {
+  return { t: MessageType.RulerUpdate, d: { sceneId, points } }
+}
+
+/** rulerClearMessage has no id. */
+export function rulerClearMessage(sceneId: string): Envelope {
+  return { t: MessageType.RulerClear, d: { sceneId } }
+}
+
 /** chatSendCommand sends a text message; a non-empty to makes it private. */
 export function chatSendCommand(id: string, text: string, to?: string[]): Envelope {
   return { t: MessageType.ChatSend, id, d: to === undefined ? { text } : { text, to } }
@@ -866,4 +1166,58 @@ export function chatHistoryCommand(id: string, before: string, limit?: number): 
     id,
     d: limit === undefined ? { before } : { before, limit },
   }
+}
+
+/** combatCommand is combat.start, combat.end, combat.next or combat.prev of a scene. */
+export function combatCommand(
+  type:
+    | typeof MessageType.CombatStart
+    | typeof MessageType.CombatEnd
+    | typeof MessageType.CombatNext
+    | typeof MessageType.CombatPrev,
+  id: string,
+  sceneId: string,
+): Envelope {
+  return { t: type, id, d: { sceneId } }
+}
+
+export function combatStartCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatStart, id, sceneId)
+}
+
+export function combatEndCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatEnd, id, sceneId)
+}
+
+export function combatAddCommand(id: string, sceneId: string, tokenIds: string[]): Envelope {
+  return { t: MessageType.CombatAdd, id, d: { sceneId, tokenIds } }
+}
+
+export function combatRemoveCommand(id: string, combatantId: string): Envelope {
+  return { t: MessageType.CombatRemove, id, d: { combatantId } }
+}
+
+/** combatSetInitiativeCommand sets the initiative; null clears it. The value is always sent. */
+export function combatSetInitiativeCommand(
+  id: string,
+  combatantId: string,
+  value: number | null,
+): Envelope {
+  return { t: MessageType.CombatSetInitiative, id, d: { combatantId, value } }
+}
+
+export function combatRollInitiativeCommand(id: string, combatantIds: string[]): Envelope {
+  return { t: MessageType.CombatRollInitiative, id, d: { combatantIds } }
+}
+
+export function combatSetHiddenCommand(id: string, combatantId: string, hidden: boolean): Envelope {
+  return { t: MessageType.CombatSetHidden, id, d: { combatantId, hidden } }
+}
+
+export function combatNextCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatNext, id, sceneId)
+}
+
+export function combatPrevCommand(id: string, sceneId: string): Envelope {
+  return combatCommand(MessageType.CombatPrev, id, sceneId)
 }

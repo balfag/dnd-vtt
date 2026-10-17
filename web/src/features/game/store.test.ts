@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
+  ChatMessage,
   PlayerInfo,
   SceneInfo,
   SceneListItem,
@@ -39,6 +40,7 @@ function snapshot(seq = 4): Snapshot {
       scenes: [],
       scene: null,
       chat: [],
+      combat: null,
     },
   }
 }
@@ -184,6 +186,7 @@ describe('game store', () => {
       background: null,
       fog: { enabled: false, ops: [] },
       tokens: [token],
+      drawings: [],
     }
     const list: SceneListItem[] = [
       { id: 's1', name: 'Tavern', sort: 0 },
@@ -281,6 +284,113 @@ describe('game store', () => {
       expect(sceneOf(store)).toEqual(scene)
     })
 
+    function asGm(store: StoreApi<GameState>, activeId: string | null = 's1') {
+      const game = store.getState().game
+      if (game === null) throw new Error('no game')
+      const snap: Snapshot = {
+        seq: store.getState().lastSeq,
+        me: { accountId: 'a1', isGm: true, playerId: 'p1' },
+        game: {
+          ...game,
+          activeSceneId: activeId,
+          combat: null,
+          scenes: [...list, { id: 's3', name: 'Cellar', sort: 2 }],
+        },
+      }
+      store.getState().applySnapshot(snap)
+    }
+    const crypt: SceneView = { ...scene, id: 's2', name: 'Crypt', tokens: [] }
+    const cellar: SceneView = { ...scene, id: 's3', name: 'Cellar', tokens: [] }
+
+    it('a snapshot makes the view the active scene', () => {
+      const store = withScene()
+      expect(store.getState().game?.viewSceneId).toBe('s1')
+      const bare = createGameStore()
+      bare.getState().applySnapshot(snapshot())
+      expect(bare.getState().game?.viewSceneId).toBeNull()
+    })
+
+    it('setViewedScene shows the scene and remembers its id', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(crypt)
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s1')
+    })
+
+    it('a GM who looked at the old active scene follows the activation', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)?.id).toBe('s2')
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a GM who looked at the scene being activated gets it refreshed', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene({ ...crypt, name: 'old' })
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a GM who prepares a third scene keeps it on the canvas', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(cellar)
+      expect(store.getState().game?.viewSceneId).toBe('s3')
+      expect(store.getState().game?.activeSceneId).toBe('s2')
+    })
+
+    it('a player always follows the activation', () => {
+      const store = withScene()
+      store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene: crypt } })
+      expect(sceneOf(store)).toEqual(crypt)
+      expect(store.getState().game?.viewSceneId).toBe('s2')
+    })
+
+    it('scenes.changed without the viewed scene empties the canvas', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      const next = [{ id: 's1', name: 'Tavern', sort: 0 }]
+      store.getState().applyEvent({ t: 'scenes.changed', seq: 5, d: { scenes: next } })
+      expect(sceneOf(store)).toBeNull()
+      expect(store.getState().game?.viewSceneId).toBeNull()
+      expect(store.getState().game?.activeSceneId).toBe('s1')
+    })
+
+    it('scenes.changed keeps the viewed scene that stays in the list', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      const next = [{ id: 's3', name: 'Cellar', sort: 0 }, ...list]
+      store.getState().applyEvent({ t: 'scenes.changed', seq: 5, d: { scenes: next } })
+      expect(sceneOf(store)).toEqual(cellar)
+    })
+
+    it('a GM snapshot of the same game remembers the view from before it', () => {
+      const store = withScene()
+      asGm(store)
+      store.getState().setViewedScene(cellar)
+      asGm(store)
+      expect(store.getState().viewBeforeSync).toBe('s3')
+      expect(store.getState().game?.viewSceneId).toBe('s1')
+      store.getState().clearViewBeforeSync()
+      expect(store.getState().viewBeforeSync).toBeNull()
+    })
+
+    it('a player snapshot remembers no view', () => {
+      const store = withScene()
+      store.getState().applySnapshot(snapshot())
+      expect(store.getState().viewBeforeSync).toBeNull()
+    })
     it('a malformed scene event only advances lastSeq', () => {
       const store = withScene()
       const before = store.getState().game
@@ -421,6 +531,102 @@ describe('game store', () => {
         store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene } })
         expect(store.getState().dragging).toEqual({})
       })
+    })
+  })
+
+  describe('chat', () => {
+    function msg(n: number, text = `m${String(n)}`): ChatMessage {
+      return {
+        id: `m${String(n)}`,
+        createdAt: 1000 + n,
+        authorPlayerId: 'p2',
+        kind: 'text',
+        visibility: 'public',
+        text,
+      }
+    }
+    function range(from: number, to: number): ChatMessage[] {
+      const out: ChatMessage[] = []
+      for (let n = from; n <= to; n++) out.push(msg(n))
+      return out
+    }
+    function withChat(chat: ChatMessage[]): StoreApi<GameState> {
+      const store = createGameStore()
+      const snap = snapshot()
+      if (snap.game === null) throw new Error('no game')
+      snap.game = { ...snap.game, chat }
+      store.getState().applySnapshot(snap)
+      return store
+    }
+    function ids(store: StoreApi<GameState>): string[] {
+      return (store.getState().game?.chat ?? []).map((m) => m.id)
+    }
+
+    it('takes the chat from the snapshot', () => {
+      const store = withChat(range(1, 3))
+      expect(ids(store)).toEqual(['m1', 'm2', 'm3'])
+    })
+
+    it('chat.message appends', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: msg(3) })
+      expect(ids(store)).toEqual(['m1', 'm2', 'm3'])
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('chat.message with a known id is not added twice', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: msg(2, 'again') })
+      expect(ids(store)).toEqual(['m1', 'm2'])
+      expect(store.getState().game?.chat[1]?.text).toBe('m2')
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('a malformed chat.message only advances lastSeq', () => {
+      const store = withChat(range(1, 2))
+      store.getState().applyEvent({ t: 'chat.message', seq: 5, d: { id: 'x' } })
+      expect(ids(store)).toEqual(['m1', 'm2'])
+      expect(store.getState().lastSeq).toBe(5)
+    })
+
+    it('prependHistory puts older messages first, in order, without duplicates', () => {
+      const store = withChat(range(5, 7))
+      store.getState().prependHistory([...range(2, 4), msg(5), msg(4)])
+      expect(ids(store)).toEqual(['m2', 'm3', 'm4', 'm5', 'm6', 'm7'])
+    })
+
+    it('prependHistory without a game changes nothing', () => {
+      const store = createGameStore()
+      store.getState().prependHistory(range(1, 2))
+      expect(store.getState().game).toBeNull()
+    })
+
+    it('the history is not done after a snapshot of 50 messages', () => {
+      const store = withChat(range(1, 50))
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
+    })
+
+    it('the history is done after a snapshot of 10 messages', () => {
+      const store = withChat(range(1, 10))
+      expect(store.getState().game?.chatHistoryDone).toBe(true)
+    })
+
+    it('a full page keeps the history open, a short one finishes it', () => {
+      const store = withChat(range(101, 150))
+      store.getState().prependHistory(range(51, 100))
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
+      store.getState().prependHistory(range(41, 50))
+      expect(store.getState().game?.chatHistoryDone).toBe(true)
+      expect(store.getState().game?.chat).toHaveLength(110)
+    })
+
+    it('a new snapshot resets chatHistoryDone', () => {
+      const store = withChat(range(1, 10))
+      const snap = snapshot()
+      if (snap.game === null) throw new Error('no game')
+      snap.game = { ...snap.game, chat: range(1, 50) }
+      store.getState().applySnapshot(snap)
+      expect(store.getState().game?.chatHistoryDone).toBe(false)
     })
   })
 

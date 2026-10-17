@@ -21,6 +21,7 @@ const snapshot = (seq: number, gameSessionId = 'g1') => ({
       scenes: [],
       scene: null,
       chat: [],
+      combat: null,
     },
   },
 })

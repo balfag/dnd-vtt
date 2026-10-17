@@ -130,7 +130,7 @@ type sceneRow struct {
 }
 
 func (r sceneRow) view() protocol.SceneView {
-	v := protocol.SceneView{ID: r.id, Name: r.name, Width: r.width, Height: r.height, Grid: r.grid, Fog: r.fog, Tokens: []protocol.Token{}}
+	v := protocol.SceneView{ID: r.id, Name: r.name, Width: r.width, Height: r.height, Grid: r.grid, Fog: r.fog, Tokens: []protocol.Token{}, Drawings: []protocol.Drawing{}}
 	if r.background.Valid {
 		v.Background = &protocol.AssetRef{AssetID: r.background.String, URL: "/assets/" + r.background.String}
 	}
@@ -457,7 +457,7 @@ func (s *Service) ReorderScenes(ctx context.Context, campaignID string, ids []st
 }
 
 // ActivateScene makes the scene the active one of the campaign. The view holds
-// every token of the scene; render it per viewer with sceneFor.
+// every token and drawing of the scene; render it per viewer with sceneFor.
 func (s *Service) ActivateScene(ctx context.Context, campaignID, sceneID string) (protocol.SceneView, error) {
 	var view protocol.SceneView
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -469,7 +469,10 @@ func (s *Service) ActivateScene(ctx context.Context, campaignID, sceneID string)
 			return fmt.Errorf("activate scene: %w", err)
 		}
 		view = row.view()
-		view.Tokens, err = listTokens(ctx, tx, sceneID)
+		if view.Tokens, err = listTokens(ctx, tx, sceneID); err != nil {
+			return err
+		}
+		view.Drawings, err = listDrawings(ctx, tx, sceneID)
 		return err
 	})
 	return view, err
@@ -482,7 +485,10 @@ func (s *Service) ViewScene(ctx context.Context, campaignID, sceneID string) (pr
 		return protocol.SceneView{}, err
 	}
 	view := row.view()
-	view.Tokens, err = listTokens(ctx, s.db, sceneID)
+	if view.Tokens, err = listTokens(ctx, s.db, sceneID); err != nil {
+		return protocol.SceneView{}, err
+	}
+	view.Drawings, err = listDrawings(ctx, s.db, sceneID)
 	return view, err
 }
 

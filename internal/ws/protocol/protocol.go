@@ -186,7 +186,7 @@ type FogOp struct {
 	Shape Shape  `json:"shape"`
 }
 
-// SceneView is a scene as a client sees it. Drawings join in #52.
+// SceneView is a scene as a client sees it.
 type SceneView struct {
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
@@ -195,7 +195,8 @@ type SceneView struct {
 	Grid       Grid      `json:"grid"`
 	Background *AssetRef `json:"background"` // null: no background
 	Fog        Fog       `json:"fog"`
-	Tokens     []Token   `json:"tokens"` // visible to the viewer, by z then id; never null
+	Tokens     []Token   `json:"tokens"`   // visible to the viewer, by z then id; never null
+	Drawings   []Drawing `json:"drawings"` // all of the scene, by id; never null
 }
 
 // SceneInfo is a scene without its tokens and drawings: the data of scene.changed.
@@ -227,6 +228,7 @@ type SnapshotTable struct {
 	Scenes        []SceneListItem `json:"scenes"`        // GM only; [] for players, never null
 	Scene         *SceneView      `json:"scene"`         // the active scene rendered for the viewer; null: none
 	Chat          []ChatMessage   `json:"chat"`          // last 50 visible to the viewer, ascending; never null
+	Combat        *Combat         `json:"combat"`        // the tracker of the active scene for the viewer; null: none
 }
 
 // SceneCreate is the data of scene.create.
@@ -480,6 +482,90 @@ func (c FogChanged) MarshalJSON() ([]byte, error) {
 	}{c.SceneID, c.Fog, c.Tokens})
 }
 
+// Message types of the drawings, pings and rulers of M1.
+const (
+	TypeDrawingCreate  = "drawing.create"
+	TypeDrawingUpdate  = "drawing.update"
+	TypeDrawingDelete  = "drawing.delete"
+	TypeDrawingChanged = "drawing.changed"
+	TypeDrawingRemoved = "drawing.removed"
+	TypePingPlace      = "ping.place"
+	TypePingShown      = "ping.shown"
+	TypeRulerUpdate    = "ruler.update"
+	TypeRulerClear     = "ruler.clear"
+	TypeRulerShown     = "ruler.shown"
+)
+
+// Drawing is a drawing or an area template of a scene.
+type Drawing struct {
+	ID             string          `json:"id"`
+	SceneID        string          `json:"sceneId"`
+	Kind           string          `json:"kind"` // freehand | rect | circle | text | template
+	Data           json.RawMessage `json:"data"` // validated, stored and sent as given
+	Color          string          `json:"color"`
+	AuthorPlayerID string          `json:"authorPlayerId"`
+}
+
+// DrawingCreate is the data of drawing.create.
+type DrawingCreate struct {
+	SceneID string          `json:"sceneId"`
+	Kind    string          `json:"kind"`
+	Data    json.RawMessage `json:"data"`
+	Color   string          `json:"color"`
+}
+
+// DrawingCreateAck is the data of the ack to drawing.create.
+type DrawingCreateAck struct {
+	DrawingID string `json:"drawingId"`
+}
+
+// DrawingUpdate is the data of drawing.update; absent fields stay.
+type DrawingUpdate struct {
+	DrawingID string          `json:"drawingId"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Color     *string         `json:"color,omitempty"`
+}
+
+// DrawingRef is the data of drawing.delete and drawing.removed.
+type DrawingRef struct {
+	DrawingID string `json:"drawingId"`
+}
+
+// DrawingChanged is the data of drawing.changed.
+type DrawingChanged struct {
+	Drawing Drawing `json:"drawing"`
+}
+
+// PingPlace is the data of ping.place; Focus (GM only) moves the cameras.
+type PingPlace struct {
+	SceneID string  `json:"sceneId"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Focus   bool    `json:"focus,omitempty"`
+}
+
+// PingShown is the data of ping.shown (no seq).
+type PingShown struct {
+	PlayerID string  `json:"playerId"`
+	SceneID  string  `json:"sceneId"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	Focus    bool    `json:"focus"`
+}
+
+// RulerUpdate is the data of ruler.update. ruler.clear uses SceneRef.
+type RulerUpdate struct {
+	SceneID string       `json:"sceneId"`
+	Points  [][2]float64 `json:"points"`
+}
+
+// RulerShown is the data of ruler.shown (no seq).
+type RulerShown struct {
+	PlayerID string       `json:"playerId"`
+	SceneID  string       `json:"sceneId"`
+	Points   [][2]float64 `json:"points"` // [] when cleared, never null
+}
+
 // Message types of the chat of M1.
 const (
 	TypeChatSend    = "chat.send"
@@ -529,4 +615,71 @@ type ChatMessage struct {
 	To             []string  `json:"to,omitempty"`   // private only
 	Text           string    `json:"text,omitempty"` // text and system
 	Roll           *ChatRoll `json:"roll,omitempty"` // roll only
+}
+
+// Message types of the initiative tracker of M1.
+const (
+	TypeCombatStart          = "combat.start"
+	TypeCombatEnd            = "combat.end"
+	TypeCombatAdd            = "combat.add"
+	TypeCombatRemove         = "combat.remove"
+	TypeCombatSetInitiative  = "combat.setInitiative"
+	TypeCombatRollInitiative = "combat.rollInitiative"
+	TypeCombatSetHidden      = "combat.setHidden"
+	TypeCombatNext           = "combat.next"
+	TypeCombatPrev           = "combat.prev"
+	TypeCombatChanged        = "combat.changed"
+)
+
+// Combatant is a participant of the tracker, as a viewer sees it.
+type Combatant struct {
+	ID         string `json:"id"`
+	TokenID    string `json:"tokenId"`
+	Name       string `json:"name"`
+	Initiative *int   `json:"initiative"` // null: not set
+	Hidden     bool   `json:"hidden"`
+}
+
+// Combat is the tracker of a scene.
+type Combat struct {
+	SceneID         string      `json:"sceneId"`
+	Round           int         `json:"round"`
+	TurnCombatantID *string     `json:"turnCombatantId"` // null: before the first combat.next, or hidden from the viewer
+	Combatants      []Combatant `json:"combatants"`      // turn order, never null
+}
+
+// CombatChanged is the data of combat.changed.
+type CombatChanged struct {
+	SceneID string  `json:"sceneId"`
+	Combat  *Combat `json:"combat"` // null: the fight is over
+}
+
+// CombatAdd is the data of combat.add. combat.start, end, next and prev use SceneRef.
+type CombatAdd struct {
+	SceneID  string   `json:"sceneId"`
+	TokenIDs []string `json:"tokenIds"`
+}
+
+// CombatantRef is the data of combat.remove.
+type CombatantRef struct {
+	CombatantID string `json:"combatantId"`
+}
+
+// CombatSetInitiative is the data of combat.setInitiative. Value is required:
+// a null clears the initiative, an absent field is bad_request, so handlers
+// check it in the raw data.
+type CombatSetInitiative struct {
+	CombatantID string `json:"combatantId"`
+	Value       *int   `json:"value"` // null clears; the field is required
+}
+
+// CombatRollInitiative is the data of combat.rollInitiative.
+type CombatRollInitiative struct {
+	CombatantIDs []string `json:"combatantIds"`
+}
+
+// CombatSetHidden is the data of combat.setHidden.
+type CombatSetHidden struct {
+	CombatantID string `json:"combatantId"`
+	Hidden      bool   `json:"hidden"`
 }

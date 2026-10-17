@@ -25,9 +25,15 @@ func (s *Service) FillSnapshot(ctx context.Context, v ws.Viewer, campaignID stri
 			return err
 		}
 		view.Tokens = all
+		if view.Drawings, err = listDrawings(ctx, s.db, active); err != nil {
+			return err
+		}
 		view = sceneFor(view, v, sceneState{Active: true, Fog: view.Fog})
 		t.ActiveSceneID = &active
 		t.Scene = &view
+	}
+	if t.Combat, err = activeCombat(ctx, s.db, campaignID, v); err != nil {
+		return err
 	}
 	if v.IsGM {
 		t.Scenes, err = listScenes(ctx, s.db, campaignID)

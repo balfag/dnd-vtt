@@ -7,6 +7,8 @@ interface TopBarProps {
   sceneName: string | null
   players: PlayerInfo[]
   isGm: boolean
+  /** onOpenScenes opens the scenes panel; the GM's scene name is its button. */
+  onOpenScenes: () => void
   onLeave: () => void
 }
 
@@ -29,14 +31,32 @@ function Participant({ player }: { player: PlayerInfo }) {
 }
 
 /** TopBar is the strip over the table: campaign, scene on the table, participants, leave. */
-export function TopBar({ campaignName, sceneName, players, isGm, onLeave }: TopBarProps) {
+export function TopBar({
+  campaignName,
+  sceneName,
+  players,
+  isGm,
+  onOpenScenes,
+  onLeave,
+}: TopBarProps) {
   const { t } = useTranslation()
   const first = players[0]
   const rest = players.length - 1
   return (
     <header className="topbar">
       <h1 className="topbar__campaign">{campaignName}</h1>
-      {sceneName !== null && <p className="topbar__scene">{sceneName}</p>}
+      {isGm ? (
+        <button
+          type="button"
+          className="topbar__scene topbar__scene--button"
+          onClick={onOpenScenes}
+        >
+          {sceneName ?? t('scenes.tab')}
+          <span aria-hidden="true"> ▾</span>
+        </button>
+      ) : (
+        sceneName !== null && <p className="topbar__scene">{sceneName}</p>
+      )}
 
       {/* Wide screens list everyone; narrow ones the first participant and "+N". */}
       <ul className="topbar__players topbar__players--all" aria-label={t('table.participants')}>
