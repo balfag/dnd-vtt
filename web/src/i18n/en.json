@@ -116,7 +116,7 @@
       "label": "Scene “{{name}}”"
     },
     "tool": {
-      "pan": "Move the map"
+      "select": "Select and move"
     },
     "zoom": {
       "in": "Zoom in",
@@ -140,6 +140,12 @@
     },
     "participants": "Participants",
     "more": "+{{count}}",
+    "token": {
+      "distance": "{{ft}} ft",
+      "selected": "Selected token “{{name}}”",
+      "unnamed": "Selected an unnamed token",
+      "moveFailed": "The token could not be moved and went back"
+    },
     "section": {
       "map": "Map",
       "chat": "Chat",

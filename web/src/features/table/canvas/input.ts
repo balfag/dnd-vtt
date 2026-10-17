@@ -1,4 +1,7 @@
+import type { Grid, Token } from '../../../shared/protocol'
 import { fit, pan, zoomAt, type Camera, type Point } from './camera'
+import { canMove } from './drag'
+import { snapTokenCenter } from './grid'
 
 // Gestures to camera actions. Pure logic: the component feeds it events and applies the result.
 
@@ -105,4 +108,52 @@ export function onKey(
     default:
       return null
   }
+}
+
+/**
+ * cycleToken picks the next (or previous) token the viewer may move, in the order of z, then id,
+ * wrapping around. With no selection, or a selection that is not in the list, it starts at the first (last).
+ */
+export function cycleToken(
+  tokens: readonly Token[],
+  selectedId: string | null,
+  back: boolean,
+  me: { isGM: boolean; playerId: string | null },
+): string | null {
+  const movable = tokens
+    .filter((t) => canMove(t, me))
+    .sort((a, b) => a.z - b.z || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  if (movable.length === 0) return null
+  const at = movable.findIndex((t) => t.id === selectedId)
+  const next =
+    at < 0
+      ? back
+        ? movable.length - 1
+        : 0
+      : (at + (back ? -1 : 1) + movable.length) % movable.length
+  return movable[next]?.id ?? null
+}
+
+const arrows: Record<string, Point> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+}
+
+/**
+ * stepPosition is the centre of the token one cell away in the arrow's direction, snapped
+ * to the grid; null for other keys, and when the step would leave the scene or not move.
+ */
+export function stepPosition(
+  t: Token,
+  key: string,
+  g: Grid,
+  bounds: { width: number; height: number },
+): Point | null {
+  const dir = arrows[key]
+  if (dir === undefined) return null
+  const to = snapTokenCenter(g, { x: t.x + dir.x * g.sizePx, y: t.y + dir.y * g.sizePx }, t)
+  if (to.x < 0 || to.y < 0 || to.x > bounds.width || to.y > bounds.height) return null
+  return to.x === t.x && to.y === t.y ? null : to
 }

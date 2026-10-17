@@ -9,6 +9,8 @@ import {
   clipSegment,
   hexEdges,
   intersect,
+  cellDistanceFt,
+  snapTokenCenter,
   squareLines,
   type Cell,
 } from './grid'
@@ -228,5 +230,71 @@ describe('intersect', () => {
       h: 5,
     })
     expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 5, h: 5 })).toBeNull()
+  })
+})
+
+describe('snapTokenCenter', () => {
+  const g = gridOf('square') // size 70, offset (13.5, -21)
+  const at = (col: number, row: number): Point => ({ x: 13.5 + col * 70, y: -21 + row * 70 })
+
+  it('puts odd sizes on a cell centre', () => {
+    const near = { x: at(2, 3).x + 20, y: at(2, 3).y + 25 }
+    expect(snapTokenCenter(g, near, { w: 1, h: 1 })).toEqual({
+      x: at(2, 3).x + 35,
+      y: at(2, 3).y + 35,
+    })
+    expect(snapTokenCenter(g, near, { w: 3, h: 3 })).toEqual({
+      x: at(2, 3).x + 35,
+      y: at(2, 3).y + 35,
+    })
+  })
+
+  it('puts even sizes on a cell corner', () => {
+    const near = { x: at(2, 3).x + 20, y: at(2, 3).y + 45 }
+    expect(snapTokenCenter(g, near, { w: 2, h: 2 })).toEqual(at(2, 4))
+  })
+
+  it('snaps each axis by its own size', () => {
+    const near = { x: at(2, 3).x + 20, y: at(2, 3).y + 45 }
+    expect(snapTokenCenter(g, near, { w: 1, h: 2 })).toEqual({ x: at(2, 3).x + 35, y: at(2, 4).y })
+  })
+
+  it.each<Grid['type']>(['hexPointy', 'hexFlat'])('puts a token on a %s cell centre', (type) => {
+    const hex = gridOf(type)
+    const c = cellCenter(hex, { col: 3, row: 2 })
+    const snapped = snapTokenCenter(hex, { x: c.x + 5, y: c.y - 4 }, { w: 2, h: 2 })
+    expect(snapped.x).toBeCloseTo(c.x)
+    expect(snapped.y).toBeCloseTo(c.y)
+  })
+})
+
+describe('cellDistanceFt', () => {
+  const sq = gridOf('square')
+  const centre = (g: Grid, col: number, row: number) => cellCenter(g, { col, row })
+
+  it('counts a square distance by the larger axis', () => {
+    expect(cellDistanceFt(sq, centre(sq, 0, 0), centre(sq, 3, 4))).toBe(20)
+  })
+
+  it('counts every diagonal as one cell', () => {
+    expect(cellDistanceFt(sq, centre(sq, 0, 0), centre(sq, 5, 5))).toBe(25)
+  })
+
+  it('uses the unit of the grid', () => {
+    const g = { ...sq, unitFt: 10 }
+    expect(cellDistanceFt(g, centre(g, 1, 1), centre(g, 4, 2))).toBe(30)
+  })
+
+  it.each<Grid['type']>(['hexPointy', 'hexFlat'])('counts %s steps', (type) => {
+    const g = gridOf(type)
+    // Three steps along the first lattice axis.
+    expect(
+      cellDistanceFt(
+        g,
+        centre(g, 2, 2),
+        centre(g, type === 'hexFlat' ? 2 : 5, type === 'hexFlat' ? 5 : 2),
+      ),
+    ).toBe(15)
+    expect(cellDistanceFt(g, centre(g, 2, 2), centre(g, 2, 2))).toBe(0)
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChatMessage,
   PlayerInfo,
@@ -398,6 +398,139 @@ describe('game store', () => {
       store.getState().applyEvent({ t: 'scenes.changed', seq: 6, d: { scenes: 'x' } })
       expect(store.getState().game).toBe(before)
       expect(store.getState().lastSeq).toBe(6)
+    })
+
+    describe('tokens', () => {
+      const dragging = (x: number, y: number) => ({
+        t: 'token.dragging',
+        d: { tokenId: 't1', x, y },
+      })
+      const changed = (seq: number, tk: Token) => ({ t: 'token.changed', seq, d: { token: tk } })
+      const tokensOf = (store: StoreApi<GameState>) => sceneOf(store)?.tokens ?? []
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('inserts a token of the current scene', () => {
+        const store = withScene()
+        const orc2 = { ...token, id: 't2', name: 'Orc 2' }
+        store.getState().applyEvent(changed(5, orc2))
+        expect(tokensOf(store)).toEqual([token, orc2])
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('replaces a token by id', () => {
+        const store = withScene()
+        const moved = { ...token, x: 99 }
+        store.getState().applyEvent(changed(5, moved))
+        expect(tokensOf(store)).toEqual([moved])
+      })
+
+      it('ignores a token of another scene', () => {
+        const store = withScene()
+        const before = store.getState().game
+        store.getState().applyEvent(changed(5, { ...token, id: 't9', sceneId: 's2' }))
+        expect(store.getState().game).toBe(before)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('removes a token', () => {
+        const store = withScene()
+        store.getState().applyEvent({ t: 'token.removed', seq: 5, d: { tokenId: 't1' } })
+        expect(tokensOf(store)).toEqual([])
+      })
+
+      it('ignores the removal of an unknown token', () => {
+        const store = withScene()
+        const before = store.getState().game
+        store.getState().applyEvent({ t: 'token.removed', seq: 5, d: { tokenId: 'zz' } })
+        expect(store.getState().game).toBe(before)
+      })
+
+      it('fog.changed with tokens replaces the list', () => {
+        const store = withScene()
+        const fog = { enabled: true, ops: [] }
+        const other = { ...token, id: 't7' }
+        store
+          .getState()
+          .applyEvent({ t: 'fog.changed', seq: 5, d: { sceneId: 's1', fog, tokens: [other] } })
+        expect(tokensOf(store)).toEqual([other])
+        expect(sceneOf(store)?.fog).toEqual(fog)
+      })
+
+      it('fog.changed without tokens keeps the list', () => {
+        const store = withScene()
+        const fog = { enabled: true, ops: [] }
+        store.getState().applyEvent({ t: 'fog.changed', seq: 5, d: { sceneId: 's1', fog } })
+        expect(tokensOf(store)).toEqual([token])
+        expect(sceneOf(store)?.fog).toEqual(fog)
+      })
+
+      it('fog.changed for another scene changes nothing', () => {
+        const store = withScene()
+        const before = store.getState().game
+        store.getState().applyEvent({
+          t: 'fog.changed',
+          seq: 5,
+          d: { sceneId: 's2', fog: { enabled: true, ops: [] }, tokens: [] },
+        })
+        expect(store.getState().game).toBe(before)
+      })
+
+      it('records the drag of another client outside lastSeq', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(dragging(30, 40))
+        expect(store.getState().dragging).toEqual({ t1: { x: 30, y: 40, at: 10_000 } })
+        expect(store.getState().lastSeq).toBe(4)
+      })
+
+      it('forgets the drag when the token changes or goes', () => {
+        const store = withScene()
+        store.getState().applyTransient(dragging(30, 40))
+        store.getState().applyEvent(changed(5, { ...token, x: 30, y: 40 }))
+        expect(store.getState().dragging).toEqual({})
+        store.getState().applyTransient(dragging(31, 41))
+        store.getState().applyEvent({ t: 'token.removed', seq: 6, d: { tokenId: 't1' } })
+        expect(store.getState().dragging).toEqual({})
+      })
+
+      it('forgets a drag after 2 s without updates', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(dragging(30, 40))
+        store.getState().pruneDragging(11_999)
+        expect(Object.keys(store.getState().dragging)).toEqual(['t1'])
+        store.getState().pruneDragging(12_000)
+        expect(store.getState().dragging).toEqual({})
+      })
+
+      it('drops stale drags when another transient arrives', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(dragging(30, 40))
+        vi.setSystemTime(12_500)
+        store.getState().applyTransient({ t: 'token.dragging', d: { tokenId: 't2', x: 1, y: 2 } })
+        expect(Object.keys(store.getState().dragging)).toEqual(['t2'])
+      })
+
+      it('ignores a transient it does not know', () => {
+        const store = withScene()
+        store.getState().applyTransient({ t: 'ping.shown', d: {} })
+        store.getState().applyTransient({ t: 'token.dragging', d: { tokenId: 1 } })
+        expect(store.getState().dragging).toEqual({})
+      })
+
+      it('scene.activated forgets drags', () => {
+        const store = withScene()
+        store.getState().applyTransient(dragging(30, 40))
+        store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene } })
+        expect(store.getState().dragging).toEqual({})
+      })
     })
   })
 

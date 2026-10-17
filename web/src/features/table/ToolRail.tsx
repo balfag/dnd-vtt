@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { PanIcon } from './icons'
+import { SelectIcon } from './icons'
 
-/** ToolRail is the tool strip. For now it has one tool: moving the map. */
+/** ToolRail is the tool strip. For now it has one tool: select and move tokens (the map pans by dragging an empty place). */
 export function ToolRail() {
   const { t } = useTranslation()
   return (
@@ -9,16 +9,17 @@ export function ToolRail() {
       className="rail"
       role="toolbar"
       aria-orientation="vertical"
-      aria-label={t('table.tool.pan')}
+      aria-label={t('table.tool.select')}
     >
       <button
         type="button"
         className="rail__button"
-        aria-label={t('table.tool.pan')}
-        title={t('table.tool.pan')}
+        aria-label={t('table.tool.select')}
+        title={t('table.tool.select')}
         aria-pressed="true"
+        aria-keyshortcuts="V"
       >
-        <PanIcon />
+        <SelectIcon />
       </button>
     </div>
   )

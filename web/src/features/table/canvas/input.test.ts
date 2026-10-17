@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { Grid, Token } from '../../../shared/protocol'
 import { screenToWorld, worldToScreen, type Camera } from './camera'
 import {
+  cycleToken,
   KEY_PAN_PX,
   noGesture,
   onKey,
@@ -8,6 +10,7 @@ import {
   pointerDown,
   pointerMove,
   pointerUp,
+  stepPosition,
   zoomCenter,
 } from './input'
 
@@ -124,5 +127,103 @@ describe('keys', () => {
 
   it('returns null for other keys', () => {
     expect(onKey(cam, 'a', viewport, null)).toBeNull()
+  })
+})
+
+function token(over: Partial<Token>): Token {
+  return {
+    id: 't',
+    sceneId: 's1',
+    layer: 'tokens',
+    x: 175,
+    y: 175,
+    w: 1,
+    h: 1,
+    rotation: 0,
+    z: 0,
+    name: '',
+    nameVisibility: 'all',
+    image: null,
+    hidden: false,
+    locked: false,
+    owners: [],
+    bars: [],
+    conditions: [],
+    ...over,
+  }
+}
+
+describe('cycleToken', () => {
+  const gm = { isGM: true, playerId: null }
+  const ann = { isGM: false, playerId: 'p2' }
+  const tokens = [
+    token({ id: 'c', z: 1, owners: ['p2'] }),
+    token({ id: 'b', z: 0, owners: ['p2'] }),
+    token({ id: 'a', z: 0, owners: ['p3'] }),
+    token({ id: 'd', z: 2, owners: ['p2'], locked: true }),
+  ]
+
+  it('goes through the movable tokens by z, then id, and wraps', () => {
+    expect(cycleToken(tokens, null, false, gm)).toBe('a')
+    expect(cycleToken(tokens, 'a', false, gm)).toBe('b')
+    expect(cycleToken(tokens, 'd', false, gm)).toBe('a')
+  })
+
+  it('goes backwards from the last', () => {
+    expect(cycleToken(tokens, null, true, gm)).toBe('d')
+    expect(cycleToken(tokens, 'a', true, gm)).toBe('d')
+    expect(cycleToken(tokens, 'c', true, gm)).toBe('b')
+  })
+
+  it('skips what the player cannot move', () => {
+    expect(cycleToken(tokens, null, false, ann)).toBe('b')
+    expect(cycleToken(tokens, 'b', false, ann)).toBe('c')
+    expect(cycleToken(tokens, 'c', false, ann)).toBe('b')
+  })
+
+  it('starts over when the selection is not movable', () => {
+    expect(cycleToken(tokens, 'a', false, ann)).toBe('b')
+  })
+
+  it('returns null when nothing can be moved', () => {
+    expect(cycleToken(tokens, null, false, { isGM: false, playerId: 'p9' })).toBeNull()
+    expect(cycleToken([], null, false, gm)).toBeNull()
+  })
+})
+
+describe('stepPosition', () => {
+  const grid: Grid = {
+    type: 'square',
+    sizePx: 70,
+    unitFt: 5,
+    offsetX: 0,
+    offsetY: 0,
+    color: '#9aa8b3',
+    visible: true,
+  }
+  const bounds = { width: 700, height: 700 }
+
+  it('moves one cell in the direction of the arrow', () => {
+    const t = token({})
+    expect(stepPosition(t, 'ArrowRight', grid, bounds)).toEqual({ x: 245, y: 175 })
+    expect(stepPosition(t, 'ArrowLeft', grid, bounds)).toEqual({ x: 105, y: 175 })
+    expect(stepPosition(t, 'ArrowUp', grid, bounds)).toEqual({ x: 175, y: 105 })
+    expect(stepPosition(t, 'ArrowDown', grid, bounds)).toEqual({ x: 175, y: 245 })
+  })
+
+  it('snaps a token that was off the grid', () => {
+    expect(stepPosition(token({ x: 180, y: 190 }), 'ArrowRight', grid, bounds)).toEqual({
+      x: 245,
+      y: 175,
+    })
+  })
+
+  it('does not step off the scene', () => {
+    expect(stepPosition(token({ x: 665, y: 35 }), 'ArrowRight', grid, bounds)).toBeNull()
+    expect(stepPosition(token({ x: 665, y: 35 }), 'ArrowUp', grid, bounds)).toBeNull()
+  })
+
+  it('ignores other keys', () => {
+    expect(stepPosition(token({}), 'a', grid, bounds)).toBeNull()
   })
 })

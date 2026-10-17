@@ -7,6 +7,7 @@ import {
   isErrorMessage,
   isHelloAck,
   isSnapshot,
+  isTokenDragging,
   MessageType,
   pingCommand,
   type Envelope,
@@ -167,7 +168,10 @@ export class GameConnection {
     }
     if (seq !== undefined) {
       this.handleEvent(env, seq)
+      return
     }
+    // Transient messages have no seq: they bypass the order checks and are never replayed.
+    if (isTokenDragging(env) && this.isSynced()) this.store.getState().applyTransient(env)
   }
 
   private settle(msg: Envelope, re: string): void {

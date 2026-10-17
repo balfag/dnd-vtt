@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
@@ -16,6 +16,7 @@ import { ConnectionNote } from './ConnectionNote'
 import { PrepFrame } from './PrepFrame'
 import { SectionTabs, type Section } from './SectionTabs'
 import { SidePanel } from './SidePanel'
+import { TableAnnouncer, type Announcement } from './TableAnnouncer'
 import { useNarrow } from './useNarrow'
 import { ToolRail } from './ToolRail'
 import { TopBar } from './TopBar'
@@ -74,13 +75,21 @@ export default function TableScreen() {
     if (anonymous) navigate('/login', { replace: true })
   }, [anonymous])
 
+  const connection = useMemo(
+    () =>
+      signedIn
+        ? new GameConnection({ store: gameStore, url: gameSocketUrl(window.location) })
+        : null,
+    [signedIn],
+  )
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
+  const announce = useCallback((text: string, visible: boolean) => {
+    setAnnouncement((prev) => ({ id: (prev?.id ?? 0) + 1, text, visible }))
+  }, [])
+
   useEffect(() => {
-    if (!signedIn) return
+    if (connection === null) return
     gameStore.getState().reset()
-    const connection = new GameConnection({
-      store: gameStore,
-      url: gameSocketUrl(window.location),
-    })
     connection.start()
     connectionRef.current = connection
     if (import.meta.env.DEV) {
@@ -93,7 +102,7 @@ export default function TableScreen() {
       connectionRef.current = null
       if (import.meta.env.DEV) delete window.dndvtt
     }
-  }, [signedIn])
+  }, [connection])
 
   const command = useCallback((type: string, data?: unknown): Promise<unknown> => {
     return (
@@ -101,10 +110,11 @@ export default function TableScreen() {
     )
   }, [])
 
-  const connection = useGame((s) => s.connection)
+  const link = useGame((s) => s.connection)
+  const snapshotMe = useGame((s) => s.me)
   const game = useGame((s) => s.game)
-  const closedReason = connection.state === 'closed' ? connection.reason : null
-  const synced = connection.state === 'synced'
+  const closedReason = link.state === 'closed' ? link.reason : null
+  const synced = link.state === 'synced'
   const isGm = state.status === 'signedIn' && state.me.isGm
   // A synced connection without a game: the game is over, or has not started.
   const noGame = synced && game === null
@@ -175,7 +185,14 @@ export default function TableScreen() {
       />
       <ToolRail />
       <main className="table__stage" inert={narrow && section !== 'map'}>
-        <SceneCanvas scene={scene} emptyText={emptyText} />
+        <SceneCanvas
+          scene={scene}
+          emptyText={emptyText}
+          players={game?.players ?? []}
+          me={{ isGM: isGm, playerId: snapshotMe?.playerId ?? null }}
+          connection={connection}
+          announce={announce}
+        />
         {preparing && (
           <PrepFrame
             viewedName={scene.name}
@@ -186,6 +203,7 @@ export default function TableScreen() {
           />
         )}
         <ConnectionNote />
+        <TableAnnouncer announcement={announcement} />
         {game !== null && scene === null && <p className="table__empty">{emptyText}</p>}
       </main>
       <SidePanel
