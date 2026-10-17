@@ -6,6 +6,8 @@ import (
 	"flag"
 	"os"
 	"testing"
+
+	"github.com/balfag/dnd-vtt/internal/dice"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files in testdata")
@@ -81,6 +83,31 @@ func examples(t *testing.T) map[string]Envelope {
 	cryptForPlayer := crypt
 	cryptForPlayer.Tokens = []Token{goblinForPlayer}
 
+	anna, boris := "01J00000000000000000000PL2", "01J00000000000000000000PL3"
+	chatText := ChatMessage{
+		ID: "01J00000000000000000000CM1", CreatedAt: 1760530100000, AuthorPlayerID: &anna,
+		Kind: "text", Visibility: "public", Text: "Иду к двери",
+	}
+	chatPrivate := ChatMessage{
+		ID: "01J00000000000000000000CM2", CreatedAt: 1760530200000, AuthorPlayerID: &anna,
+		Kind: "text", Visibility: "private", To: []string{boris}, Text: "Давай обойдём сзади",
+	}
+	rollResult := dice.Result{
+		Formula: "2d20kh1+5", Total: 19,
+		Terms: []dice.TermResult{
+			{Sign: 1, Value: 14, Dice: &dice.DiceGroup{Count: 2, Sides: 20, Dice: []dice.Die{{Value: 14}, {Value: 6, Dropped: true}}}},
+			{Sign: 1, Value: 5},
+		},
+	}
+	chatRoll := ChatMessage{
+		ID: "01J00000000000000000000CM3", CreatedAt: 1760530300000, AuthorPlayerID: &anna,
+		Kind: "roll", Visibility: "public", Roll: &ChatRoll{Formula: "2d20kh1+5", Label: "Восприятие", Result: &rollResult},
+	}
+	chatBlindAuthor := ChatMessage{
+		ID: "01J00000000000000000000CM4", CreatedAt: 1760530400000, AuthorPlayerID: &anna,
+		Kind: "roll", Visibility: "blind", Roll: &ChatRoll{Formula: "2d20kh1+5", Label: "Скрытность"},
+	}
+
 	return map[string]Envelope{
 		"hello_command": with(mustNew(t, TypeHello, Hello{GameSessionID: "01J00000000000000000000GS1", LastSeq: 17}),
 			func(e *Envelope) { e.ID = "c-1" }),
@@ -101,7 +128,7 @@ func examples(t *testing.T) map[string]Envelope {
 					{ID: "01J00000000000000000000PL1", DisplayName: "master", Color: "#e53935", Role: "gm", Online: true},
 					{ID: "01J00000000000000000000PL2", DisplayName: "Анна", Color: "#1e88e5", Role: "player", Online: true},
 				},
-				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavernForPlayer},
+				SnapshotTable: SnapshotTable{ActiveSceneID: strPtr(tavern.ID), Scenes: []SceneListItem{}, Scene: &tavernForPlayer, Chat: []ChatMessage{chatText, chatRoll}},
 			},
 		}),
 		"snapshot_gm_scenes": mustNew(t, TypeSnapshot, Snapshot{
@@ -118,6 +145,7 @@ func examples(t *testing.T) map[string]Envelope {
 					ActiveSceneID: strPtr(crypt.ID),
 					Scenes:        []SceneListItem{{ID: tavern.ID, Name: tavern.Name, Sort: 0}, {ID: crypt.ID, Name: crypt.Name, Sort: 1}},
 					Scene:         &crypt,
+					Chat:          []ChatMessage{},
 				},
 			},
 		}),
@@ -179,6 +207,18 @@ func examples(t *testing.T) map[string]Envelope {
 			func(e *Envelope) { e.Seq = 26 }),
 		"fog_changed_player_empty": with(mustNew(t, TypeFogChanged, FogChanged{SceneID: crypt.ID, Fog: crypt.Fog, Tokens: []Token{}}),
 			func(e *Envelope) { e.Seq = 26 }),
+		"chat_send_command": with(mustNew(t, TypeChatSend, ChatSend{Text: "Давай обойдём сзади", To: []string{boris}}),
+			func(e *Envelope) { e.ID = "c-13" }),
+		"roll_request_command": with(mustNew(t, TypeRollRequest, RollRequest{Formula: "2d20kh1+5", Visibility: "blind", Label: "Скрытность"}),
+			func(e *Envelope) { e.ID = "c-14" }),
+		"chat_history_command": with(mustNew(t, TypeChatHistory, ChatHistory{Before: chatRoll.ID, Limit: 20}),
+			func(e *Envelope) { e.ID = "c-15" }),
+		"chat_message_text":              with(mustNew(t, TypeChatMessage, chatText), func(e *Envelope) { e.Seq = 27 }),
+		"chat_message_private":           with(mustNew(t, TypeChatMessage, chatPrivate), func(e *Envelope) { e.Seq = 28 }),
+		"chat_message_roll":              with(mustNew(t, TypeChatMessage, chatRoll), func(e *Envelope) { e.Seq = 29 }),
+		"chat_message_roll_blind_author": with(mustNew(t, TypeChatMessage, chatBlindAuthor), func(e *Envelope) { e.Seq = 30 }),
+		"chat_history_ack": with(mustNew(t, TypeAck, ChatHistoryAck{Messages: []ChatMessage{chatText, chatPrivate, chatRoll}}),
+			func(e *Envelope) { e.Re = "c-15" }),
 		"noop":              with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
 		"ping":              with(mustNew(t, TypePing, nil), func(e *Envelope) { e.ID = "p-5" }),
 		"pong":              with(mustNew(t, TypePong, nil), func(e *Envelope) { e.Re = "p-5" }),
@@ -239,9 +279,12 @@ func TestGolden(t *testing.T) {
 			case TypeHello:
 				data = &Hello{}
 			case TypeAck:
-				if name == "scene_view_ack" {
+				switch name {
+				case "scene_view_ack":
 					data = &SceneViewAck{}
-				} else {
+				case "chat_history_ack":
+					data = &ChatHistoryAck{}
+				default:
 					data = &HelloAck{}
 				}
 			case TypeSceneCreate:
@@ -270,6 +313,14 @@ func TestGolden(t *testing.T) {
 				data = &FogShape{}
 			case TypeFogChanged:
 				data = &FogChanged{}
+			case TypeChatSend:
+				data = &ChatSend{}
+			case TypeRollRequest:
+				data = &RollRequest{}
+			case TypeChatHistory:
+				data = &ChatHistory{}
+			case TypeChatMessage:
+				data = &ChatMessage{}
 			case TypeSnapshot:
 				data = &Snapshot{}
 			case TypePresence:

@@ -1,0 +1,15 @@
+{
+  "t": "chat.message",
+  "seq": 30,
+  "d": {
+    "id": "01J00000000000000000000CM4",
+    "createdAt": 1760530400000,
+    "authorPlayerId": "01J00000000000000000000PL2",
+    "kind": "roll",
+    "visibility": "blind",
+    "roll": {
+      "formula": "2d20kh1+5",
+      "label": "Скрытность"
+    }
+  }
+}

@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import chatHistoryAck from '../../../../internal/ws/protocol/testdata/chat_history_ack.json'
+import chatHistoryCommandExample from '../../../../internal/ws/protocol/testdata/chat_history_command.json'
+import chatMessagePrivate from '../../../../internal/ws/protocol/testdata/chat_message_private.json'
+import chatMessageRoll from '../../../../internal/ws/protocol/testdata/chat_message_roll.json'
+import chatMessageRollBlindAuthor from '../../../../internal/ws/protocol/testdata/chat_message_roll_blind_author.json'
+import chatMessageText from '../../../../internal/ws/protocol/testdata/chat_message_text.json'
+import chatSendExample from '../../../../internal/ws/protocol/testdata/chat_send_command.json'
 import errorBadRequest from '../../../../internal/ws/protocol/testdata/error_bad_request.json'
 import fogChangedGm from '../../../../internal/ws/protocol/testdata/fog_changed_gm.json'
 import fogChangedPlayer from '../../../../internal/ws/protocol/testdata/fog_changed_player.json'
@@ -22,6 +29,7 @@ import sceneCreateExample from '../../../../internal/ws/protocol/testdata/scene_
 import sceneUpdateExample from '../../../../internal/ws/protocol/testdata/scene_update_command.json'
 import sceneViewAck from '../../../../internal/ws/protocol/testdata/scene_view_ack.json'
 import scenesChanged from '../../../../internal/ws/protocol/testdata/scenes_changed.json'
+import rollRequestExample from '../../../../internal/ws/protocol/testdata/roll_request_command.json'
 import snapshotGmNoGame from '../../../../internal/ws/protocol/testdata/snapshot_gm_no_game.json'
 import snapshotGmScenes from '../../../../internal/ws/protocol/testdata/snapshot_gm_scenes.json'
 import snapshotPlayer from '../../../../internal/ws/protocol/testdata/snapshot_player.json'
@@ -34,11 +42,15 @@ import tokenMoveExample from '../../../../internal/ws/protocol/testdata/token_mo
 import tokenRemoved from '../../../../internal/ws/protocol/testdata/token_removed.json'
 import tokenUpdateExample from '../../../../internal/ws/protocol/testdata/token_update_command.json'
 import {
+  chatHistoryCommand,
+  chatSendCommand,
   fogHideCommand,
   fogResetCommand,
   fogRevealCommand,
   fogSetCommand,
   helloCommand,
+  isChatHistoryAck,
+  isChatMessage,
   isEnvelope,
   isFogChanged,
   isErrorMessage,
@@ -57,6 +69,7 @@ import {
   isTokenDragging,
   isTokenRemoved,
   pingCommand,
+  rollRequestCommand,
   sceneCreateCommand,
   sceneReorderCommand,
   sceneRefCommand,
@@ -88,6 +101,11 @@ describe('server examples pass their guards', () => {
     ['token_changed_player', tokenChangedPlayer, isTokenChanged],
     ['token_removed', tokenRemoved, isTokenRemoved],
     ['token_dragging', tokenDragging, isTokenDragging],
+    ['chat_message_text', chatMessageText, isChatMessage],
+    ['chat_message_private', chatMessagePrivate, isChatMessage],
+    ['chat_message_roll', chatMessageRoll, isChatMessage],
+    ['chat_message_roll_blind_author', chatMessageRollBlindAuthor, isChatMessage],
+    ['chat_history_ack', chatHistoryAck, isChatHistoryAck],
     ['presence_offline', presenceOffline, isPresence],
     ['presence_new_player', presenceNewPlayer, isPresence],
     ['noop', noop, isNoop],
@@ -114,6 +132,9 @@ describe('server examples pass their guards', () => {
       fogRevealRect,
       fogHidePolygon,
       fogRevealCircle,
+      chatSendExample,
+      rollRequestExample,
+      chatHistoryCommandExample,
     ]) {
       expect(isEnvelope(example)).toBe(true)
     }
@@ -260,6 +281,38 @@ describe('command builders match the examples', () => {
     })
   })
 
+  it('chat commands', () => {
+    expect(
+      chatSendCommand('c-13', 'Давай обойдём сзади', ['01J00000000000000000000PL3']),
+    ).toStrictEqual(chatSendExample)
+    expect(chatSendCommand('c-1', 'hi')).toStrictEqual({
+      t: 'chat.send',
+      id: 'c-1',
+      d: { text: 'hi' },
+    })
+    expect(rollRequestCommand('c-14', '2d20kh1+5', 'blind', 'Скрытность')).toStrictEqual(
+      rollRequestExample,
+    )
+    expect(rollRequestCommand('c-2', '1d20', 'public')).toStrictEqual({
+      t: 'roll.request',
+      id: 'c-2',
+      d: { formula: '1d20', visibility: 'public' },
+    })
+    expect(chatHistoryCommand('c-15', '01J00000000000000000000CM3', 20)).toStrictEqual(
+      chatHistoryCommandExample,
+    )
+    expect(chatHistoryCommand('c-3', 'M1')).toStrictEqual({
+      t: 'chat.history',
+      id: 'c-3',
+      d: { before: 'M1' },
+    })
+  })
+
+  it('a blind roll of its author has no result', () => {
+    expect('result' in chatMessageRollBlindAuthor.d.roll).toBe(false)
+    expect('result' in chatMessageRoll.d.roll).toBe(true)
+  })
+
   it('isFogChanged tells the GM frame from the player frame', () => {
     expect('tokens' in fogChangedGm.d).toBe(false)
     expect(fogChangedPlayerEmpty.d.tokens).toStrictEqual([])
@@ -403,6 +456,56 @@ describe('guards reject damaged messages', () => {
       'scene tokens is null',
       isSceneActivated,
       corrupt(sceneActivated, ['d', 'scene', 'tokens'], null),
+    ],
+    ['chat message without seq', isChatMessage, corrupt(chatMessageText, ['seq'], undefined, true)],
+    [
+      'roll message without a roll',
+      isChatMessage,
+      corrupt(chatMessageRoll, ['d', 'roll'], undefined, true),
+    ],
+    ['text message with a roll', isChatMessage, corrupt(chatMessageText, ['d', 'roll'], {})],
+    [
+      'private message without recipients',
+      isChatMessage,
+      corrupt(chatMessagePrivate, ['d', 'to'], undefined, true),
+    ],
+    ['private message with empty to', isChatMessage, corrupt(chatMessagePrivate, ['d', 'to'], [])],
+    [
+      'public message with recipients',
+      isChatMessage,
+      corrupt(chatMessageText, ['d', 'to'], ['01J00000000000000000000PL3']),
+    ],
+    ['unknown visibility', isChatMessage, corrupt(chatMessageText, ['d', 'visibility'], 'friends')],
+    ['unknown kind', isChatMessage, corrupt(chatMessageText, ['d', 'kind'], 'emote')],
+    [
+      'author is missing',
+      isChatMessage,
+      corrupt(chatMessageText, ['d', 'authorPlayerId'], undefined, true),
+    ],
+    [
+      'die value is 0',
+      isChatMessage,
+      corrupt(
+        chatMessageRoll,
+        ['d', 'roll', 'result', 'terms', '0', 'dice', 'dice', '0', 'value'],
+        0,
+      ),
+    ],
+    [
+      'history messages is null',
+      isChatHistoryAck,
+      corrupt(chatHistoryAck, ['d', 'messages'], null),
+    ],
+    [
+      'history has a damaged message',
+      isChatHistoryAck,
+      corrupt(chatHistoryAck, ['d', 'messages', '0', 'kind'], 'emote'),
+    ],
+    ['snapshot chat is null', isSnapshot, corrupt(snapshotPlayer, ['d', 'game', 'chat'], null)],
+    [
+      'snapshot chat has a damaged message',
+      isSnapshot,
+      corrupt(snapshotPlayer, ['d', 'game', 'chat', '0', 'visibility'], 'friends'),
     ],
     ['noop seq is 0', isNoop, corrupt(noop, ['seq'], 0)],
     ['noop has data', isNoop, corrupt(noop, ['d'], {})],

@@ -17,7 +17,9 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/chat"
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/dice"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
 	"github.com/balfag/dnd-vtt/internal/vtt"
@@ -63,6 +65,9 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 	vttSvc := vtt.NewService(db, vtt.Options{})
 	vtt.Register(hub, vttSvc)
 	hub.AddSnapshotSource(vttSvc)
+	chatSvc := chat.NewService(db, chat.Options{})
+	chat.Register(hub, chatSvc, dice.CryptoRoller())
+	hub.AddSnapshotSource(chatSvc)
 	return &App{
 		cfg:         cfg,
 		logger:      logger,

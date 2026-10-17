@@ -29,6 +29,10 @@ export const MessageType = {
   FogHide: 'fog.hide',
   FogReset: 'fog.reset',
   FogChanged: 'fog.changed',
+  ChatSend: 'chat.send',
+  RollRequest: 'roll.request',
+  ChatHistory: 'chat.history',
+  ChatMessage: 'chat.message',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -154,6 +158,58 @@ export interface SceneListItem {
   name: string
   sort: number
 }
+/** DiceDie is one rolled die. */
+export interface DiceDie {
+  value: number
+  /** Removed by kh/kl/dh/dl. */
+  dropped?: boolean
+  /** The original value when the die was rerolled. */
+  rerolledFrom?: number
+  /** Added by an explosion. */
+  exploded?: boolean
+}
+export interface DiceGroup {
+  /** Dice before explosions. */
+  count: number
+  sides: number
+  dice: DiceDie[]
+}
+/** DiceTerm is one summand: a constant, or a rolled dice group. */
+export interface DiceTerm {
+  sign: 1 | -1
+  /** The constant, or the sum of the kept dice. */
+  value: number
+  dice?: DiceGroup
+}
+export interface DiceResult {
+  /** Canonical. */
+  formula: string
+  total: number
+  terms: DiceTerm[]
+}
+export type RollVisibility = 'public' | 'gm' | 'self' | 'blind'
+export interface ChatRoll {
+  /** Canonical. */
+  formula: string
+  label: string
+  /** Absent for the author of a blind roll. */
+  result?: DiceResult
+}
+/** ChatMessage is the data of chat.message and an item of the snapshot and of the history. */
+export interface ChatMessage {
+  id: string
+  createdAt: number
+  /** null for system messages. */
+  authorPlayerId: string | null
+  kind: 'text' | 'roll' | 'system'
+  visibility: 'public' | 'private' | RollVisibility
+  /** Private messages only. */
+  to?: string[]
+  /** Text and system messages. */
+  text?: string
+  /** Roll messages only. */
+  roll?: ChatRoll
+}
 export interface SnapshotGame {
   gameSessionId: string
   startedAt: number
@@ -163,6 +219,8 @@ export interface SnapshotGame {
   /** The GM gets every scene; a player gets []. */
   scenes: SceneListItem[]
   scene: SceneView | null
+  /** The last 50 messages visible to the viewer, ascending. */
+  chat: ChatMessage[]
 }
 export interface Snapshot {
   seq: number
@@ -203,6 +261,8 @@ export type TokenDraggingMessage = {
 }
 export type TokenCreateAckMessage = { t: 'ack'; re: string; d: { tokenId: string } }
 export type SceneViewAckMessage = { t: 'ack'; re: string; d: { scene: SceneView } }
+export type ChatMessageEvent = { t: 'chat.message'; seq: number; d: ChatMessage }
+export type ChatHistoryAckMessage = { t: 'ack'; re: string; d: { messages: ChatMessage[] } }
 export type PongMessage = { t: 'pong'; re: string }
 export type ErrorMessage = { t: 'error'; re?: string; d: ErrorData }
 
@@ -404,6 +464,75 @@ function isSnapshotMe(v: unknown): v is SnapshotMe {
   )
 }
 
+function isDiceDie(v: unknown): v is DiceDie {
+  return (
+    isObject(v) &&
+    isInteger(v.value, 1) &&
+    (v.dropped === undefined || typeof v.dropped === 'boolean') &&
+    (v.rerolledFrom === undefined || isInteger(v.rerolledFrom, 1)) &&
+    (v.exploded === undefined || typeof v.exploded === 'boolean')
+  )
+}
+
+function isDiceGroup(v: unknown): v is DiceGroup {
+  return (
+    isObject(v) &&
+    isInteger(v.count, 1) &&
+    isInteger(v.sides, 2) &&
+    Array.isArray(v.dice) &&
+    v.dice.every(isDiceDie)
+  )
+}
+
+function isDiceTerm(v: unknown): v is DiceTerm {
+  return (
+    isObject(v) &&
+    (v.sign === 1 || v.sign === -1) &&
+    isInteger(v.value, 0) &&
+    (v.dice === undefined || isDiceGroup(v.dice))
+  )
+}
+
+function isDiceResult(v: unknown): v is DiceResult {
+  return (
+    isObject(v) &&
+    typeof v.formula === 'string' &&
+    typeof v.total === 'number' &&
+    Number.isInteger(v.total) &&
+    Array.isArray(v.terms) &&
+    v.terms.every(isDiceTerm)
+  )
+}
+
+function isChatRoll(v: unknown): v is ChatRoll {
+  return (
+    isObject(v) &&
+    typeof v.formula === 'string' &&
+    typeof v.label === 'string' &&
+    (v.result === undefined || isDiceResult(v.result))
+  )
+}
+
+const chatKinds: readonly unknown[] = ['text', 'roll', 'system']
+const chatVisibilities: readonly unknown[] = ['public', 'private', 'gm', 'self', 'blind']
+
+/** isChatMessageData checks a message and that its parts agree: a roll has a roll, a private message has recipients. */
+function isChatMessageData(v: unknown): v is ChatMessage {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    isInteger(v.createdAt, 0) &&
+    (v.authorPlayerId === null || typeof v.authorPlayerId === 'string') &&
+    chatKinds.includes(v.kind) &&
+    chatVisibilities.includes(v.visibility) &&
+    (v.to === undefined || isStringArray(v.to)) &&
+    (v.text === undefined || typeof v.text === 'string') &&
+    (v.roll === undefined || isChatRoll(v.roll)) &&
+    (v.kind === 'roll') === (v.roll !== undefined) &&
+    (v.visibility === 'private') === (v.to !== undefined && v.to.length > 0)
+  )
+}
+
 function isSnapshotGame(v: unknown): v is SnapshotGame {
   return (
     isObject(v) &&
@@ -417,7 +546,9 @@ function isSnapshotGame(v: unknown): v is SnapshotGame {
     (v.activeSceneId === null || typeof v.activeSceneId === 'string') &&
     Array.isArray(v.scenes) &&
     v.scenes.every(isSceneListItem) &&
-    (v.scene === null || isSceneView(v.scene))
+    (v.scene === null || isSceneView(v.scene)) &&
+    Array.isArray(v.chat) &&
+    v.chat.every(isChatMessageData)
   )
 }
 
@@ -569,6 +700,23 @@ export function isSceneViewAck(v: unknown): v is SceneViewAckMessage {
   )
 }
 
+export function isChatMessage(v: unknown): v is ChatMessageEvent {
+  return (
+    isObject(v) && v.t === MessageType.ChatMessage && isInteger(v.seq, 1) && isChatMessageData(v.d)
+  )
+}
+
+export function isChatHistoryAck(v: unknown): v is ChatHistoryAckMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.Ack &&
+    typeof v.re === 'string' &&
+    isObject(v.d) &&
+    Array.isArray(v.d.messages) &&
+    v.d.messages.every(isChatMessageData)
+  )
+}
+
 export function isPong(v: unknown): v is PongMessage {
   return isObject(v) && v.t === MessageType.Pong && typeof v.re === 'string'
 }
@@ -691,4 +839,31 @@ export function fogHideCommand(id: string, sceneId: string, shape: Shape): Envel
 /** fogResetCommand removes every operation; enabled stays. */
 export function fogResetCommand(id: string, sceneId: string): Envelope {
   return { t: MessageType.FogReset, id, d: { sceneId } }
+}
+
+/** chatSendCommand sends a text message; a non-empty to makes it private. */
+export function chatSendCommand(id: string, text: string, to?: string[]): Envelope {
+  return { t: MessageType.ChatSend, id, d: to === undefined ? { text } : { text, to } }
+}
+
+export function rollRequestCommand(
+  id: string,
+  formula: string,
+  visibility: RollVisibility,
+  label?: string,
+): Envelope {
+  return {
+    t: MessageType.RollRequest,
+    id,
+    d: label === undefined ? { formula, visibility } : { formula, visibility, label },
+  }
+}
+
+/** chatHistoryCommand asks for the messages before the message with the id before. */
+export function chatHistoryCommand(id: string, before: string, limit?: number): Envelope {
+  return {
+    t: MessageType.ChatHistory,
+    id,
+    d: limit === undefined ? { before } : { before, limit },
+  }
 }

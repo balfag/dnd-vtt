@@ -31,6 +31,7 @@ function snapshot(seq = 4): Snapshot {
       activeSceneId: null,
       scenes: [],
       scene: null,
+      chat: [],
     },
   }
 }
