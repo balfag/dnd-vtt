@@ -337,3 +337,45 @@ func TestPlayerSeesTokenImageOnlyInTheRevealedArea(t *testing.T) {
 	}
 	check("fog on, token revealed", true)
 }
+
+func TestFogIsAppliedToTokensInSceneActivated(t *testing.T) {
+	tb := newTable(t)
+	tb.scene("Tavern") // active
+	crypt := tb.scene("Crypt")
+	a, b, gm := tb.trio()
+
+	// The fog is built on the inactive scene: nothing the players see changes.
+	fogCommand(t, gm, "fog.set", "c-1", fmt.Sprintf(`{"sceneId":%q,"enabled":true}`, crypt))
+	fogCommand(t, gm, "fog.reveal", "c-2", fmt.Sprintf(`{"sceneId":%q,"shape":%s}`, crypt, rectAround))
+	seen, _ := createToken(t, gm, "c-3", fmt.Sprintf(`{"sceneId":%q,"x":500,"y":500,"name":"ZZSEEN"}`, crypt))
+	fogged, _ := createToken(t, gm, "c-4", fmt.Sprintf(`{"sceneId":%q,"x":2500,"y":2000,"name":"ZZFOGGED"}`, crypt))
+
+	for range 4 { // sync.noop for each change on the inactive scene
+		a.recv()
+		b.recv()
+	}
+
+	gm.send("scene.activate", "c-5", fmt.Sprintf(`{"sceneId":%q}`, crypt))
+	var sg protocol.SceneActivated
+	if err := json.Unmarshal(gm.want(protocol.TypeSceneActivated).D, &sg); err != nil {
+		t.Fatal(err)
+	}
+	gm.wantAck("c-5")
+	sameIDs(t, "GM tokens", ids(sg.Scene.Tokens), []string{seen, fogged})
+
+	for name, cl := range map[string]*client{"A": a, "B": b} {
+		var s protocol.SceneActivated
+		if err := json.Unmarshal(cl.want(protocol.TypeSceneActivated).D, &s); err != nil {
+			t.Fatal(err)
+		}
+		sameIDs(t, name+" tokens", ids(s.Scene.Tokens), []string{seen})
+		if !s.Scene.Fog.Enabled {
+			t.Errorf("%s: fog is not enabled in scene.activated", name)
+		}
+		for _, f := range cl.frames {
+			if strings.Contains(f, fogged) || strings.Contains(f, "ZZFOGGED") {
+				t.Errorf("a token in the fog leaked to %s: %s", name, f)
+			}
+		}
+	}
+}
