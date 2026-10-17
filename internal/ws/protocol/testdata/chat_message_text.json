@@ -1,0 +1,12 @@
+{
+  "t": "chat.message",
+  "seq": 27,
+  "d": {
+    "id": "01J00000000000000000000CM1",
+    "createdAt": 1760530100000,
+    "authorPlayerId": "01J00000000000000000000PL2",
+    "kind": "text",
+    "visibility": "public",
+    "text": "Иду к двери"
+  }
+}

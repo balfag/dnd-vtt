@@ -352,7 +352,7 @@ func (h *Hub) snapshotLocked(ctx context.Context, cn *conn) (protocol.Snapshot, 
 		infos = append(infos, playerInfo(p, online[p.ID]))
 	}
 	// An empty table first; the sources fill their parts of it in order.
-	table := protocol.SnapshotTable{Scenes: []protocol.SceneListItem{}}
+	table := protocol.SnapshotTable{Scenes: []protocol.SceneListItem{}, Chat: []protocol.ChatMessage{}}
 	for _, src := range h.snapshotSources {
 		if err := src.FillSnapshot(ctx, viewerLocked(cn), h.state.campaignID, &table); err != nil {
 			return protocol.Snapshot{}, err

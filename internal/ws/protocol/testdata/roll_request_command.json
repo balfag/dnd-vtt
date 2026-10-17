@@ -1,0 +1,9 @@
+{
+  "t": "roll.request",
+  "id": "c-14",
+  "d": {
+    "formula": "2d20kh1+5",
+    "visibility": "blind",
+    "label": "Скрытность"
+  }
+}

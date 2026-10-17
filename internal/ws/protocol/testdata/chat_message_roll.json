@@ -1,0 +1,42 @@
+{
+  "t": "chat.message",
+  "seq": 29,
+  "d": {
+    "id": "01J00000000000000000000CM3",
+    "createdAt": 1760530300000,
+    "authorPlayerId": "01J00000000000000000000PL2",
+    "kind": "roll",
+    "visibility": "public",
+    "roll": {
+      "formula": "2d20kh1+5",
+      "label": "Восприятие",
+      "result": {
+        "formula": "2d20kh1+5",
+        "total": 19,
+        "terms": [
+          {
+            "sign": 1,
+            "value": 14,
+            "dice": {
+              "count": 2,
+              "sides": 20,
+              "dice": [
+                {
+                  "value": 14
+                },
+                {
+                  "value": 6,
+                  "dropped": true
+                }
+              ]
+            }
+          },
+          {
+            "sign": 1,
+            "value": 5
+          }
+        ]
+      }
+    }
+  }
+}

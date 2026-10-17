@@ -1,7 +1,11 @@
 // Package protocol defines the WebSocket messages of docs/architecture/protocol.md.
 package protocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/balfag/dnd-vtt/internal/dice"
+)
 
 // Envelope is one WebSocket text frame.
 type Envelope struct {
@@ -222,6 +226,7 @@ type SnapshotTable struct {
 	ActiveSceneID *string         `json:"activeSceneId"` // null: no active scene
 	Scenes        []SceneListItem `json:"scenes"`        // GM only; [] for players, never null
 	Scene         *SceneView      `json:"scene"`         // the active scene rendered for the viewer; null: none
+	Chat          []ChatMessage   `json:"chat"`          // last 50 visible to the viewer, ascending; never null
 }
 
 // SceneCreate is the data of scene.create.
@@ -473,4 +478,55 @@ func (c FogChanged) MarshalJSON() ([]byte, error) {
 		Fog     Fog     `json:"fog"`
 		Tokens  []Token `json:"tokens"`
 	}{c.SceneID, c.Fog, c.Tokens})
+}
+
+// Message types of the chat of M1.
+const (
+	TypeChatSend    = "chat.send"
+	TypeRollRequest = "roll.request"
+	TypeChatHistory = "chat.history"
+	TypeChatMessage = "chat.message"
+)
+
+// ChatSend is the data of chat.send; To makes the message private.
+type ChatSend struct {
+	Text string   `json:"text"`
+	To   []string `json:"to,omitempty"`
+}
+
+// RollRequest is the data of roll.request.
+type RollRequest struct {
+	Formula    string `json:"formula"`
+	Visibility string `json:"visibility"` // public | gm | self | blind
+	Label      string `json:"label,omitempty"`
+}
+
+// ChatHistory is the data of chat.history.
+type ChatHistory struct {
+	Before string `json:"before"`
+	Limit  int    `json:"limit,omitempty"` // 0 means 50
+}
+
+// ChatHistoryAck is the data of the ack to chat.history.
+type ChatHistoryAck struct {
+	Messages []ChatMessage `json:"messages"` // ascending, never null
+}
+
+// ChatRoll is the payload of a roll message.
+type ChatRoll struct {
+	Formula string       `json:"formula"` // canonical
+	Label   string       `json:"label"`
+	Result  *dice.Result `json:"result,omitempty"` // nil for the author of a blind roll
+}
+
+// ChatMessage is the data of chat.message and an item of the snapshot and history.
+type ChatMessage struct {
+	ID             string    `json:"id"`
+	CreatedAt      int64     `json:"createdAt"`
+	AuthorPlayerID *string   `json:"authorPlayerId"` // null for system messages
+	Kind           string    `json:"kind"`
+	Visibility     string    `json:"visibility"`
+	To             []string  `json:"to,omitempty"`   // private only
+	Text           string    `json:"text,omitempty"` // text and system
+	Roll           *ChatRoll `json:"roll,omitempty"` // roll only
 }
