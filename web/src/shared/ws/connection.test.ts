@@ -263,4 +263,24 @@ describe('GameConnection', () => {
     expect(store.getState().lastSeq).toBe(1)
     expect(store.getState().game?.players[1]?.online).toBe(false)
   })
+
+  it('routes token.dragging without seq to the store and leaves lastSeq alone', () => {
+    const { store, last, syncFresh } = setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    syncFresh(7)
+    last().receive({ t: 'token.dragging', d: { tokenId: 't1', x: 10, y: 20 } })
+    expect(store.getState().dragging['t1']).toMatchObject({ x: 10, y: 20 })
+    expect(store.getState().lastSeq).toBe(7)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('ignores other messages without seq', () => {
+    const { store, last, syncFresh } = setup()
+    syncFresh(7)
+    last().receive({ t: 'token.dragging', d: { tokenId: 1 } })
+    last().receive({ t: 'something.else', d: {} })
+    expect(store.getState().dragging).toEqual({})
+    expect(store.getState().lastSeq).toBe(7)
+  })
 })
