@@ -186,6 +186,7 @@ describe('game store', () => {
       background: null,
       fog: { enabled: false, ops: [] },
       tokens: [token],
+      drawings: [],
     }
     const list: SceneListItem[] = [
       { id: 's1', name: 'Tavern', sort: 0 },

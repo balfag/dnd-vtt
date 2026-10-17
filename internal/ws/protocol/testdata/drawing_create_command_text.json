@@ -1,0 +1,15 @@
+{
+  "t": "drawing.create",
+  "id": "c-28",
+  "d": {
+    "sceneId": "01J00000000000000000000SC2",
+    "kind": "text",
+    "data": {
+      "x": 120,
+      "y": 80,
+      "text": "Ловушка",
+      "size": 24
+    },
+    "color": "#c9a34e"
+  }
+}
