@@ -255,10 +255,7 @@
     },
     "bg": {
       "label": "Background",
-      "upload": "Upload an image",
-      "none": "No background",
-      "uploading": "Uploading: {{percent}}%",
-      "empty": "No uploaded images yet."
+      "none": "No background"
     },
     "grid": {
       "label": "Grid",
@@ -277,5 +274,125 @@
     "error": {
       "range": "From {{min}} to {{max}}"
     }
+  },
+  "assets": {
+    "upload": "Upload an image",
+    "uploading": "Uploading: {{percent}}%",
+    "empty": "No uploaded images yet."
+  },
+  "tokens": {
+    "tool": {
+      "place": "Place a token"
+    },
+    "place": {
+      "label": "Image of the new token",
+      "noImage": "No image"
+    },
+    "drop": {
+      "uploading": "Uploading the image: {{percent}}%"
+    },
+    "dialog": {
+      "title": "Token “{{name}}”",
+      "titleUnnamed": "Unnamed token"
+    },
+    "field": {
+      "name": "Name",
+      "nameVisibility": "Name visible",
+      "image": "Image",
+      "size": "Size",
+      "width": "Width, cells",
+      "height": "Height, cells",
+      "rotation": "Rotation, degrees",
+      "layer": "Layer",
+      "hidden": "Hidden from players",
+      "locked": "Locked",
+      "owners": "Who can move it",
+      "bars": "Bars",
+      "conditions": "Conditions"
+    },
+    "nameVis": {
+      "all": "to everyone",
+      "hover": "on hover",
+      "gm": "GM only"
+    },
+    "image": {
+      "none": "No image"
+    },
+    "size": {
+      "tiny": "Tiny",
+      "medium": "Small or medium",
+      "large": "Large",
+      "huge": "Huge",
+      "gargantuan": "Gargantuan",
+      "custom": "Custom, in cells"
+    },
+    "layer": {
+      "map": "Map",
+      "tokens": "Tokens",
+      "gm": "GM only"
+    },
+    "owners": {
+      "empty": "There are no players in the campaign yet."
+    },
+    "bar": {
+      "key": "Key",
+      "value": "Value",
+      "max": "Max",
+      "visibility": "Visible to",
+      "add": "Add a bar",
+      "remove": "Remove bar {{key}}"
+    },
+    "barVis": {
+      "all": "everyone",
+      "owners": "owners",
+      "gm": "GM"
+    },
+    "error": {
+      "range": "From {{min}} to {{max}}",
+      "barKey": "1–16 characters: a–z, 0–9 and “_”",
+      "barKeyTaken": "This token already has a bar with this key"
+    },
+    "save": "Save the token",
+    "menu": {
+      "label": "Token actions",
+      "properties": "Properties",
+      "hide": "Hide from players",
+      "show": "Show to players",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "toFront": "Bring to front",
+      "toBack": "Send to back",
+      "delete": "Delete"
+    },
+    "deleteConfirm": "Delete the token “{{name}}”?",
+    "deleteConfirmUnnamed": "Delete the unnamed token?",
+    "announce": {
+      "created": "Token placed",
+      "saved": "Token saved",
+      "hidden": "Token hidden from players",
+      "shown": "Token shown to players",
+      "locked": "Token locked",
+      "unlocked": "Token unlocked",
+      "front": "Token brought to front",
+      "back": "Token sent to back",
+      "deleted": "Token deleted"
+    }
+  },
+  "conditions": {
+    "blinded": "Blinded",
+    "charmed": "Charmed",
+    "deafened": "Deafened",
+    "exhaustion": "Exhaustion",
+    "frightened": "Frightened",
+    "grappled": "Grappled",
+    "incapacitated": "Incapacitated",
+    "invisible": "Invisible",
+    "paralyzed": "Paralyzed",
+    "petrified": "Petrified",
+    "poisoned": "Poisoned",
+    "prone": "Prone",
+    "restrained": "Restrained",
+    "stunned": "Stunned",
+    "unconscious": "Unconscious"
   }
 }
