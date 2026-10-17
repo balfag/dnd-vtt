@@ -30,6 +30,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': `http://${goServer}`,
+      '/assets': `http://${goServer}`,
       '/ws': { target: `ws://${goServer}`, ws: true },
     },
   },

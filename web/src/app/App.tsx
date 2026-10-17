@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoginPage } from '../features/auth/LoginPage'
 import { PlayPage } from '../features/auth/PlayPage'
@@ -12,6 +12,9 @@ import { Link } from '../ui/Link'
 import { ErrorNote } from '../ui/ErrorNote'
 import { navigate, useRoute } from './router'
 import { SessionProvider, useSession } from './session'
+
+// PixiJS is heavy: the table is its own chunk, loaded only for /table.
+const TableScreen = lazy(() => import('../features/table/TableScreen'))
 
 /** App picks the page by route inside the session provider. */
 export function App() {
@@ -31,6 +34,12 @@ function Pages() {
       return <SetupPage />
     case 'login':
       return <LoginPage />
+    case 'table':
+      return (
+        <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--slate)' }} />}>
+          <TableScreen />
+        </Suspense>
+      )
     case 'play':
       return <PlayPage token={route.token} />
     case 'reset':

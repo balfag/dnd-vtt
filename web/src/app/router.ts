@@ -4,6 +4,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'setup' }
   | { name: 'login' }
+  | { name: 'table' }
   | { name: 'play'; token: string }
   | { name: 'reset'; token: string }
   | { name: 'notFound' }
@@ -18,6 +19,7 @@ export function matchRoute(pathname: string): Route {
   if (path === '/') return { name: 'home' }
   if (path === '/setup') return { name: 'setup' }
   if (path === '/login') return { name: 'login' }
+  if (path === '/table') return { name: 'table' }
 
   const [, first, token, ...rest] = path.split('/')
   if (token !== undefined && rest.length === 0 && tokenPattern.test(token)) {

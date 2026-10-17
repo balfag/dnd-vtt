@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { navigate } from '../../app/router'
 import type { Campaign, CampaignPlayer, PasswordResetLink } from '../../shared/api/campaigns'
 import { Button } from '../../ui/Button'
 import { CopyField } from '../../ui/CopyField'
@@ -70,7 +71,6 @@ export function ActiveGame({
           id="game-link"
           label={t('game.linkLabel')}
           value={link}
-          primary
           onCopied={() => {
             notify(t('ui.copy.done'))
           }}
@@ -78,6 +78,14 @@ export function ActiveGame({
       )}
 
       <div className="active-game__buttons">
+        <Button
+          fullWidth={false}
+          onClick={() => {
+            navigate('/table')
+          }}
+        >
+          {t('table.open')}
+        </Button>
         <Button
           variant="secondary"
           fullWidth={false}
