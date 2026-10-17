@@ -1,10 +1,12 @@
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import {
+  isChatMessage,
   isPresence,
   isSceneActivated,
   isSceneChanged,
   isScenesChanged,
+  type ChatMessage,
   type Envelope,
   type PlayerInfo,
   type SceneListItem,
@@ -31,6 +33,10 @@ export interface GameView {
   scenes: SceneListItem[]
   /** The scene this client shows; null while there is none. */
   scene: SceneView | null
+  /** Messages ascending by time. */
+  chat: ChatMessage[]
+  /** True when there is no older history to load. */
+  chatHistoryDone: boolean
 }
 
 export interface GameState {
@@ -42,8 +48,13 @@ export interface GameState {
   applySnapshot(s: Snapshot): void
   /** applyEvent applies one event with seq; unknown types only advance lastSeq. */
   applyEvent(e: Envelope & { seq: number }): void
+  /** prependHistory puts older messages (ascending) before the loaded ones, skipping known ids. */
+  prependHistory(messages: ChatMessage[]): void
   reset(): void
 }
+
+/** The snapshot and a history page carry up to 50 messages: fewer means the history is complete. */
+export const historyPageSize = 50
 
 const initial: Pick<GameState, 'connection' | 'me' | 'game' | 'lastSeq'> = {
   connection: { state: 'idle' },
@@ -68,6 +79,8 @@ export function createGameStore(): StoreApi<GameState> {
                 ...s.game,
                 players: [...s.game.players],
                 scenes: [...s.game.scenes],
+                chat: [...s.game.chat],
+                chatHistoryDone: s.game.chat.length < historyPageSize,
               },
         lastSeq: s.seq,
       })
@@ -90,6 +103,10 @@ export function createGameStore(): StoreApi<GameState> {
         if (isScenesChanged(e)) {
           return { lastSeq: e.seq, game: { ...game, scenes: e.d.scenes } }
         }
+        if (isChatMessage(e)) {
+          if (game.chat.some((m) => m.id === e.d.id)) return { lastSeq: e.seq }
+          return { lastSeq: e.seq, game: { ...game, chat: [...game.chat, e.d] } }
+        }
         if (!isPresence(e)) return { lastSeq: e.seq }
         const { playerId, online, player } = e.d
         if (game.players.some((p) => p.id === playerId)) {
@@ -103,6 +120,21 @@ export function createGameStore(): StoreApi<GameState> {
           lastSeq: e.seq,
           game: { ...game, players: [...game.players, { ...player, online }] },
         }
+      })
+    },
+    prependHistory: (messages) => {
+      set((state) => {
+        const game = state.game
+        if (game === null) return {}
+        const known = new Set(game.chat.map((m) => m.id))
+        const older = messages.filter((m) => {
+          if (known.has(m.id)) return false
+          known.add(m.id)
+          return true
+        })
+        // A short page is the oldest one.
+        const chatHistoryDone = game.chatHistoryDone || messages.length < historyPageSize
+        return { game: { ...game, chat: [...older, ...game.chat], chatHistoryDone } }
       })
     },
     reset: () => {
