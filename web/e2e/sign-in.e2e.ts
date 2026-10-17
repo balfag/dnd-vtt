@@ -2,10 +2,6 @@ import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import ru from '../src/i18n/ru.json' with { type: 'json' }
 
-function fill(template: string, values: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => values[key] ?? '')
-}
-
 function password(): string {
   return randomBytes(8).toString('hex')
 }
@@ -50,9 +46,8 @@ test('gm sets up, a player registers by the game link and the link can be replac
   await player.getByLabel(ru.common.password, { exact: true }).fill(playerPassword)
   await player.getByLabel(ru.common.passwordRepeat, { exact: true }).fill(playerPassword)
   await player.getByRole('button', { name: ru.play.submitRegister }).click()
-  await expect(
-    player.getByRole('heading', { name: fill(ru.home.player.title, { name: playerName }) }),
-  ).toBeVisible()
+  await expect(player).toHaveURL(/\/table$/)
+  await expect(player.getByText(ru.table.empty.player)).toBeVisible()
 
   // 4. The GM sees the player in the campaign.
   const playersRes = await gmContext.request.get(`/api/campaigns/${campaign.id}/players`)
