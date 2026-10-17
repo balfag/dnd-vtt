@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { HideFogIcon, RevealFogIcon, SelectIcon } from './icons'
+import { HideFogIcon, PlaceTokenIcon, RevealFogIcon, SelectIcon } from './icons'
 
-/** TableTool is the tool in hand: select and move tokens, or one of the GM's fog tools. */
-export type TableTool = 'select' | 'reveal' | 'hide'
+/** TableTool is the tool in hand: select and move tokens, or one of the GM's tools: place tokens, reveal or hide fog. */
+export type TableTool = 'select' | 'place' | 'reveal' | 'hide'
 
 interface ToolRailProps {
   tool: TableTool
@@ -36,6 +36,20 @@ export function ToolRail({ tool, onTool, isGm }: ToolRailProps) {
       {isGm && (
         <>
           <hr className="rail__separator" />
+          <button
+            type="button"
+            className="rail__button rail__button--gm"
+            data-tool="place"
+            aria-label={t('tokens.tool.place')}
+            title={`${t('tokens.tool.place')} (K)`}
+            aria-pressed={tool === 'place'}
+            aria-keyshortcuts="K"
+            onClick={() => {
+              onTool(tool === 'place' ? 'select' : 'place')
+            }}
+          >
+            <PlaceTokenIcon />
+          </button>
           <button
             type="button"
             className="rail__button rail__button--gm"

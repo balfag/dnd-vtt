@@ -27,6 +27,17 @@ export function SelectIcon() {
     </Icon>
   )
 }
+
+/** PlaceTokenIcon is a token ring with a plus: put a new token on the map. */
+export function PlaceTokenIcon() {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8.5v7M8.5 12h7" />
+    </Icon>
+  )
+}
+
 /** RevealFogIcon is a dashed frame with a clear circle: open a place in the fog. */
 export function RevealFogIcon() {
   return (

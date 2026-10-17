@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { uploadAsset } from '../../../shared/api/assets'
+import { errorKey } from '../../../shared/api/errors'
 import type { PlayerInfo, SceneView, Shape, Token } from '../../../shared/protocol'
 import { MessageType } from '../../../shared/protocol'
 import type { GameConnection } from '../../../shared/ws/connection'
 import { CommandError, commandErrorKey } from '../../../shared/ws/errors'
 import type { FogToolState } from '../../fog/FogToolbar'
 import { gameStore } from '../../game/store'
+import { isCondition } from '../../tokens/conditions'
+import { actionOfKey, type TokenAction } from '../../tokens/tokenActions'
+import { buildTokenCreate } from '../../tokens/tokenForm'
 import { createMoves } from '../moves'
 import { ZoomControls } from '../ZoomControls'
 import { fit, screenToWorld, type Camera, type Point } from './camera'
@@ -18,7 +23,7 @@ import {
   polygonFromPoints,
   rectFromPoints,
 } from './fogShapes'
-import { cellDistanceFt } from './grid'
+import { cellDistanceFt, snapTokenCenter } from './grid'
 import {
   cycleToken,
   noGesture,
@@ -70,6 +75,30 @@ interface SceneCanvasProps {
   announce: (text: string, visible: boolean) => void
   /** fogTool is the GM's fog tool in hand (null: the select tool). */
   fogTool: FogToolState | null
+  campaignId: string
+  /** placeTool is the GM's place tool in hand with the image of the new token (null: another tool). */
+  placeTool: PlaceToolState | null
+  /** onOpenToken opens the properties of a token (a double click). */
+  onOpenToken: (tokenId: string) => void
+  /** onTokenMenu opens the context menu of a token at a point of the window. */
+  onTokenMenu: (tokenId: string, at: Point) => void
+  /** onTokenAction does a key action of the GM on the selected token. */
+  onTokenAction: (action: TokenAction, tokenId: string) => void
+}
+
+/** PlaceToolState is the place tool in hand: image is the picture of the next token, null for none. */
+export interface PlaceToolState {
+  image: { assetId: string; originalName: string } | null
+}
+
+/** Dropped files and the note of their upload: the error shows for this long. */
+const errorNoteMs = 4000
+
+/** tokenIdOfAck reads the id of the new token from the ack of token.create. */
+function tokenIdOfAck(d: unknown): string | null {
+  return typeof d === 'object' && d !== null && 'tokenId' in d && typeof d.tokenId === 'string'
+    ? d.tokenId
+    : null
 }
 
 function typesText(target: EventTarget | null): boolean {
@@ -119,11 +148,18 @@ export function SceneCanvas({
   connection,
   announce,
   fogTool,
+  campaignId,
+  placeTool,
+  onOpenToken,
+  onTokenMenu,
+  onTokenAction,
 }: SceneCanvasProps) {
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
   const [renderer, setRenderer] = useState<SceneRenderer | null>(null)
   const [zoom, setZoom] = useState(startCamera.zoom)
+  const [note, setNote] = useState<{ text: string; error: boolean } | null>(null)
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cameraRef = useRef<Camera>(startCamera)
   const sceneRef = useRef<SceneView | null>(scene)
   const fittedFor = useRef<string | null>(null)
@@ -136,7 +172,15 @@ export function SceneCanvas({
   const tRef = useRef(t)
   const fogToolRef = useRef(fogTool)
   const fogDraw = useRef<FogDraw | null>(null)
+  const placeToolRef = useRef(placeTool)
+  const campaignIdRef = useRef(campaignId)
+  const tokenCallbacks = useRef({ onOpenToken, onTokenMenu, onTokenAction })
+  // The token a create command made, selected as soon as the scene has it.
+  const pendingSelect = useRef<string | null>(null)
   useEffect(() => {
+    placeToolRef.current = placeTool
+    campaignIdRef.current = campaignId
+    tokenCallbacks.current = { onOpenToken, onTokenMenu, onTokenAction }
     fogToolRef.current = fogTool
     playersRef.current = players
     meRef.current = me
@@ -236,6 +280,7 @@ export function SceneCanvas({
       ghost,
       distance,
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      conditionLabel: (key) => (isCondition(key) ? tRef.current(`conditions.${key}`) : key),
     })
   }, [renderer])
 
@@ -251,6 +296,11 @@ export function SceneCanvas({
     } else {
       renderer.setCamera(cameraRef.current)
     }
+    const pendingId = pendingSelect.current
+    if (pendingId !== null && scene?.tokens.some((tk) => tk.id === pendingId)) {
+      selectedId.current = pendingId
+      pendingSelect.current = null
+    }
     if (selectedId.current !== null && !scene?.tokens.some((tk) => tk.id === selectedId.current)) {
       selectedId.current = null
     }
@@ -265,14 +315,22 @@ export function SceneCanvas({
   const fogMode = fogTool?.mode
   const fogShape = fogTool?.shape
   const sceneId = scene?.id
+  const placing = placeTool !== null
   useEffect(() => {
     fogDraw.current = null
     renderer?.setFogPreview(null)
     const host = hostRef.current
     if (host === null) return
-    if (fogMode !== undefined) host.setAttribute('data-cursor', 'crosshair')
+    if (fogMode !== undefined || placing) host.setAttribute('data-cursor', 'crosshair')
     else if (host.getAttribute('data-cursor') === 'crosshair') host.removeAttribute('data-cursor')
-  }, [renderer, fogMode, fogShape, sceneId])
+  }, [renderer, fogMode, fogShape, sceneId, placing])
+
+  // The note of a dropped image: progress stays until the upload is done, an error goes after a few seconds.
+  useEffect(() => {
+    return () => {
+      if (noteTimer.current !== null) clearTimeout(noteTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     refresh()
@@ -303,6 +361,16 @@ export function SceneCanvas({
     }
   }, [renderer, refresh])
 
+  const showNote = useCallback((text: string, error: boolean) => {
+    if (noteTimer.current !== null) clearTimeout(noteTimer.current)
+    noteTimer.current = error
+      ? setTimeout(() => {
+          setNote(null)
+        }, errorNoteMs)
+      : null
+    setNote({ text, error })
+  }, [])
+
   useEffect(() => {
     const host = hostRef.current
     if (host === null || renderer === null) return
@@ -319,10 +387,76 @@ export function SceneCanvas({
       if (on) host?.setAttribute('data-panning', '')
       else host?.removeAttribute('data-panning')
     }
+    /** toolInHand: a GM tool that takes the clicks, instead of the selection of tokens. */
+    function toolInHand(): boolean {
+      return fogToolRef.current !== null || placeToolRef.current !== null
+    }
     function setCursor(kind: 'grab' | 'grabbing' | null) {
       if (kind !== null) host?.setAttribute('data-cursor', kind)
-      else if (fogToolRef.current !== null) host?.setAttribute('data-cursor', 'crosshair')
+      else if (toolInHand()) host?.setAttribute('data-cursor', 'crosshair')
       else host?.removeAttribute('data-cursor')
+    }
+
+    /** snapNew puts a new token on the grid at a point of the host and inside the scene. */
+    function snapNew(sc: SceneView, p: Point): Point {
+      const at = snapTokenCenter(sc.grid, screenToWorld(cameraRef.current, p), { w: 1, h: 1 })
+      return {
+        x: Math.min(Math.max(at.x, 0), sc.width),
+        y: Math.min(Math.max(at.y, 0), sc.height),
+      }
+    }
+    /** createToken asks for a token of one cell and selects it when it arrives. */
+    async function createToken(
+      sceneId: string,
+      at: Point,
+      image: { assetId: string; originalName: string } | null,
+    ) {
+      const conn = connectionRef.current
+      if (conn === null) return
+      try {
+        const ack = await conn.command(
+          MessageType.TokenCreate,
+          buildTokenCreate(sceneId, at, image),
+        )
+        const id = tokenIdOfAck(ack)
+        if (id !== null) {
+          pendingSelect.current = id
+          if (tokenById(id) !== null) {
+            pendingSelect.current = null
+            select(id)
+          }
+        }
+        announceRef.current(tRef.current('tokens.announce.created'), false)
+      } catch (err) {
+        announceRef.current(tRef.current(commandErrorKey(err)), true)
+      }
+    }
+    function placeAt(p: Point) {
+      const sc = sceneRef.current
+      const tool = placeToolRef.current
+      if (sc === null || tool === null || !meRef.current.isGM) return
+      void createToken(sc.id, snapNew(sc, p), tool.image)
+    }
+    /** dropFile uploads an image dropped on the canvas and makes a token of it where it was dropped. */
+    async function dropFile(file: File, p: Point) {
+      const sc = sceneRef.current
+      if (sc === null || campaignIdRef.current === '') return
+      const at = snapNew(sc, p)
+      let shown = -1
+      const progress = (done: number) => {
+        const percent = Math.round(done * 100)
+        if (percent === shown) return
+        shown = percent
+        showNote(tRef.current('tokens.drop.uploading', { percent }), false)
+      }
+      progress(0)
+      try {
+        const asset = await uploadAsset(campaignIdRef.current, file, 'token', progress)
+        setNote(null)
+        await createToken(sc.id, at, { assetId: asset.id, originalName: asset.originalName })
+      } catch (err) {
+        showNote(tRef.current(errorKey(err)), true)
+      }
     }
 
     // The fog tool: the shape in progress is drawn as a dashed preview and sent when it is closed.
@@ -457,7 +591,7 @@ export function SceneCanvas({
     }
 
     const hoverAt = (p: Point) => {
-      if (fogToolRef.current !== null) return
+      if (toolInHand()) return
       const id = renderer.tokenAt(p)
       const tk = tokenById(id)
       setCursor(tk !== null && canMove(tk, meRef.current) ? 'grab' : null)
@@ -484,6 +618,15 @@ export function SceneCanvas({
         } else if (e.button === 0 && !spaceHeld && gesture.pointers.size === 0) {
           fogDown(e, p)
           return
+        }
+        gesture = pointerDown(gesture, e.pointerId, p)
+        setPanning(true)
+        return
+      }
+      if (placeToolRef.current !== null) {
+        // A click places a token, a drag pans the map: the press waits for its release.
+        if (e.button === 0 && !spaceHeld && gesture.pointers.size === 0) {
+          tap = { id: e.pointerId, at: p }
         }
         gesture = pointerDown(gesture, e.pointerId, p)
         setPanning(true)
@@ -590,7 +733,10 @@ export function SceneCanvas({
       }
       if (tap?.id === e.pointerId) {
         tap = null
-        if (e.type === 'pointerup') select(null)
+        if (e.type === 'pointerup') {
+          if (placeToolRef.current !== null) placeAt(local(e))
+          else select(null)
+        }
       }
       gesture = pointerUp(gesture, e.pointerId)
       if (gesture.pointers.size === 0) setPanning(false)
@@ -609,8 +755,35 @@ export function SceneCanvas({
     const mouseDown = (e: MouseEvent) => {
       if (e.button === 1) e.preventDefault()
     }
-    const doubleClick = () => {
+    const doubleClick = (e: MouseEvent) => {
       closeFogPolygon()
+      if (!meRef.current.isGM || toolInHand()) return
+      const id = renderer.tokenAt(local(e))
+      if (id === null) return
+      select(id)
+      tokenCallbacks.current.onOpenToken(id)
+    }
+    // The browser menu stays everywhere but over a token the GM can act on.
+    const contextMenu = (e: MouseEvent) => {
+      if (!meRef.current.isGM || toolInHand()) return
+      const id = renderer.tokenAt(local(e))
+      if (id === null) return
+      e.preventDefault()
+      select(id)
+      tokenCallbacks.current.onTokenMenu(id, { x: e.clientX, y: e.clientY })
+    }
+    // A file over the canvas must not open in the tab; only the GM's drop makes a token.
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files') === true
+    const dragOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = meRef.current.isGM ? 'copy' : 'none'
+    }
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      const file = e.dataTransfer?.files[0]
+      if (file !== undefined && meRef.current.isGM) void dropFile(file, local(e))
     }
     const altChanged = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || drag.current === null) return
@@ -662,6 +835,14 @@ export function SceneCanvas({
         return
       }
       const selected = tokenById(selectedId.current)
+      if (focused && selected !== null && meRef.current.isGM && !toolInHand()) {
+        const action = actionOfKey(e.key)
+        if (action !== null) {
+          e.preventDefault()
+          tokenCallbacks.current.onTokenAction(action, selected.id)
+          return
+        }
+      }
       if (focused && sc !== null && selected !== null && canMove(selected, meRef.current)) {
         // Repeated arrows step from where the token is shown, not from the last server position.
         const shown = { ...selected, ...moves.current.position(selected) }
@@ -694,6 +875,9 @@ export function SceneCanvas({
     host.addEventListener('pointerleave', leave)
     host.addEventListener('mousedown', mouseDown)
     host.addEventListener('dblclick', doubleClick)
+    host.addEventListener('contextmenu', contextMenu)
+    host.addEventListener('dragover', dragOver)
+    host.addEventListener('drop', drop)
     document.addEventListener('keydown', key)
     document.addEventListener('keyup', keyUp)
     return () => {
@@ -705,11 +889,14 @@ export function SceneCanvas({
       host.removeEventListener('pointerleave', leave)
       host.removeEventListener('mousedown', mouseDown)
       host.removeEventListener('dblclick', doubleClick)
+      host.removeEventListener('contextmenu', contextMenu)
+      host.removeEventListener('dragover', dragOver)
+      host.removeEventListener('drop', drop)
       document.removeEventListener('keydown', key)
       document.removeEventListener('keyup', keyUp)
       drag.current = null
     }
-  }, [renderer, apply, refresh])
+  }, [renderer, apply, refresh, showNote])
 
   function step(factor: number) {
     if (renderer !== null) apply(zoomCenter(cameraRef.current, renderer.viewport(), factor))
@@ -724,6 +911,14 @@ export function SceneCanvas({
         aria-label={scene === null ? emptyText : t('table.canvas.label', { name: scene.name })}
         tabIndex={0}
       />
+      {note !== null && (
+        <p
+          className={note.error ? 'canvas__note canvas__note--error' : 'canvas__note'}
+          role="status"
+        >
+          {note.text}
+        </p>
+      )}
       <ZoomControls
         zoom={zoom}
         onZoomIn={() => {
