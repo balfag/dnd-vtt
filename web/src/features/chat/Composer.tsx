@@ -1,11 +1,7 @@
-import { useRef, useState } from 'react'
+﻿import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { errorCodes } from '../../shared/api/errors'
-import { MessageType } from '../../shared/protocol'
-import { CommandError } from '../../shared/ws/errors'
 import { parseInput, type ParsedInput } from './parseInput'
-
-type Command = (type: string, data?: unknown) => Promise<unknown>
+import { sendInput, type Command, type Problem, type SendState } from './sendInput'
 
 interface ComposerProps {
   command: Command
@@ -13,88 +9,24 @@ interface ComposerProps {
   meId: string
 }
 
-interface Problem {
-  key: string
-  params?: Record<string, string>
-}
-
 const quickDice = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100']
-
-function commandProblem(err: unknown, formula: string | null): Problem {
-  if (err instanceof CommandError) {
-    if (err.code === 'rate_limited') return { key: 'chat.error.tooFast' }
-    if (err.code === 'bad_request' && formula !== null) {
-      return { key: 'chat.error.formula', params: { formula } }
-    }
-    const known = errorCodes.find((code) => code === err.code)
-    if (known !== undefined) return { key: `errors.${known}` }
-  }
-  return { key: 'errors.unknown' }
-}
-
-function send(command: Command, parsed: ParsedInput): Promise<unknown> {
-  switch (parsed.kind) {
-    case 'text':
-      return command(MessageType.ChatSend, { text: parsed.text })
-    case 'private':
-      return command(MessageType.ChatSend, { text: parsed.text, to: parsed.to })
-    case 'roll':
-      return command(MessageType.RollRequest, {
-        formula: parsed.formula,
-        visibility: parsed.visibility,
-        ...(parsed.label === '' ? {} : { label: parsed.label }),
-      })
-    case 'error':
-      return Promise.reject(new Error(parsed.key))
-  }
-}
-
 /** Composer is the quick roll buttons and the input line of the chat. */
 export function Composer({ command, players, meId }: ComposerProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
   const [problem, setProblem] = useState<Problem | null>(null)
-  const inFlight = useRef<string | null>(null)
-  const lastSent = useRef('')
-
-  function run(input: string, parsed: ParsedInput, onDone?: () => void) {
-    if (parsed.kind === 'error') {
-      setProblem({
-        key: parsed.key,
-        ...(parsed.params === undefined ? {} : { params: parsed.params }),
-      })
-      return
-    }
-    // The same text is not sent again until the server has answered.
-    if (inFlight.current === input) return
-    inFlight.current = input
-    setProblem(null)
-    const formula = parsed.kind === 'roll' ? parsed.formula : null
-    send(command, parsed)
-      .then(() => {
-        lastSent.current = input
-        onDone?.()
-      })
-      .catch((err: unknown) => {
-        setProblem(commandProblem(err, formula))
-      })
-      .finally(() => {
-        if (inFlight.current === input) inFlight.current = null
-      })
-  }
+  const state = useRef<SendState>({ inFlight: null, lastSent: '' })
+  const hooks = { setText, setProblem }
 
   function submit() {
-    const input = text
-    run(input, parseInput(input, players, meId), () => {
-      // A text edited while the request was on its way stays.
-      setText((current) => (current === input ? '' : current))
-    })
+    const parsed = parseInput(text, players, meId)
+    sendInput(command, state.current, hooks, text, parsed, true)
   }
 
   function quick(formula: string) {
-    run(`/r ${formula}`, { kind: 'roll', formula, label: '', visibility: 'public' })
+    const parsed: ParsedInput = { kind: 'roll', formula, label: '', visibility: 'public' }
+    sendInput(command, state.current, hooks, `/r ${formula}`, parsed, false)
   }
-
   const hintId = 'chat-input-hint'
   return (
     <div className="composer">
@@ -151,9 +83,9 @@ export function Composer({ command, players, meId }: ComposerProps) {
             setProblem(null)
           }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowUp' && text === '' && lastSent.current !== '') {
+            if (e.key === 'ArrowUp' && text === '' && state.current.lastSent !== '') {
               e.preventDefault()
-              setText(lastSent.current)
+              setText(state.current.lastSent)
             }
           }}
         />
