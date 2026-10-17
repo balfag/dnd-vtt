@@ -140,6 +140,12 @@
     "tool": {
       "select": "Select and move"
     },
+    "tokens": {
+      "label": "Tokens on the scene",
+      "item": "{{name}}, cell {{cell}}",
+      "unnamed": "Unnamed token",
+      "cell": "{{col}}:{{row}}"
+    },
     "zoom": {
       "in": "Zoom in",
       "out": "Zoom out",
