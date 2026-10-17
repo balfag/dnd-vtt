@@ -157,17 +157,12 @@ func loadScene(ctx context.Context, q queryer, campaignID, sceneID string) (scen
 	if err := json.Unmarshal([]byte(gridRaw), &r.grid); err != nil {
 		return sceneRow{}, fmt.Errorf("decode grid of scene %s: %w", sceneID, err)
 	}
-	var fog struct {
-		Enabled bool            `json:"enabled"`
-		Ops     json.RawMessage `json:"ops"`
-	}
-	if err := json.Unmarshal([]byte(fogRaw), &fog); err != nil {
+	if err := json.Unmarshal([]byte(fogRaw), &r.fog); err != nil {
 		return sceneRow{}, fmt.Errorf("decode fog of scene %s: %w", sceneID, err)
 	}
-	if len(fog.Ops) == 0 {
-		fog.Ops = json.RawMessage("[]")
+	if r.fog.Ops == nil {
+		r.fog.Ops = []protocol.FogOp{}
 	}
-	r.fog = protocol.Fog{Enabled: fog.Enabled, Ops: fog.Ops}
 	return r, nil
 }
 

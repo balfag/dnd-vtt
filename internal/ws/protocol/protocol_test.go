@@ -46,7 +46,7 @@ func examples(t *testing.T) map[string]Envelope {
 	tavern := SceneView{
 		ID: "01J00000000000000000000SC1", Name: "Таверна", Width: 3000, Height: 2000, Grid: grid,
 		Background: &AssetRef{AssetID: "01J00000000000000000000AS1", URL: "/assets/01J00000000000000000000AS1"},
-		Fog:        Fog{Enabled: false, Ops: json.RawMessage("[]")},
+		Fog:        Fog{Enabled: false, Ops: []FogOp{}},
 		Tokens:     []Token{},
 	}
 	goblinImage := &AssetRef{AssetID: "01J00000000000000000000AS2", URL: "/assets/01J00000000000000000000AS2"}
@@ -66,10 +66,14 @@ func examples(t *testing.T) map[string]Envelope {
 	goblinForPlayer := goblin
 	goblinForPlayer.Name = ""
 	goblinForPlayer.Bars = []TokenBar{{Key: "ac", Value: 15, Max: 15, Visibility: "all"}}
+	cryptOps := []FogOp{
+		{Op: "reveal", Shape: Shape{Type: ShapeRect, X: 0, Y: 0, W: 1400, H: 1050}},
+		{Op: "hide", Shape: Shape{Type: ShapePolygon, Points: [][2]float64{{300, 200}, {700, 200}, {500, 600.5}}}},
+	}
 	crypt := SceneView{
 		ID: "01J00000000000000000000SC2", Name: "Склеп", Width: 2800, Height: 2100, Grid: hexGrid,
 		Background: nil,
-		Fog:        Fog{Enabled: true, Ops: json.RawMessage("[]")},
+		Fog:        Fog{Enabled: true, Ops: cryptOps},
 		Tokens:     []Token{goblin},
 	}
 	tavernForPlayer := tavern
@@ -158,8 +162,23 @@ func examples(t *testing.T) map[string]Envelope {
 		"token_changed":      with(mustNew(t, TypeTokenChanged, TokenChanged{Token: goblin}), func(e *Envelope) { e.Seq = 24 }),
 		"token_changed_player": with(mustNew(t, TypeTokenChanged, TokenChanged{Token: goblinForPlayer}),
 			func(e *Envelope) { e.Seq = 24 }),
-		"token_removed":     with(mustNew(t, TypeTokenRemoved, TokenRef{TokenID: goblin.ID}), func(e *Envelope) { e.Seq = 25 }),
-		"token_dragging":    mustNew(t, TypeTokenDragging, TokenMove{TokenID: goblin.ID, X: 400.5, Y: 250}),
+		"token_removed":  with(mustNew(t, TypeTokenRemoved, TokenRef{TokenID: goblin.ID}), func(e *Envelope) { e.Seq = 25 }),
+		"token_dragging": mustNew(t, TypeTokenDragging, TokenMove{TokenID: goblin.ID, X: 400.5, Y: 250}),
+		"fog_set_command": with(mustNew(t, TypeFogSet, FogSet{SceneID: crypt.ID, Enabled: true}),
+			func(e *Envelope) { e.ID = "c-9" }),
+		"fog_reveal_rect_command": with(mustNew(t, TypeFogReveal, FogShape{SceneID: crypt.ID, Shape: cryptOps[0].Shape}),
+			func(e *Envelope) { e.ID = "c-10" }),
+		"fog_hide_polygon_command": with(mustNew(t, TypeFogHide, FogShape{SceneID: crypt.ID, Shape: cryptOps[1].Shape}),
+			func(e *Envelope) { e.ID = "c-11" }),
+		"fog_reveal_circle_command": with(mustNew(t, TypeFogReveal, FogShape{
+			SceneID: crypt.ID, Shape: Shape{Type: ShapeCircle, X: 500, Y: 400.5, R: 120},
+		}), func(e *Envelope) { e.ID = "c-12" }),
+		"fog_changed_gm": with(mustNew(t, TypeFogChanged, FogChanged{SceneID: crypt.ID, Fog: crypt.Fog}),
+			func(e *Envelope) { e.Seq = 26 }),
+		"fog_changed_player": with(mustNew(t, TypeFogChanged, FogChanged{SceneID: crypt.ID, Fog: crypt.Fog, Tokens: []Token{goblinForPlayer}}),
+			func(e *Envelope) { e.Seq = 26 }),
+		"fog_changed_player_empty": with(mustNew(t, TypeFogChanged, FogChanged{SceneID: crypt.ID, Fog: crypt.Fog, Tokens: []Token{}}),
+			func(e *Envelope) { e.Seq = 26 }),
 		"noop":              with(mustNew(t, TypeNoop, nil), func(e *Envelope) { e.Seq = 42 }),
 		"ping":              with(mustNew(t, TypePing, nil), func(e *Envelope) { e.ID = "p-5" }),
 		"pong":              with(mustNew(t, TypePong, nil), func(e *Envelope) { e.Re = "p-5" }),
@@ -245,6 +264,12 @@ func TestGolden(t *testing.T) {
 				data = &TokenChanged{}
 			case TypeTokenRemoved:
 				data = &TokenRef{}
+			case TypeFogSet:
+				data = &FogSet{}
+			case TypeFogReveal, TypeFogHide:
+				data = &FogShape{}
+			case TypeFogChanged:
+				data = &FogChanged{}
 			case TypeSnapshot:
 				data = &Snapshot{}
 			case TypePresence:

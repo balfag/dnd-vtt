@@ -188,7 +188,7 @@ func ids(tokens []protocol.Token) []string {
 	return out
 }
 
-func contains(list []string, s string) bool {
+func hasID(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
 			return true
@@ -248,7 +248,7 @@ func TestHiddenTokenIsKeptFromOthersAndNeverLeaks(t *testing.T) {
 		t.Errorf("B got %+v %s, want token.removed of the hidden token", eb, eb.D)
 	}
 
-	if got := ids(tb.snapshotTokens(ws.Viewer{PlayerID: aid})); !contains(got, tokenID) {
+	if got := ids(tb.snapshotTokens(ws.Viewer{PlayerID: aid})); !hasID(got, tokenID) {
 		t.Errorf("snapshot of the owner lacks the token: %v", got)
 	}
 	if got := ids(tb.snapshotTokens(ws.Viewer{PlayerID: tb.pid(tb.boris)})); len(got) != 0 {

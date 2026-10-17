@@ -161,10 +161,25 @@ type AssetRef struct {
 	URL     string `json:"url"` // "/assets/<id>"
 }
 
-// Fog is the fog of a scene. Ops are passed through as stored until #51 types them.
+// Fog is the fog of a scene. Ops are in the order of application.
 type Fog struct {
-	Enabled bool            `json:"enabled"`
-	Ops     json.RawMessage `json:"ops"` // JSON array, "[]" for a new scene
+	Enabled bool    `json:"enabled"`
+	Ops     []FogOp `json:"ops"` // never null: "[]" for a new scene
+}
+
+// MarshalJSON encodes a nil Ops as [].
+func (f Fog) MarshalJSON() ([]byte, error) {
+	if f.Ops == nil {
+		f.Ops = []FogOp{}
+	}
+	type plain Fog
+	return json.Marshal(plain(f))
+}
+
+// FogOp reveals or hides the area of a shape.
+type FogOp struct {
+	Op    string `json:"op"` // reveal | hide
+	Shape Shape  `json:"shape"`
 }
 
 // SceneView is a scene as a client sees it. Drawings join in #52.
@@ -413,4 +428,49 @@ type TokenRef struct {
 // TokenChanged is the data of token.changed.
 type TokenChanged struct {
 	Token Token `json:"token"`
+}
+
+// Message types of the fog of war of M1.
+const (
+	TypeFogSet     = "fog.set"
+	TypeFogReveal  = "fog.reveal"
+	TypeFogHide    = "fog.hide"
+	TypeFogReset   = "fog.reset"
+	TypeFogChanged = "fog.changed"
+)
+
+// FogSet is the data of fog.set.
+type FogSet struct {
+	SceneID string `json:"sceneId"`
+	Enabled bool   `json:"enabled"`
+}
+
+// FogShape is the data of fog.reveal and fog.hide. fog.reset uses SceneRef.
+type FogShape struct {
+	SceneID string `json:"sceneId"`
+	Shape   Shape  `json:"shape"`
+}
+
+// FogChanged is the data of fog.changed. Tokens is for players only: all the
+// tokens of the scene they see now. nil is absent (the GM); a non-nil empty
+// slice is encoded as [].
+type FogChanged struct {
+	SceneID string  `json:"sceneId"`
+	Fog     Fog     `json:"fog"`
+	Tokens  []Token `json:"tokens,omitempty"`
+}
+
+// MarshalJSON encodes Tokens when it is not nil, even if it is empty.
+func (c FogChanged) MarshalJSON() ([]byte, error) {
+	if c.Tokens == nil {
+		return json.Marshal(struct {
+			SceneID string `json:"sceneId"`
+			Fog     Fog    `json:"fog"`
+		}{c.SceneID, c.Fog})
+	}
+	return json.Marshal(struct {
+		SceneID string  `json:"sceneId"`
+		Fog     Fog     `json:"fog"`
+		Tokens  []Token `json:"tokens"`
+	}{c.SceneID, c.Fog, c.Tokens})
 }

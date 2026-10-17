@@ -10,7 +10,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
 
-// Register adds the scene.* and token.* handlers to hub.
+// Register adds the scene.*, token.* and fog.* handlers to hub.
 func Register(hub *ws.Hub, s *Service) {
 	h := &handlers{s: s}
 	for t, fn := range map[string]ws.Handler{
@@ -28,6 +28,14 @@ func Register(hub *ws.Hub, s *Service) {
 		protocol.TypeTokenUpdate: h.tokenUpdate,
 		protocol.TypeTokenMove:   h.tokenMove,
 		protocol.TypeTokenDelete: h.tokenDelete,
+	} {
+		hub.Handle(t, fn, ws.HandlerOptions{})
+	}
+	for t, fn := range map[string]ws.Handler{
+		protocol.TypeFogSet:    h.fogSet,
+		protocol.TypeFogReveal: h.fogReveal,
+		protocol.TypeFogHide:   h.fogHide,
+		protocol.TypeFogReset:  h.fogReset,
 	} {
 		hub.Handle(t, fn, ws.HandlerOptions{})
 	}
@@ -95,7 +103,7 @@ func sceneChanged(scene protocol.SceneView, wasActive bool) ws.Renderer {
 // see; scene holds all of them and is not changed.
 func sceneActivated(scene protocol.SceneView) ws.Renderer {
 	return func(v ws.Viewer) (string, any, bool) {
-		return protocol.TypeSceneActivated, protocol.SceneActivated{Scene: sceneFor(scene, v, sceneState{Active: true})}, true
+		return protocol.TypeSceneActivated, protocol.SceneActivated{Scene: sceneFor(scene, v, sceneState{Active: true, Fog: scene.Fog})}, true
 	}
 }
 
@@ -314,5 +322,79 @@ func (h *handlers) tokenDelete(ctx context.Context, cmd ws.Command, em ws.Emitte
 		return nil, commandError(err)
 	}
 	em.Emit(tokenRemoved(res.Token.ID, res.State))
+	return nil, nil
+}
+
+// fogChanged shows the GM the fog. A player gets it for the active scene only,
+// with all the tokens of the scene they see now (a possibly empty list), which
+// replaces their own; there are no token.changed or token.removed for it.
+func fogChanged(res FogResult) ws.Renderer {
+	st := sceneState{Active: res.Active, Fog: res.Fog}
+	return func(v ws.Viewer) (string, any, bool) {
+		d := protocol.FogChanged{SceneID: res.SceneID, Fog: res.Fog}
+		switch {
+		case v.IsGM:
+		case !st.Active:
+			return "", nil, false
+		default:
+			d.Tokens = visibleTokens(res.Tokens, v, st)
+		}
+		return protocol.TypeFogChanged, d, true
+	}
+}
+
+func (h *handlers) fogSet(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if err := gmOnly(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.FogSet
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.SetFog(ctx, cmd.CampaignID, in)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(fogChanged(res))
+	return nil, nil
+}
+
+func (h *handlers) fogReveal(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	return h.fogShape(ctx, cmd, em, "reveal")
+}
+
+func (h *handlers) fogHide(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	return h.fogShape(ctx, cmd, em, "hide")
+}
+
+func (h *handlers) fogShape(ctx context.Context, cmd ws.Command, em ws.Emitter, op string) (any, error) {
+	if err := gmOnly(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.FogShape
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.AddFogOp(ctx, cmd.CampaignID, op, in)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(fogChanged(res))
+	return nil, nil
+}
+
+func (h *handlers) fogReset(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if err := gmOnly(cmd); err != nil {
+		return nil, err
+	}
+	var in protocol.SceneRef
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	res, err := h.s.ResetFog(ctx, cmd.CampaignID, in.SceneID)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(fogChanged(res))
 	return nil, nil
 }

@@ -24,6 +24,11 @@ export const MessageType = {
   TokenChanged: 'token.changed',
   TokenRemoved: 'token.removed',
   TokenDragging: 'token.dragging',
+  FogSet: 'fog.set',
+  FogReveal: 'fog.reveal',
+  FogHide: 'fog.hide',
+  FogReset: 'fog.reset',
+  FogChanged: 'fog.changed',
   Ping: 'ping',
   Pong: 'pong',
   Ack: 'ack',
@@ -91,9 +96,19 @@ export interface AssetRef {
   assetId: string
   url: string
 }
+/** Shape is an area of the scene in scene pixels; the same limits as on the server. */
+export type Shape =
+  | { type: 'rect'; x: number; y: number; w: number; h: number }
+  | { type: 'circle'; x: number; y: number; r: number }
+  | { type: 'polygon'; points: [number, number][] }
+export interface FogOp {
+  op: 'reveal' | 'hide'
+  shape: Shape
+}
 export interface Fog {
   enabled: boolean
-  ops: unknown[]
+  /** In the order of application: the last op whose shape holds a point decides. */
+  ops: FogOp[]
 }
 export interface TokenBar {
   key: string
@@ -173,6 +188,12 @@ export type ScenesChangedMessage = {
 }
 export type SceneChangedMessage = { t: 'scene.changed'; seq: number; d: { scene: SceneInfo } }
 export type SceneActivatedMessage = { t: 'scene.activated'; seq: number; d: { scene: SceneView } }
+/** FogChangedMessage: tokens is there for players only, the whole list they see now. */
+export type FogChangedMessage = {
+  t: 'fog.changed'
+  seq: number
+  d: { sceneId: string; fog: Fog; tokens?: Token[] }
+}
 export type TokenChangedMessage = { t: 'token.changed'; seq: number; d: { token: Token } }
 export type TokenRemovedMessage = { t: 'token.removed'; seq: number; d: { tokenId: string } }
 /** TokenDraggingMessage is transient: it has no seq. */
@@ -237,8 +258,66 @@ function isAssetRef(v: unknown): v is AssetRef {
   return isObject(v) && typeof v.assetId === 'string' && typeof v.url === 'string'
 }
 
+const maxCoord = 100000
+const maxPolygonPoints = 200
+
+function isCoord(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= maxCoord
+}
+
+function isPositiveCoord(v: unknown): v is number {
+  return isCoord(v) && v > 0
+}
+
+function hasExactKeys(v: Record<string, unknown>, keys: string[]): boolean {
+  const own = Object.keys(v)
+  return own.length === keys.length && keys.every((k) => k in v)
+}
+
+export function isShape(v: unknown): v is Shape {
+  if (!isObject(v)) return false
+  switch (v.type) {
+    case 'rect':
+      return (
+        hasExactKeys(v, ['type', 'x', 'y', 'w', 'h']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isPositiveCoord(v.w) &&
+        isPositiveCoord(v.h)
+      )
+    case 'circle':
+      return (
+        hasExactKeys(v, ['type', 'x', 'y', 'r']) &&
+        isCoord(v.x) &&
+        isCoord(v.y) &&
+        isPositiveCoord(v.r)
+      )
+    case 'polygon':
+      return (
+        hasExactKeys(v, ['type', 'points']) &&
+        Array.isArray(v.points) &&
+        v.points.length >= 3 &&
+        v.points.length <= maxPolygonPoints &&
+        v.points.every((p) => Array.isArray(p) && p.length === 2 && isCoord(p[0]) && isCoord(p[1]))
+      )
+    default:
+      return false
+  }
+}
+
+function isFogOp(v: unknown): v is FogOp {
+  return (
+    isObject(v) &&
+    hasExactKeys(v, ['op', 'shape']) &&
+    (v.op === 'reveal' || v.op === 'hide') &&
+    isShape(v.shape)
+  )
+}
+
 function isFog(v: unknown): v is Fog {
-  return isObject(v) && typeof v.enabled === 'boolean' && Array.isArray(v.ops)
+  return (
+    isObject(v) && typeof v.enabled === 'boolean' && Array.isArray(v.ops) && v.ops.every(isFogOp)
+  )
 }
 
 const visibilities: readonly unknown[] = ['all', 'owners', 'gm']
@@ -426,6 +505,18 @@ export function isSceneActivated(v: unknown): v is SceneActivatedMessage {
   )
 }
 
+export function isFogChanged(v: unknown): v is FogChangedMessage {
+  return (
+    isObject(v) &&
+    v.t === MessageType.FogChanged &&
+    isInteger(v.seq, 1) &&
+    isObject(v.d) &&
+    typeof v.d.sceneId === 'string' &&
+    isFog(v.d.fog) &&
+    (v.d.tokens === undefined || (Array.isArray(v.d.tokens) && v.d.tokens.every(isToken)))
+  )
+}
+
 export function isTokenChanged(v: unknown): v is TokenChangedMessage {
   return (
     isObject(v) &&
@@ -582,4 +673,22 @@ export function tokenDragMessage(tokenId: string, x: number, y: number): Envelop
 
 export function tokenDeleteCommand(id: string, tokenId: string): Envelope {
   return { t: MessageType.TokenDelete, id, d: { tokenId } }
+}
+
+export function fogSetCommand(id: string, sceneId: string, enabled: boolean): Envelope {
+  return { t: MessageType.FogSet, id, d: { sceneId, enabled } }
+}
+
+/** fogRevealCommand and fogHideCommand add an operation to the end of the fog. */
+export function fogRevealCommand(id: string, sceneId: string, shape: Shape): Envelope {
+  return { t: MessageType.FogReveal, id, d: { sceneId, shape } }
+}
+
+export function fogHideCommand(id: string, sceneId: string, shape: Shape): Envelope {
+  return { t: MessageType.FogHide, id, d: { sceneId, shape } }
+}
+
+/** fogResetCommand removes every operation; enabled stays. */
+export function fogResetCommand(id: string, sceneId: string): Envelope {
+  return { t: MessageType.FogReset, id, d: { sceneId } }
 }
