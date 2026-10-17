@@ -32,6 +32,7 @@ type identity struct {
 type table struct {
 	t      *testing.T
 	svc    *Service
+	roller *sequenceRoller // rolls the initiative; set its values in a test
 	hub    *ws.Hub
 	game   *game.Service
 	srv    *httptest.Server
@@ -63,7 +64,8 @@ func newTable(t *testing.T) *table {
 	tb.hub = ws.NewHub(gameSvc, slog.New(slog.NewTextHandler(io.Discard, nil)), ws.Options{
 		IdleTimeout: 30 * time.Second, RatePerSec: 1000, RateBurst: 1000, BufferSize: 50,
 	})
-	Register(tb.hub, tb.svc)
+	tb.roller = &sequenceRoller{}
+	Register(tb.hub, tb.svc, tb.roller)
 	tb.hub.AddSnapshotSource(tb.svc)
 
 	setup, err := authSvc.IssueSetupToken()

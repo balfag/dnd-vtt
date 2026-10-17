@@ -36,8 +36,9 @@ var (
 // TokenResult is a token after a change with the state of its scene at that
 // moment; the renderer of the event captures both.
 type TokenResult struct {
-	Token protocol.Token
-	State sceneState
+	Token  protocol.Token
+	State  sceneState
+	Combat *CombatResult // DeleteToken only: the fight of the scene after the deletion, nil if none
 }
 
 // tokenScene is the scene a token is on, as far as token checks need it.
@@ -500,7 +501,11 @@ func (s *Service) DeleteToken(ctx context.Context, campaignID, tokenID string) (
 		if _, err := tx.ExecContext(ctx, `DELETE FROM token WHERE id = ?`, tokenID); err != nil {
 			return fmt.Errorf("delete token: %w", err)
 		}
-		res = TokenResult{Token: t, State: sc.state()}
+		combat, err := combatIfAny(ctx, tx, campaignID, t.SceneID)
+		if err != nil {
+			return err
+		}
+		res = TokenResult{Token: t, State: sc.state(), Combat: combat}
 		return nil
 	})
 	return res, err
