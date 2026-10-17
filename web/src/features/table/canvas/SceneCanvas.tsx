@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { PlayerInfo, SceneView, Token } from '../../../shared/protocol'
+import type { PlayerInfo, SceneView, Shape, Token } from '../../../shared/protocol'
 import { MessageType } from '../../../shared/protocol'
 import type { GameConnection } from '../../../shared/ws/connection'
+import { CommandError, commandErrorKey } from '../../../shared/ws/errors'
+import type { FogToolState } from '../../fog/FogToolbar'
 import { gameStore } from '../../game/store'
 import { createMoves } from '../moves'
 import { ZoomControls } from '../ZoomControls'
 import { canvasBridge } from './canvasBridge'
 import { centerOn, fit, screenToWorld, type Camera, type Point } from './camera'
 import { canMove, endDrag, moveDrag, startDrag, type DragState } from './drag'
+import type { FogPreviewModel } from './FogLayer'
+import {
+  brushStamps,
+  clampToScene,
+  MAX_POLYGON_POINTS,
+  polygonFromPoints,
+  rectFromPoints,
+} from './fogShapes'
 import { cellDistanceFt } from './grid'
 import {
   cycleToken,
@@ -32,6 +42,19 @@ const clickSlopPx = 4
 // If the server answers a move but sends no token.changed (nothing changed), the pending move is dropped after this.
 const confirmFallbackMs = 1000
 const pruneEveryMs = 500
+// A click this close (screen px) to the first corner closes the polygon.
+const closeSlopPx = 10
+// Two clicks closer than this (screen px) are one corner.
+const sameCornerPx = 6
+
+/** FogDraw is the shape the fog tool is drawing; points are in scene coordinates. */
+interface FogDraw {
+  shape: FogToolState['shape']
+  points: Point[]
+  /** The pointer that holds a rectangle or a brush stroke; a polygon is drawn by clicks. */
+  pointerId: number | null
+  cursor: Point | null
+}
 
 export interface CanvasMe {
   isGM: boolean
@@ -46,6 +69,8 @@ interface SceneCanvasProps {
   connection: GameConnection | null
   /** announce says something to the viewer; visible also shows a note for a few seconds. */
   announce: (text: string, visible: boolean) => void
+  /** fogTool is the GM's fog tool in hand (null: the select tool). */
+  fogTool: FogToolState | null
 }
 
 function typesText(target: EventTarget | null): boolean {
@@ -56,6 +81,27 @@ function typesText(target: EventTarget | null): boolean {
       target.tagName === 'TEXTAREA' ||
       target.tagName === 'SELECT')
   )
+}
+
+/** fogShapes turns what the fog tool drew into the shapes to send: one, or a circle per brush stamp. */
+function fogShapes(d: FogDraw, sc: SceneView, tool: FogToolState): Shape[] {
+  const bounds = { width: sc.width, height: sc.height }
+  switch (d.shape) {
+    case 'rect': {
+      const [a, b] = d.points
+      if (a === undefined || b === undefined) return []
+      const rect = clampToScene(rectFromPoints(a, b), bounds)
+      return rect.type === 'rect' && rect.w > 0 && rect.h > 0 ? [rect] : []
+    }
+    case 'polygon': {
+      const polygon = polygonFromPoints(d.points)
+      return polygon === null ? [] : [clampToScene(polygon, bounds)]
+    }
+    case 'brush':
+      return brushStamps(d.points, tool.radiusCells * sc.grid.sizePx).map((s) =>
+        clampToScene(s, bounds),
+      )
+  }
 }
 
 function samePoint(a: Point, b: Point): boolean {
@@ -73,6 +119,7 @@ export function SceneCanvas({
   me,
   connection,
   announce,
+  fogTool,
 }: SceneCanvasProps) {
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
@@ -88,7 +135,10 @@ export function SceneCanvas({
   const connectionRef = useRef(connection)
   const announceRef = useRef(announce)
   const tRef = useRef(t)
+  const fogToolRef = useRef(fogTool)
+  const fogDraw = useRef<FogDraw | null>(null)
   useEffect(() => {
+    fogToolRef.current = fogTool
     playersRef.current = players
     meRef.current = me
     connectionRef.current = connection
@@ -220,6 +270,23 @@ export function SceneCanvas({
   }, [])
 
   useEffect(() => {
+    renderer?.setFog(scene, me.isGM)
+  }, [renderer, scene, me.isGM])
+
+  // Another tool or another scene drops a shape that is half drawn.
+  const fogMode = fogTool?.mode
+  const fogShape = fogTool?.shape
+  const sceneId = scene?.id
+  useEffect(() => {
+    fogDraw.current = null
+    renderer?.setFogPreview(null)
+    const host = hostRef.current
+    if (host === null) return
+    if (fogMode !== undefined) host.setAttribute('data-cursor', 'crosshair')
+    else if (host.getAttribute('data-cursor') === 'crosshair') host.removeAttribute('data-cursor')
+  }, [renderer, fogMode, fogShape, sceneId])
+
+  useEffect(() => {
     refresh()
   }, [players, me.isGM, me.playerId, refresh])
 
@@ -266,8 +333,94 @@ export function SceneCanvas({
       else host?.removeAttribute('data-panning')
     }
     function setCursor(kind: 'grab' | 'grabbing' | null) {
-      if (kind === null) host?.removeAttribute('data-cursor')
-      else host?.setAttribute('data-cursor', kind)
+      if (kind !== null) host?.setAttribute('data-cursor', kind)
+      else if (fogToolRef.current !== null) host?.setAttribute('data-cursor', 'crosshair')
+      else host?.removeAttribute('data-cursor')
+    }
+
+    // The fog tool: the shape in progress is drawn as a dashed preview and sent when it is closed.
+    const fogRenderer = renderer // function declarations lose the narrowing of the renderer
+    let fogHover: Point | null = null
+    let fogQueue: Promise<void> = Promise.resolve()
+    function screenGap(a: Point, b: Point): number {
+      return Math.hypot(a.x - b.x, a.y - b.y) * cameraRef.current.zoom
+    }
+    function previewFog() {
+      const tool = fogToolRef.current
+      const sc = sceneRef.current
+      if (tool === null || sc === null) {
+        fogRenderer.setFogPreview(null)
+        return
+      }
+      const radius = tool.radiusCells * sc.grid.sizePx
+      const d = fogDraw.current
+      let model: FogPreviewModel | null = null
+      if (d !== null) model = { shape: d.shape, points: d.points, cursor: d.cursor, radius }
+      else if (tool.shape === 'brush' && fogHover !== null) {
+        model = { shape: 'brush', points: [fogHover], cursor: null, radius }
+      }
+      fogRenderer.setFogPreview(model)
+    }
+    async function sendFog(tool: FogToolState, sc: SceneView, shapes: Shape[]) {
+      const conn = connectionRef.current
+      if (conn === null || shapes.length === 0) return
+      const type = tool.mode === 'reveal' ? MessageType.FogReveal : MessageType.FogHide
+      try {
+        // Drawing on a scene without fog turns the fog on first.
+        if (!sc.fog.enabled)
+          await conn.command(MessageType.FogSet, { sceneId: sc.id, enabled: true })
+        for (const shape of shapes) await conn.command(type, { sceneId: sc.id, shape })
+      } catch (err) {
+        const full = err instanceof CommandError && err.code === 'conflict'
+        announceRef.current(tRef.current(full ? 'fog.opsFull' : commandErrorKey(err)), true)
+      }
+    }
+    function dropFog() {
+      fogDraw.current = null
+      previewFog()
+    }
+    function finishFog() {
+      const d = fogDraw.current
+      const tool = fogToolRef.current
+      const sc = sceneRef.current
+      dropFog()
+      if (d === null || tool === null || sc === null) return
+      const shapes = fogShapes(d, sc, tool)
+      fogQueue = fogQueue.then(() => sendFog(tool, sc, shapes))
+    }
+    /** closeFogPolygon sends the polygon; with fewer than 3 corners it stays open. */
+    function closeFogPolygon() {
+      const d = fogDraw.current
+      if (d?.shape !== 'polygon' || polygonFromPoints(d.points) === null) return
+      finishFog()
+    }
+    function fogDown(e: PointerEvent, p: Point) {
+      const tool = fogToolRef.current
+      if (tool === null) return
+      const at = screenToWorld(cameraRef.current, p)
+      const d = fogDraw.current
+      if (tool.shape === 'rect') {
+        fogDraw.current = { shape: 'rect', points: [at, at], pointerId: e.pointerId, cursor: null }
+      } else if (tool.shape === 'brush') {
+        fogDraw.current = { shape: 'brush', points: [at], pointerId: e.pointerId, cursor: null }
+      } else if (d?.shape !== 'polygon') {
+        fogDraw.current = { shape: 'polygon', points: [at], pointerId: null, cursor: at }
+      } else {
+        const first = d.points[0]
+        const last = d.points[d.points.length - 1]
+        if (first !== undefined && d.points.length >= 3 && screenGap(first, at) < closeSlopPx) {
+          closeFogPolygon()
+          return
+        }
+        // The second click of a double click lands on the corner the first one made.
+        if (last !== undefined && screenGap(last, at) < sameCornerPx) return
+        d.points = [...d.points, at]
+        if (d.points.length >= MAX_POLYGON_POINTS) {
+          closeFogPolygon()
+          return
+        }
+      }
+      previewFog()
     }
     function tokenById(id: string | null): Token | null {
       return sceneRef.current?.tokens.find((tk) => tk.id === id) ?? null
@@ -318,6 +471,7 @@ export function SceneCanvas({
     }
 
     const hoverAt = (p: Point) => {
+      if (fogToolRef.current !== null) return
       const id = renderer.tokenAt(p)
       const tk = tokenById(id)
       setCursor(tk !== null && canMove(tk, meRef.current) ? 'grab' : null)
@@ -336,6 +490,19 @@ export function SceneCanvas({
       host.setPointerCapture(e.pointerId)
       const p = local(e)
       pointer.current = p
+      if (fogToolRef.current !== null) {
+        const fd = fogDraw.current
+        if (fd !== null && fd.pointerId !== null && fd.pointerId !== e.pointerId) {
+          // A second finger: the shape is dropped, the fingers pan and zoom the map.
+          dropFog()
+        } else if (e.button === 0 && !spaceHeld && gesture.pointers.size === 0) {
+          fogDown(e, p)
+          return
+        }
+        gesture = pointerDown(gesture, e.pointerId, p)
+        setPanning(true)
+        return
+      }
       if (drag.current !== null) {
         // A second finger: the token stays where it was, the fingers pan and zoom the map.
         cancelDrag()
@@ -363,6 +530,19 @@ export function SceneCanvas({
     const move = (e: PointerEvent) => {
       const p = local(e)
       pointer.current = p
+      if (fogToolRef.current !== null) {
+        const fd = fogDraw.current
+        const at = screenToWorld(cameraRef.current, p)
+        fogHover = at
+        if (fd?.pointerId === e.pointerId) {
+          const last = fd.points[fd.points.length - 1]
+          if (fd.shape === 'rect') fd.points = [fd.points[0] ?? at, at]
+          else if (last === undefined || screenGap(last, at) >= 2) fd.points = [...fd.points, at]
+        } else if (fd?.shape === 'polygon') {
+          fd.cursor = at
+        }
+        previewFog()
+      }
       const sc = sceneRef.current
       const d = drag.current
       if (d !== null && e.pointerId === dragPointer && sc !== null) {
@@ -401,6 +581,12 @@ export function SceneCanvas({
       if (gesture.pointers.size === 0 && e.buttons === 0) hoverAt(p)
     }
     const up = (e: PointerEvent) => {
+      const fd = fogDraw.current
+      if (fd !== null && fd.pointerId === e.pointerId) {
+        if (e.type === 'pointerup') finishFog()
+        else dropFog()
+        return
+      }
       const sc = sceneRef.current
       const d = drag.current
       if (d !== null && e.pointerId === dragPointer && sc !== null) {
@@ -424,6 +610,10 @@ export function SceneCanvas({
       if (gesture.pointers.size === 0) setPanning(false)
     }
     const leave = () => {
+      if (fogHover !== null) {
+        fogHover = null
+        previewFog()
+      }
       if (hoverId.current === null || drag.current !== null) return
       hoverId.current = null
       setCursor(null)
@@ -433,6 +623,9 @@ export function SceneCanvas({
     const mouseDown = (e: MouseEvent) => {
       if (e.button === 1) e.preventDefault()
     }
+    const doubleClick = () => {
+      closeFogPolygon()
+    }
     const altChanged = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || drag.current === null) return
       snap.current = e.type === 'keyup'
@@ -441,6 +634,20 @@ export function SceneCanvas({
     const key = (e: KeyboardEvent) => {
       altChanged(e)
       if (typesText(e.target)) return
+      const draw = fogDraw.current
+      if (draw !== null && e.key === 'Escape') {
+        dropFog()
+        return
+      }
+      if (
+        draw?.shape === 'polygon' &&
+        e.key === 'Enter' &&
+        (e.target === host || e.target === document.body)
+      ) {
+        e.preventDefault()
+        closeFogPolygon()
+        return
+      }
       const focused = document.activeElement === host
       if (e.key === ' ' && focused) {
         spaceHeld = true
@@ -513,6 +720,7 @@ export function SceneCanvas({
     host.addEventListener('pointercancel', up)
     host.addEventListener('pointerleave', leave)
     host.addEventListener('mousedown', mouseDown)
+    host.addEventListener('dblclick', doubleClick)
     document.addEventListener('keydown', key)
     document.addEventListener('keyup', keyUp)
     return () => {
@@ -524,6 +732,7 @@ export function SceneCanvas({
       host.removeEventListener('pointercancel', up)
       host.removeEventListener('pointerleave', leave)
       host.removeEventListener('mousedown', mouseDown)
+      host.removeEventListener('dblclick', doubleClick)
       document.removeEventListener('keydown', key)
       document.removeEventListener('keyup', keyUp)
       drag.current = null

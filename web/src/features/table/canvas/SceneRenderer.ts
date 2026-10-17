@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
 import type { AssetRef, Grid, SceneView } from '../../../shared/protocol'
 import { worldToScreen, screenToWorld, type Camera } from './camera'
 import { clipSegment, hexEdges, intersect, squareLines } from './grid'
+import { FogLayer, FogPreviewLayer, type FogPreviewModel } from './FogLayer'
 import { tileRects } from './tiles'
 import { TokenLayer, type TokenModel } from './TokenLayer'
 
@@ -17,6 +18,7 @@ export interface SceneLayers {
   grid: Container
   tokens: Container
   gmTokens: Container
+  fog: Container
   edge: Container
   overlay: Container
 }
@@ -38,6 +40,9 @@ export class SceneRenderer {
   private readonly gridShape = new Graphics()
   private readonly edgeShape = new Graphics()
   private readonly tokenLayer: TokenLayer
+  private readonly fogLayer: FogLayer
+  private readonly fogPreview: FogPreviewLayer
+  private previewModel: FogPreviewModel | null = null
   private readonly resizeObserver: ResizeObserver
   private readonly maxTile: number
   private scene: SceneView | null = null
@@ -59,24 +64,28 @@ export class SceneRenderer {
       verdigris: cssColor(host, '--verdigris', '#4fa58e'),
       seal: cssColor(host, '--seal', '#c25468'),
     })
+    this.fogLayer = new FogLayer(app, this.slateColor)
+    this.fogPreview = new FogPreviewLayer(cssColor(host, '--brass', '#c9a34e'))
     this.layers = {
       background: new Container(),
       mapTokens: this.tokenLayer.layers.map,
       grid: new Container(),
       tokens: this.tokenLayer.layers.tokens,
       gmTokens: this.tokenLayer.layers.gm,
+      fog: this.fogLayer.container,
       edge: new Container(),
       overlay: this.tokenLayer.layers.overlay,
     }
     this.layers.background.addChild(this.board)
     this.layers.grid.addChild(this.gridShape)
-    this.layers.edge.addChild(this.edgeShape)
+    this.layers.edge.addChild(this.edgeShape, this.fogPreview.graphics)
     app.stage.addChild(
       this.layers.background,
       this.layers.mapTokens,
       this.layers.grid,
       this.layers.tokens,
       this.layers.gmTokens,
+      this.layers.fog,
       this.layers.edge,
       this.layers.overlay,
     )
@@ -124,6 +133,7 @@ export class SceneRenderer {
   setCamera(c: Camera): void {
     this.camera = c
     this.applyCamera()
+    this.fogPreview.draw(this.previewModel, c)
     this.tokenLayer.setCamera(c)
     this.gridDirty = true
     this.edgeDirty = true
@@ -132,6 +142,17 @@ export class SceneRenderer {
   /** setTokens gives the token layer what to draw; call it whenever the tokens, selection or drag change. */
   setTokens(model: TokenModel): void {
     if (!this.destroyed) this.tokenLayer.setModel(model)
+  }
+
+  /** setFog shows the fog of the scene, opaque for a player and see-through for the GM. */
+  setFog(scene: SceneView | null, isGM: boolean): void {
+    if (!this.destroyed) this.fogLayer.setFog(scene, isGM)
+  }
+
+  /** setFogPreview shows the outline of the fog shape being drawn (null: nothing). */
+  setFogPreview(model: FogPreviewModel | null): void {
+    this.previewModel = model
+    if (!this.destroyed) this.fogPreview.draw(model, this.camera)
   }
 
   /** tokenAt is the id of the topmost token under the point (viewport coordinates), or null. */
@@ -170,6 +191,7 @@ export class SceneRenderer {
     this.loadId++
     this.resizeObserver.disconnect()
     this.tokenLayer.destroy()
+    this.fogLayer.destroy()
     this.app.destroy(true, { children: true, texture: true })
   }
 
@@ -178,6 +200,9 @@ export class SceneRenderer {
     const bg = this.layers.background
     bg.position.set(-x * zoom, -y * zoom)
     bg.scale.set(zoom)
+    const fog = this.layers.fog
+    fog.position.set(-x * zoom, -y * zoom)
+    fog.scale.set(zoom)
   }
 
   /** flush redraws the screen-space lines at most once per frame. */
