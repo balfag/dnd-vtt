@@ -132,6 +132,35 @@
               "prone"
             ]
           }
+        ],
+        "drawings": [
+          {
+            "id": "01J00000000000000000000DR1",
+            "sceneId": "01J00000000000000000000SC2",
+            "kind": "template",
+            "data": {
+              "shape": "cone",
+              "x": 350,
+              "y": 210.5,
+              "size": 15,
+              "direction": 45
+            },
+            "color": "#e53935",
+            "authorPlayerId": "01J00000000000000000000PL2"
+          },
+          {
+            "id": "01J00000000000000000000DR2",
+            "sceneId": "01J00000000000000000000SC2",
+            "kind": "text",
+            "data": {
+              "x": 120,
+              "y": 80,
+              "text": "Ловушка",
+              "size": 24
+            },
+            "color": "#c9a34e",
+            "authorPlayerId": "01J00000000000000000000PL1"
+          }
         ]
       },
       "chat": [],

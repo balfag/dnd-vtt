@@ -1,0 +1,20 @@
+{
+  "t": "drawing.changed",
+  "seq": 33,
+  "d": {
+    "drawing": {
+      "id": "01J00000000000000000000DR1",
+      "sceneId": "01J00000000000000000000SC2",
+      "kind": "template",
+      "data": {
+        "shape": "cone",
+        "x": 350,
+        "y": 210.5,
+        "size": 15,
+        "direction": 45
+      },
+      "color": "#e53935",
+      "authorPlayerId": "01J00000000000000000000PL2"
+    }
+  }
+}
