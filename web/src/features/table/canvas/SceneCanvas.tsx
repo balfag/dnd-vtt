@@ -9,7 +9,7 @@ import { CommandError, commandErrorKey } from '../../../shared/ws/errors'
 import type { FogToolState } from '../../fog/FogToolbar'
 import { gameStore } from '../../game/store'
 import { isCondition } from '../../tokens/conditions'
-import { actionOfKey, type TokenAction } from '../../tokens/tokenActions'
+import { quickActionOfKey, type TokenAction } from '../../tokens/tokenActions'
 import { buildTokenCreate } from '../../tokens/tokenForm'
 import { createMoves } from '../moves'
 import { ZoomControls } from '../ZoomControls'
@@ -849,13 +849,15 @@ export function SceneCanvas({
         return
       }
       const selected = tokenById(selectedId.current)
-      if (focused && selected !== null && meRef.current.isGM && !toolInHand()) {
-        const action = actionOfKey(e.key)
-        if (action !== null) {
-          e.preventDefault()
-          tokenCallbacks.current.onTokenAction(action, selected.id)
-          return
-        }
+      const action = quickActionOfKey(e.key, {
+        focused,
+        isGM: meRef.current.isGM,
+        hasSelection: selected !== null,
+      })
+      if (action !== null && selected !== null) {
+        e.preventDefault()
+        tokenCallbacks.current.onTokenAction(action, selected.id)
+        return
       }
       if (focused && sc !== null && selected !== null && canMove(selected, meRef.current)) {
         // Repeated arrows step from where the token is shown, not from the last server position.

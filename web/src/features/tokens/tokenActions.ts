@@ -34,6 +34,18 @@ export function tokenMenuItems(token: Token): TokenMenuItem[] {
   ]
 }
 
+/**
+ * quickActionOfKey is the action a key does on the selected token for this viewer, or null. It does
+ * not depend on the active tool: the quick actions work whatever tool is in hand.
+ */
+export function quickActionOfKey(
+  key: string,
+  ctx: { focused: boolean; isGM: boolean; hasSelection: boolean },
+): TokenAction | null {
+  if (!ctx.focused || !ctx.isGM || !ctx.hasSelection) return null
+  return actionOfKey(key)
+}
+
 /** actionOfKey is the action a key does on the selected token, or null. */
 export function actionOfKey(key: string): TokenAction | null {
   switch (key) {
