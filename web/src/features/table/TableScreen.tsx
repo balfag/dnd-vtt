@@ -28,6 +28,7 @@ import { SidePanel } from './SidePanel'
 import { TableAnnouncer, type Announcement } from './TableAnnouncer'
 import { useNarrow } from './useNarrow'
 import { ToolRail, type TableTool } from './ToolRail'
+import { TokenList } from './TokenList'
 import { TopBar } from './TopBar'
 import './table.css'
 
@@ -320,6 +321,7 @@ export default function TableScreen() {
           }}
           onTokenAction={doTokenAction}
         />
+        <TokenList scene={scene} />
         {placeTool !== null && (
           <PlaceTokenPopover
             campaignId={campaignId}
