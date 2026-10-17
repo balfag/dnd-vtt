@@ -28,7 +28,7 @@ function parseRoll(rest: string, visibility: 'public' | 'gm' | 'self' | 'blind')
   const space = body.search(/\s/)
   const formula = space === -1 ? body : body.slice(0, space)
   const label = space === -1 ? '' : body.slice(space).trim()
-  if ([...label].length > maxLabel) return fail('chat.error.labelTooLong')
+  if (Array.from(label).length > maxLabel) return fail('chat.error.labelTooLong')
   return { kind: 'roll', formula, label, visibility }
 }
 
