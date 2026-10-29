@@ -1,0 +1,342 @@
+[
+  {
+    "formula": "2d20kh1 + 5",
+    "ok": true
+  },
+  {
+    "formula": "4d6dl1",
+    "ok": true
+  },
+  {
+    "formula": "8d6",
+    "ok": true
+  },
+  {
+    "formula": "1d%",
+    "ok": true
+  },
+  {
+    "formula": "2d6r<=2 + 3",
+    "ok": true
+  },
+  {
+    "formula": "3d6! - 1",
+    "ok": true
+  },
+  {
+    "formula": "d20",
+    "ok": true
+  },
+  {
+    "formula": "10",
+    "ok": true
+  },
+  {
+    "formula": "0",
+    "ok": true
+  },
+  {
+    "formula": "1000000",
+    "ok": true
+  },
+  {
+    "formula": "1000001",
+    "ok": false
+  },
+  {
+    "formula": "99999999999999999999999",
+    "ok": false
+  },
+  {
+    "formula": "-2+d4",
+    "ok": true
+  },
+  {
+    "formula": "+2d6",
+    "ok": true
+  },
+  {
+    "formula": "1d20-1d4",
+    "ok": true
+  },
+  {
+    "formula": "  2 d 6 kh 1 + 3 ",
+    "ok": true
+  },
+  {
+    "formula": "2\td6",
+    "ok": true
+  },
+  {
+    "formula": "2D20KH1",
+    "ok": true
+  },
+  {
+    "formula": "2d20Kh1",
+    "ok": true
+  },
+  {
+    "formula": "D%",
+    "ok": true
+  },
+  {
+    "formula": "d%kh",
+    "ok": true
+  },
+  {
+    "formula": "2D20KH",
+    "ok": true
+  },
+  {
+    "formula": "1 0d6",
+    "ok": false
+  },
+  {
+    "formula": "100d6",
+    "ok": true
+  },
+  {
+    "formula": "101d6",
+    "ok": false
+  },
+  {
+    "formula": "0d6",
+    "ok": false
+  },
+  {
+    "formula": "1d1000",
+    "ok": true
+  },
+  {
+    "formula": "d1000",
+    "ok": true
+  },
+  {
+    "formula": "d1001",
+    "ok": false
+  },
+  {
+    "formula": "d2",
+    "ok": true
+  },
+  {
+    "formula": "d1",
+    "ok": false
+  },
+  {
+    "formula": "2d1",
+    "ok": false
+  },
+  {
+    "formula": "d0",
+    "ok": false
+  },
+  {
+    "formula": "99999999999999999999d6",
+    "ok": false
+  },
+  {
+    "formula": "100d1000",
+    "ok": true
+  },
+  {
+    "formula": "4d6dh2",
+    "ok": true
+  },
+  {
+    "formula": "3d8kl2",
+    "ok": true
+  },
+  {
+    "formula": "2d20kh",
+    "ok": true
+  },
+  {
+    "formula": "100d6dl99",
+    "ok": true
+  },
+  {
+    "formula": "2d6kh3",
+    "ok": false
+  },
+  {
+    "formula": "2d6kh0",
+    "ok": false
+  },
+  {
+    "formula": "2d6kh1kl1",
+    "ok": false
+  },
+  {
+    "formula": "2d6k",
+    "ok": false
+  },
+  {
+    "formula": "2d6d6",
+    "ok": false
+  },
+  {
+    "formula": "1d6r1",
+    "ok": true
+  },
+  {
+    "formula": "2d6r<3",
+    "ok": true
+  },
+  {
+    "formula": "2d6r>4",
+    "ok": true
+  },
+  {
+    "formula": "2d6r>=5",
+    "ok": true
+  },
+  {
+    "formula": "1d2r1",
+    "ok": true
+  },
+  {
+    "formula": "1d6r<=5",
+    "ok": true
+  },
+  {
+    "formula": "1d6r<=6",
+    "ok": false
+  },
+  {
+    "formula": "1d6r>0",
+    "ok": false
+  },
+  {
+    "formula": "1d6r>=1",
+    "ok": false
+  },
+  {
+    "formula": "1d6r0",
+    "ok": false
+  },
+  {
+    "formula": "1d2r<3",
+    "ok": false
+  },
+  {
+    "formula": "2d6r",
+    "ok": false
+  },
+  {
+    "formula": "2d6r1r2",
+    "ok": false
+  },
+  {
+    "formula": "d6!r1kh1",
+    "ok": true
+  },
+  {
+    "formula": "1d1000kh1r1!",
+    "ok": true
+  },
+  {
+    "formula": "2d6!!",
+    "ok": false
+  },
+  {
+    "formula": "100d6+100d6",
+    "ok": true
+  },
+  {
+    "formula": "100d6+100d6+1d6",
+    "ok": false
+  },
+  {
+    "formula": "1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1",
+    "ok": true
+  },
+  {
+    "formula": "1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1",
+    "ok": false
+  },
+  {
+    "formula": "                                                                                                                                                                                                       1",
+    "ok": true
+  },
+  {
+    "formula": "                                                                                                                                                                                                        1",
+    "ok": false
+  },
+  {
+    "formula": "                                                                                                                                                                                                   1d6",
+    "ok": true
+  },
+  {
+    "formula": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "ok": false
+  },
+  {
+    "formula": "жжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжж",
+    "ok": false
+  },
+  {
+    "formula": "",
+    "ok": false
+  },
+  {
+    "formula": "   ",
+    "ok": false
+  },
+  {
+    "formula": "2d",
+    "ok": false
+  },
+  {
+    "formula": "d",
+    "ok": false
+  },
+  {
+    "formula": "+",
+    "ok": false
+  },
+  {
+    "formula": "-",
+    "ok": false
+  },
+  {
+    "formula": "2d6+",
+    "ok": false
+  },
+  {
+    "formula": "2d6+-1",
+    "ok": false
+  },
+  {
+    "formula": "abc",
+    "ok": false
+  },
+  {
+    "formula": "2d6x",
+    "ok": false
+  },
+  {
+    "formula": "2d6ж",
+    "ok": false
+  },
+  {
+    "formula": "ж",
+    "ok": false
+  },
+  {
+    "formula": "1.5",
+    "ok": false
+  },
+  {
+    "formula": "2d6 3",
+    "ok": false
+  },
+  {
+    "formula": "(2d6)",
+    "ok": false
+  },
+  {
+    "formula": "2*3",
+    "ok": false
+  }
+]

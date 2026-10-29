@@ -1,0 +1,550 @@
+/* The wiki editor (docs/design/wiki-screen.md, "Шрифты" and "Содержимое страницы"). */
+
+.wiki-editor {
+  max-width: 44rem;
+  color: var(--chalk);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.wiki-editor__content {
+  min-height: 6rem;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+
+.wiki-editor ::selection {
+  background: rgba(79, 165, 142, 0.32);
+}
+
+.wiki-editor__content > :first-child {
+  margin-top: 0;
+}
+
+.wiki-editor p {
+  margin: 0 0 0.75em;
+}
+
+.wiki-editor p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: var(--fog);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+/* Headings are Alegreya 700. */
+.wiki-editor h1,
+.wiki-editor h2,
+.wiki-editor h3 {
+  margin: 1.2em 0 0.4em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.wiki-editor h1 {
+  font-size: 24px;
+}
+
+.wiki-editor h2 {
+  font-size: 21px;
+}
+
+.wiki-editor h3 {
+  font-size: 18px;
+}
+
+.wiki-editor a {
+  color: var(--verdigris);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wiki-editor strong {
+  font-weight: 700;
+}
+
+.wiki-editor ul,
+.wiki-editor ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.5em;
+}
+
+.wiki-editor li > p {
+  margin-bottom: 0.25em;
+}
+
+.wiki-editor blockquote {
+  margin: 0 0 0.75em;
+  padding-left: 14px;
+  border-left: 3px solid var(--fog);
+}
+
+.wiki-editor hr {
+  margin: 1.2em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Code is the only place with a monospace font. */
+.wiki-editor code,
+.wiki-editor pre {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.88em;
+}
+
+.wiki-editor code {
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+  background: var(--board);
+}
+
+.wiki-editor pre {
+  margin: 0 0 0.75em;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--board);
+  line-height: 1.5;
+}
+
+.wiki-editor pre code {
+  padding: 0;
+  background: none;
+}
+
+.wiki-editor img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 0.75em;
+  border-radius: 4px;
+}
+
+.wiki-editor .ProseMirror-selectednode {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+/* Mention: chalk text, a dotted fog underline; scene and token carry a small label. */
+.wiki-mention {
+  border-bottom: 1px dotted var(--fog);
+  color: var(--chalk);
+  cursor: pointer;
+}
+
+.wiki-mention:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+.wiki-mention__kind {
+  color: var(--fog);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.wiki-mention--gone {
+  border-bottom-color: transparent;
+  color: var(--fog);
+  cursor: default;
+}
+
+.wiki-mention--gone .wiki-mention__name {
+  text-decoration: line-through;
+}
+
+/* Inline roll: a button in the line. */
+.wiki-roll {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 1px;
+  padding: 0 7px;
+  border: 1px solid var(--fog);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chalk);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.wiki-roll:hover:not(:disabled) {
+  border-color: var(--verdigris);
+}
+
+.wiki-roll:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+/* Out of a game the roll is plain fog text without a frame. */
+.wiki-roll:disabled {
+  border-color: transparent;
+  color: var(--fog);
+  cursor: default;
+}
+
+/* Callout: board background, an emoji at the left, no frame or shadow. */
+.wiki-callout {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 0.75em;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--board);
+}
+
+.wiki-callout__emoji {
+  flex: none;
+  align-self: flex-start;
+  width: 1.6em;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
+  text-align: center;
+}
+
+button.wiki-callout__emoji:not(:disabled) {
+  cursor: pointer;
+}
+
+.wiki-callout__input {
+  flex: none;
+  align-self: flex-start;
+  width: 4.5em;
+  border: 1px solid var(--fog);
+  border-radius: 4px;
+  background: var(--slate);
+  color: var(--chalk);
+  font: inherit;
+}
+
+.wiki-callout__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.wiki-callout__body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Checklist: a 15 px square; a checked item is struck out in fog. */
+.wiki-editor ul[data-type='taskList'] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.wiki-editor ul[data-type='taskList'] li {
+  display: flex;
+  gap: 10px;
+}
+
+.wiki-editor ul[data-type='taskList'] li > label {
+  flex: none;
+  padding-top: 0.42em;
+}
+
+.wiki-editor ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.wiki-editor ul[data-type='taskList'] input[type='checkbox'] {
+  position: relative;
+  display: block;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1.5px solid var(--fog);
+  border-radius: 3px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.wiki-editor ul[data-type='taskList'] input[type='checkbox']:checked {
+  border-color: var(--verdigris);
+  background: var(--verdigris);
+}
+
+.wiki-editor ul[data-type='taskList'] input[type='checkbox']:checked::after {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--ink-on-verdigris);
+  border-width: 0 2px 2px 0;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.wiki-editor ul[data-type='taskList'] input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+.wiki-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--fog);
+  text-decoration: line-through;
+}
+
+/* Collapsible block: a fog triangle and the summary; the content is indented 22 px. */
+.wiki-editor [data-type='details'] {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 0.75em;
+}
+
+.wiki-editor [data-type='details'] > button {
+  flex: none;
+  align-self: flex-start;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fog);
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.wiki-editor [data-type='details'] > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.wiki-editor [data-type='detailsSummary'] {
+  font-weight: 700;
+}
+
+.wiki-editor [data-type='detailsContent'] {
+  display: none;
+  padding-left: 22px;
+}
+
+.wiki-editor [data-type='details'].is-open > div > [data-type='detailsContent'] {
+  display: block;
+}
+
+/* Table: a grid of --line, no zebra. */
+.wiki-editor .tableWrapper {
+  margin: 0 0 0.75em;
+  overflow-x: auto;
+}
+
+.wiki-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.wiki-editor th,
+.wiki-editor td {
+  position: relative;
+  min-width: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+
+.wiki-editor th {
+  font-family: var(--sans);
+  font-weight: 700;
+}
+
+.wiki-editor th > p,
+.wiki-editor td > p {
+  margin-bottom: 0.25em;
+}
+
+.wiki-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  background: rgba(79, 165, 142, 0.22);
+  content: '';
+  pointer-events: none;
+}
+
+.wiki-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background: var(--verdigris);
+  pointer-events: none;
+}
+
+.wiki-editor.resize-cursor,
+.wiki-editor .resize-cursor {
+  cursor: col-resize;
+}
+
+/* The "/" and "@" menus: a board panel under the cursor. */
+.wiki-menu {
+  z-index: 50;
+  width: 300px;
+  max-height: 320px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  color: var(--chalk);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+.wiki-menu__group {
+  padding: 6px 8px 2px;
+  color: var(--fog);
+  font-size: 13px;
+}
+
+.wiki-menu__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.wiki-menu__item[aria-selected='true'] {
+  background: var(--slate);
+  box-shadow: inset 3px 0 0 var(--verdigris);
+}
+
+.wiki-menu__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-menu__detail {
+  flex: none;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.wiki-menu__empty {
+  padding: 6px 8px;
+  color: var(--fog);
+}
+
+/* The bar over a selection. */
+.wiki-bubble {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+.wiki-bubble__button {
+  min-width: 30px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--chalk);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wiki-bubble__button:hover {
+  background: var(--slate);
+}
+
+.wiki-bubble__button[aria-pressed='true'] {
+  color: var(--verdigris);
+}
+
+.wiki-bubble__button--bold {
+  font-weight: 700;
+}
+
+.wiki-bubble__button--italic {
+  font-style: italic;
+}
+
+.wiki-bubble__button:focus-visible,
+.wiki-bubble__input:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 1px;
+}
+
+.wiki-bubble__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wiki-bubble__input {
+  width: 260px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--slate);
+  color: var(--chalk);
+  font: inherit;
+}
+
+.wiki-bubble__input[aria-invalid='true'] {
+  border-color: var(--seal);
+}
+
+.wiki-bubble__error {
+  color: var(--seal);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* The context menu of an inline roll. */
+.wiki-popup {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+.wiki-popup__item {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--chalk);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wiki-popup__item:hover,
+.wiki-popup__item:focus-visible {
+  background: var(--slate);
+  box-shadow: inset 3px 0 0 var(--verdigris);
+  outline: none;
+}
