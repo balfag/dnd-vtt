@@ -56,7 +56,8 @@ export const Callout = Node.create({
 
       const paint = () => {
         emojiButton.textContent = String(current.attrs.emoji)
-        emojiButton.disabled = !editor.isEditable
+        // Read-only: still the same emoji, but out of the tab order.
+        emojiButton.tabIndex = editor.isEditable ? 0 : -1
         emojiButton.setAttribute('aria-label', i18n.t('wiki.editor.callout.change'))
       }
       paint()
