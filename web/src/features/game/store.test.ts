@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+﻿import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChatMessage,
   Combat,
+  Drawing,
   PlayerInfo,
   SceneInfo,
   SceneListItem,
@@ -639,6 +640,203 @@ describe('game store', () => {
         store.getState().applyTransient(dragging(30, 40))
         store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene } })
         expect(store.getState().dragging).toEqual({})
+      })
+    })
+    describe('drawings', () => {
+      const rect: Drawing = {
+        id: 'd1',
+        sceneId: 's1',
+        kind: 'rect',
+        data: { x: 0, y: 0, w: 10, h: 20 },
+        color: '#e53935',
+        authorPlayerId: 'p2',
+      }
+      const drawingChanged = (seq: number, drawing: Drawing) => ({
+        t: 'drawing.changed',
+        seq,
+        d: { drawing },
+      })
+      const drawingsOf = (store: StoreApi<GameState>) => sceneOf(store)?.drawings ?? []
+
+      it('inserts a drawing of the current scene', () => {
+        const store = withScene()
+        store.getState().applyEvent(drawingChanged(5, rect))
+        expect(drawingsOf(store)).toEqual([rect])
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('replaces a drawing by id with what the server sent', () => {
+        const store = withScene()
+        store.getState().applyEvent(drawingChanged(5, rect))
+        const moved: Drawing = { ...rect, data: { x: 5, y: 5, w: 10, h: 20 } }
+        store.getState().applyEvent(drawingChanged(6, moved))
+        expect(drawingsOf(store)).toEqual([moved])
+      })
+
+      it('ignores a drawing of another scene', () => {
+        const store = withScene()
+        const before = store.getState().game
+        store.getState().applyEvent(drawingChanged(5, { ...rect, sceneId: 's2' }))
+        expect(store.getState().game).toBe(before)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('removes a drawing', () => {
+        const store = withScene()
+        store.getState().applyEvent(drawingChanged(5, rect))
+        store.getState().applyEvent({ t: 'drawing.removed', seq: 6, d: { drawingId: 'd1' } })
+        expect(drawingsOf(store)).toEqual([])
+      })
+
+      it('ignores the removal of an unknown drawing', () => {
+        const store = withScene()
+        const before = store.getState().game
+        store.getState().applyEvent({ t: 'drawing.removed', seq: 5, d: { drawingId: 'nope' } })
+        expect(store.getState().game).toBe(before)
+        expect(store.getState().lastSeq).toBe(5)
+      })
+
+      it('keeps the drawings when scene.changed arrives', () => {
+        const store = withScene()
+        store.getState().applyEvent(drawingChanged(5, rect))
+        const info = infoOf(scene)
+        store
+          .getState()
+          .applyEvent({ t: 'scene.changed', seq: 6, d: { scene: { ...info, name: 'Renamed' } } })
+        expect(drawingsOf(store)).toEqual([rect])
+      })
+    })
+
+    describe('rulers and pings', () => {
+      const ruler = (playerId: string, points: [number, number][], sceneId = 's1') => ({
+        t: 'ruler.shown',
+        d: { playerId, sceneId, points },
+      })
+      const ping = (playerId: string, sceneId = 's1', focus = false) => ({
+        t: 'ping.shown',
+        d: { playerId, sceneId, x: 10, y: 20, focus },
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('keeps the ruler of another player', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(
+          ruler('p3', [
+            [1, 2],
+            [3, 4],
+          ]),
+        )
+        expect(store.getState().rulers).toEqual({
+          p3: {
+            points: [
+              [1, 2],
+              [3, 4],
+            ],
+            at: 10_000,
+          },
+        })
+        expect(store.getState().lastSeq).toBe(4)
+      })
+
+      it('replaces a ruler of the same player and removes it on empty points', () => {
+        const store = withScene()
+        store.getState().applyTransient(
+          ruler('p3', [
+            [1, 2],
+            [3, 4],
+          ]),
+        )
+        store.getState().applyTransient(
+          ruler('p3', [
+            [5, 6],
+            [7, 8],
+          ]),
+        )
+        expect(store.getState().rulers.p3?.points).toEqual([
+          [5, 6],
+          [7, 8],
+        ])
+        store.getState().applyTransient(ruler('p3', []))
+        expect(store.getState().rulers).toEqual({})
+      })
+
+      it('ignores the ruler and the ping of another scene', () => {
+        const store = withScene()
+        store.getState().applyTransient(ruler('p3', [[1, 2]], 's2'))
+        store.getState().applyTransient(ping('p3', 's2'))
+        expect(store.getState().rulers).toEqual({})
+        expect(store.getState().pings).toEqual([])
+      })
+
+      it('forgets a ruler that was not refreshed for 5 s', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(
+          ruler('p3', [
+            [1, 2],
+            [3, 4],
+          ]),
+        )
+        vi.setSystemTime(14_999)
+        store.getState().pruneTools(Date.now())
+        expect(Object.keys(store.getState().rulers)).toEqual(['p3'])
+        vi.setSystemTime(15_000)
+        store.getState().pruneTools(Date.now())
+        expect(store.getState().rulers).toEqual({})
+      })
+
+      it('shows a ping for 2 s', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(10_000)
+        const store = withScene()
+        store.getState().applyTransient(ping('p2', 's1', true))
+        expect(store.getState().pings).toHaveLength(1)
+        expect(store.getState().pings[0]).toMatchObject({
+          playerId: 'p2',
+          x: 10,
+          y: 20,
+          focus: true,
+        })
+        vi.setSystemTime(11_999)
+        store.getState().pruneTools(Date.now())
+        expect(store.getState().pings).toHaveLength(1)
+        vi.setSystemTime(12_000)
+        store.getState().pruneTools(Date.now())
+        expect(store.getState().pings).toEqual([])
+      })
+
+      it('gives every ping its own id', () => {
+        const store = withScene()
+        store.getState().applyTransient(ping('p3'))
+        store.getState().applyTransient(ping('p3'))
+        const ids = store.getState().pings.map((p) => p.id)
+        expect(new Set(ids).size).toBe(2)
+      })
+
+      it('scene.activated forgets rulers and pings', () => {
+        const store = withScene()
+        store.getState().applyTransient(
+          ruler('p3', [
+            [1, 2],
+            [3, 4],
+          ]),
+        )
+        store.getState().applyTransient(ping('p3'))
+        store.getState().applyEvent({ t: 'scene.activated', seq: 5, d: { scene } })
+        expect(store.getState().rulers).toEqual({})
+        expect(store.getState().pings).toEqual([])
+      })
+
+      it('ignores a malformed ruler', () => {
+        const store = withScene()
+        store.getState().applyTransient({ t: 'ruler.shown', d: { playerId: 'p3', points: 3 } })
+        expect(store.getState().rulers).toEqual({})
       })
     })
   })
