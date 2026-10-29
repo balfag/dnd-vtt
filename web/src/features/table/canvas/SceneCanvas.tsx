@@ -1,22 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { uploadAsset } from '../../../shared/api/assets'
 import { errorKey } from '../../../shared/api/errors'
-import type { PlayerInfo, SceneView, Shape, Token } from '../../../shared/protocol'
+import type { Drawing, PlayerInfo, SceneView, Shape, Token } from '../../../shared/protocol'
 import { MessageType } from '../../../shared/protocol'
 import type { GameConnection } from '../../../shared/ws/connection'
 import { CommandError, commandErrorKey } from '../../../shared/ws/errors'
+import { readableColor } from '../../chat/playerColor'
 import type { FogToolState } from '../../fog/FogToolbar'
-import { gameStore } from '../../game/store'
+import { gameStore, type PingMark } from '../../game/store'
 import { isCondition } from '../../tokens/conditions'
 import { quickActionOfKey, type TokenAction } from '../../tokens/tokenActions'
 import { buildTokenCreate } from '../../tokens/tokenForm'
+import { createTools, type CanvasTools } from '../../tools/createTools'
+import { placePing } from '../../tools/PingTool'
+import {
+  TEXT_LENGTH_MAX,
+  type DrawOptions,
+  type TemplateOptions,
+  type ToolPointer,
+} from '../../tools/toolState'
 import { createMoves } from '../moves'
 import { ZoomControls } from '../ZoomControls'
 import { canvasBridge } from './canvasBridge'
 import { centerOn, fit, screenToWorld, type Camera, type Point } from './camera'
 import { canMove, endDrag, moveDrag, startDrag, type DragState } from './drag'
+import { hitDrawing, moveDrawing } from './drawings'
 import type { FogPreviewModel } from './FogLayer'
+import type { RulerView } from './OverlayLayer'
 import {
   brushStamps,
   clampToScene,
@@ -25,6 +36,7 @@ import {
   rectFromPoints,
 } from './fogShapes'
 import { cellDistanceFt, snapTokenCenter } from './grid'
+import { rulerDistanceFt } from './ruler'
 import {
   cycleToken,
   noGesture,
@@ -51,6 +63,22 @@ const pruneEveryMs = 500
 const closeSlopPx = 10
 // Two clicks closer than this (screen px) are one corner.
 const sameCornerPx = 6
+// A click on a drawing reaches it from this far (screen px).
+const drawingHitPx = 8
+// The camera glides to a ping of the GM for this long.
+const glideMs = 300
+
+/** CanvasTool is a tool of everyone that takes the clicks on the canvas. */
+export type CanvasTool = 'ruler' | 'ping' | 'draw' | 'template'
+
+/** A drawing being dragged by its author or the GM: it is shown moved by (dx, dy) until the release. */
+interface DrawingDrag {
+  id: string
+  grab: Point
+  dx: number
+  dy: number
+  pointerId: number
+}
 
 /** FogDraw is the shape the fog tool is drawing; points are in scene coordinates. */
 interface FogDraw {
@@ -85,6 +113,10 @@ interface SceneCanvasProps {
   onTokenMenu: (tokenId: string, at: Point) => void
   /** onTokenAction does a key action of the GM on the selected token. */
   onTokenAction: (action: TokenAction, tokenId: string) => void
+  /** tool is the tool of everyone in hand (null: the select tool or a GM tool). */
+  tool: CanvasTool | null
+  drawOptions: DrawOptions
+  templateOptions: TemplateOptions
 }
 
 /** PlaceToolState is the place tool in hand: image is the picture of the next token, null for none. */
@@ -137,6 +169,12 @@ function samePoint(a: Point, b: Point): boolean {
   return a.x === b.x && a.y === b.y
 }
 
+/** chalkColor is --chalk, the colour of the viewer's own ruler. */
+function chalkColor(): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--chalk').trim()
+  return value === '' ? '#ece7db' : value
+}
+
 /**
  * SceneCanvas hosts the PixiJS renderer, owns the camera and turns input into camera moves
  * and token moves. emptyText labels the canvas while there is no scene.
@@ -154,11 +192,18 @@ export function SceneCanvas({
   onOpenToken,
   onTokenMenu,
   onTokenAction,
+  tool,
+  drawOptions,
+  templateOptions,
 }: SceneCanvasProps) {
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
   const [renderer, setRenderer] = useState<SceneRenderer | null>(null)
   const [zoom, setZoom] = useState(startCamera.zoom)
+  // The text being typed on the map: where it goes (world) and where the field is (host px).
+  const [textInput, setTextInput] = useState<{ world: Point; screen: Point; color: string } | null>(
+    null,
+  )
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cameraRef = useRef<Camera>(startCamera)
@@ -176,9 +221,30 @@ export function SceneCanvas({
   const placeToolRef = useRef(placeTool)
   const campaignIdRef = useRef(campaignId)
   const tokenCallbacks = useRef({ onOpenToken, onTokenMenu, onTokenAction })
+  const toolRef = useRef(tool)
+  const drawOptionsRef = useRef(drawOptions)
+  const templateOptionsRef = useRef(templateOptions)
+  const changedRef = useRef<() => void>(() => undefined)
+  // The tools of everyone: made once the refs they read exist, used from the handlers.
+  const toolsRef = useRef<CanvasTools | null>(null)
   // The token a create command made, selected as soon as the scene has it.
   const pendingSelect = useRef<string | null>(null)
   useEffect(() => {
+    toolsRef.current ??= createTools({
+      scene: sceneRef,
+      camera: cameraRef,
+      connection: connectionRef,
+      players: playersRef,
+      me: meRef,
+      drawOptions: drawOptionsRef,
+      templateOptions: templateOptionsRef,
+      announce: announceRef,
+      t: tRef,
+      changed: changedRef,
+    })
+    toolRef.current = tool
+    drawOptionsRef.current = drawOptions
+    templateOptionsRef.current = templateOptions
     placeToolRef.current = placeTool
     campaignIdRef.current = campaignId
     tokenCallbacks.current = { onOpenToken, onTokenMenu, onTokenAction }
@@ -198,6 +264,10 @@ export function SceneCanvas({
   const drag = useRef<DragState | null>(null)
   const snap = useRef(true)
   const pointer = useRef<Point>({ x: 0, y: 0 })
+  // Drawings: the selected one, the one being dragged, and the moves the server has not confirmed yet.
+  const selectedDrawing = useRef<string | null>(null)
+  const drawingDrag = useRef<DrawingDrag | null>(null)
+  const pendingDrawings = useRef(new Map<string, { base: Drawing; shown: Drawing; seq: number }>())
 
   useEffect(() => {
     const host = hostRef.current
@@ -233,6 +303,59 @@ export function SceneCanvas({
       renderer?.setCamera(next)
     },
     [renderer],
+  )
+
+  // The camera glides to the ping of the GM; any move of the viewer's own stops it.
+  const glideFrame = useRef<number | null>(null)
+  const stopGlide = useCallback(() => {
+    if (glideFrame.current === null) return
+    cancelAnimationFrame(glideFrame.current)
+    glideFrame.current = null
+  }, [])
+  const glideTo = useCallback(
+    (to: Camera) => {
+      stopGlide()
+      const from = cameraRef.current
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        apply(to)
+        return
+      }
+      const start = performance.now()
+      const step = (now: number) => {
+        const k = Math.min(1, (now - start) / glideMs)
+        const eased = 1 - (1 - k) ** 3
+        apply({
+          x: from.x + (to.x - from.x) * eased,
+          y: from.y + (to.y - from.y) * eased,
+          zoom: from.zoom,
+        })
+        glideFrame.current = k < 1 ? requestAnimationFrame(step) : null
+      }
+      glideFrame.current = requestAnimationFrame(step)
+    },
+    [apply, stopGlide],
+  )
+  useEffect(() => stopGlide, [stopGlide])
+
+  // A ping of someone else is announced; a ping of the GM with focus brings the camera to the place.
+  const handledPings = useRef(new Set<string>())
+  const handlePings = useCallback(
+    (pings: readonly PingMark[]) => {
+      const seen = handledPings.current
+      for (const ping of pings) {
+        if (seen.has(ping.id)) continue
+        seen.add(ping.id)
+        if (ping.playerId === meRef.current.playerId) continue
+        const name = playersRef.current.find((p) => p.id === ping.playerId)?.displayName ?? ''
+        announceRef.current(tRef.current('tools.ping.announce', { name }), false)
+        if (ping.focus && renderer !== null) {
+          glideTo(centerOn(cameraRef.current, { x: ping.x, y: ping.y }, renderer.viewport()))
+        }
+      }
+      const live = new Set(pings.map((p) => p.id))
+      for (const id of seen) if (!live.has(id)) seen.delete(id)
+    },
+    [renderer, glideTo],
   )
 
   /** refresh hands the renderer what to draw: tokens where they are shown now, selection, drag. */
@@ -286,7 +409,71 @@ export function SceneCanvas({
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       conditionLabel: (key) => (isCondition(key) ? tRef.current(`conditions.${key}`) : key),
     })
+
+    // Drawings: a drag shows the drawing moved, a move the server has not confirmed too.
+    const moving = drawingDrag.current
+    const drawings = (sc?.drawings ?? []).map((dr) => {
+      if (moving?.id === dr.id) return moveDrawing(dr, moving.dx, moving.dy)
+      return pendingDrawings.current.get(dr.id)?.shown ?? dr
+    })
+    renderer.setDrawings({ scene: sc, drawings, selectedId: selectedDrawing.current })
+
+    // Rulers and pings: the rulers of others come from the store, the viewer's own from the tool.
+    const state = gameStore.getState()
+    const colorOf = (playerId: string) =>
+      playersRef.current.find((p) => p.id === playerId)?.color ?? '#9aa8b3'
+    const rulers: RulerView[] = []
+    if (sc !== null) {
+      for (const [playerId, ruler] of Object.entries(state.rulers)) {
+        if (playerId === meRef.current.playerId) continue
+        const path = ruler.points.map(([x, y]) => ({ x, y }))
+        const color = colorOf(playerId)
+        rulers.push({
+          key: playerId,
+          path,
+          color,
+          labelColor: readableColor(color),
+          text: tRef.current('tools.ruler.distance', { ft: rulerDistanceFt(sc.grid, path) }),
+        })
+      }
+      const own = toolsRef.current?.ruler.view() ?? null
+      if (own !== null) {
+        const chalk = chalkColor()
+        rulers.push({
+          key: 'own',
+          path: own.path,
+          color: chalk,
+          labelColor: chalk,
+          text: tRef.current('tools.ruler.distance', { ft: own.ft }),
+        })
+      }
+    }
+    const author = meRef.current.playerId ?? ''
+    const active = toolRef.current
+    const preview =
+      active === 'draw'
+        ? (toolsRef.current?.draw.preview(author) ?? null)
+        : active === 'template'
+          ? (toolsRef.current?.template.preview(author) ?? null)
+          : null
+    renderer.setOverlay({
+      scene: sc,
+      rulers,
+      pings: state.pings.map((p) => ({
+        id: p.id,
+        x: p.x,
+        y: p.y,
+        color: colorOf(p.playerId),
+        at: p.at,
+      })),
+      preview,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    })
   }, [renderer])
+
+  useEffect(() => {
+    changedRef.current = refresh
+  }, [refresh])
 
   useEffect(() => {
     sceneRef.current = scene
@@ -309,6 +496,12 @@ export function SceneCanvas({
       selectedId.current = null
       canvasBridge.getState().setSelected(null)
     }
+    if (
+      selectedDrawing.current !== null &&
+      !scene?.drawings.some((d) => d.id === selectedDrawing.current)
+    ) {
+      selectedDrawing.current = null
+    }
     refresh()
   }, [renderer, scene, apply, refresh])
 
@@ -328,14 +521,29 @@ export function SceneCanvas({
   const fogShape = fogTool?.shape
   const sceneId = scene?.id
   const placing = placeTool !== null
+  const hasTool = tool !== null
   useEffect(() => {
     fogDraw.current = null
     renderer?.setFogPreview(null)
     const host = hostRef.current
     if (host === null) return
-    if (fogMode !== undefined || placing) host.setAttribute('data-cursor', 'crosshair')
+    if (fogMode !== undefined || placing || hasTool) host.setAttribute('data-cursor', 'crosshair')
     else if (host.getAttribute('data-cursor') === 'crosshair') host.removeAttribute('data-cursor')
-  }, [renderer, fogMode, fogShape, sceneId, placing])
+  }, [renderer, fogMode, fogShape, sceneId, placing, hasTool])
+
+  // Another tool or another scene drops what a tool had in hand: a ruler, a stroke. A half-typed text goes with the blur.
+  useEffect(() => {
+    const tools = toolsRef.current
+    tools?.ruler.clear()
+    tools?.draw.cancel()
+    tools?.template.cancel()
+  }, [tool, sceneId])
+  useEffect(() => {
+    const tools = toolsRef.current
+    return () => {
+      tools?.ruler.clear()
+    }
+  }, [])
 
   // The note of a dropped image: progress stays until the upload is done, an error goes after a few seconds.
   useEffect(() => {
@@ -362,17 +570,31 @@ export function SceneCanvas({
           pending.current.delete(id)
         }
       }
+      if (next?.drawings !== prev.game?.scene?.drawings) {
+        for (const [id, p] of pendingDrawings.current) {
+          const now = next?.drawings.find((d) => d.id === id)
+          if (now === p.base) continue
+          // drawing.changed or drawing.removed arrived: what the server has is the truth again.
+          pendingDrawings.current.delete(id)
+        }
+      }
       if (next !== null && state.dragging !== prev.dragging) refresh()
+      if (state.rulers !== prev.rulers) refresh()
+      if (state.pings !== prev.pings) {
+        refresh()
+        handlePings(state.pings)
+      }
       if (state.game?.combat !== prev.game?.combat) refresh()
     })
     const timer = setInterval(() => {
       gameStore.getState().pruneDragging(Date.now())
+      gameStore.getState().pruneTools(Date.now())
     }, pruneEveryMs)
     return () => {
       unsubscribe()
       clearInterval(timer)
     }
-  }, [renderer, refresh])
+  }, [renderer, refresh, handlePings])
 
   const showNote = useCallback((text: string, error: boolean) => {
     if (noteTimer.current !== null) clearTimeout(noteTimer.current)
@@ -386,11 +608,17 @@ export function SceneCanvas({
 
   useEffect(() => {
     const host = hostRef.current
-    if (host === null || renderer === null) return
+    const made = toolsRef.current
+    if (host === null || renderer === null || made === null) return
+    // Function declarations below lose the narrowing of the tools.
+    const tools: CanvasTools = made
+    const toolEnv = tools.env
     let gesture: Gesture = noGesture
     let dragPointer: number | null = null
     let tap: { id: number; at: Point } | null = null
     let spaceHeld = false
+    // The pointer that holds a stroke of a tool of everyone (a ruler drag, a line, a template).
+    let toolPointer: number | null = null
 
     function local(e: { clientX: number; clientY: number }): Point {
       const rect = host?.getBoundingClientRect()
@@ -402,7 +630,59 @@ export function SceneCanvas({
     }
     /** toolInHand: a GM tool that takes the clicks, instead of the selection of tokens. */
     function toolInHand(): boolean {
-      return fogToolRef.current !== null || placeToolRef.current !== null
+      return (
+        fogToolRef.current !== null || placeToolRef.current !== null || toolRef.current !== null
+      )
+    }
+    function toolPointerOf(p: Point, e: { shiftKey: boolean }): ToolPointer {
+      return { world: screenToWorld(cameraRef.current, p), screen: p, shiftKey: e.shiftKey }
+    }
+    // The place a text will go to: it is asked for when the press is released.
+    let textAt: { world: Point; screen: Point; color: string } | null = null
+    function toolDown(active: CanvasTool, e: PointerEvent, p: Point) {
+      const ptr = toolPointerOf(p, e)
+      if (active === 'ping') {
+        placePing(toolEnv, ptr.world, { isGM: meRef.current.isGM, shiftKey: e.shiftKey })
+        return
+      }
+      toolPointer = e.pointerId
+      if (active === 'ruler') {
+        tools.ruler.down(ptr, e.pointerId)
+      } else if (active === 'template') {
+        tools.template.down(ptr, e.pointerId)
+      } else if (tools.draw.down(ptr, e.pointerId) === 'text') {
+        textAt = { world: ptr.world, screen: p, color: tools.draw.color() }
+      }
+    }
+    function toolUp(active: CanvasTool, e: PointerEvent) {
+      const ptr = toolPointerOf(local(e), e)
+      const cancelled = e.type !== 'pointerup'
+      if (active === 'ruler') {
+        tools.ruler.up(ptr, e.pointerId)
+      } else if (active === 'template') {
+        if (cancelled) tools.template.cancel()
+        else tools.template.up(ptr, e.pointerId)
+      } else if (active === 'draw') {
+        if (cancelled) tools.draw.cancel()
+        else tools.draw.up(ptr, e.pointerId)
+        if (textAt !== null && !cancelled) setTextInput(textAt)
+        textAt = null
+      }
+    }
+    function canEditDrawing(d: Drawing): boolean {
+      return meRef.current.isGM || d.authorPlayerId === meRef.current.playerId
+    }
+    /** drawingAt is the topmost drawing under the point (host px) that the viewer may change. */
+    function drawingAt(p: Point): Drawing | null {
+      const sc = sceneRef.current
+      if (sc === null) return null
+      const world = screenToWorld(cameraRef.current, p)
+      const tol = drawingHitPx / cameraRef.current.zoom
+      for (let i = sc.drawings.length - 1; i >= 0; i--) {
+        const d = sc.drawings[i]
+        if (d !== undefined && canEditDrawing(d) && hitDrawing(d, world, tol, sc.grid)) return d
+      }
+      return null
     }
     function setCursor(kind: 'grab' | 'grabbing' | null) {
       if (kind !== null) host?.setAttribute('data-cursor', kind)
@@ -559,10 +839,69 @@ export function SceneCanvas({
     function tokenById(id: string | null): Token | null {
       return sceneRef.current?.tokens.find((tk) => tk.id === id) ?? null
     }
+    // A token and a drawing are never selected together.
     function select(id: string | null) {
-      if (selectedId.current === id) return
+      const hadDrawing = selectedDrawing.current !== null
+      selectedDrawing.current = null
+      if (selectedId.current === id) {
+        if (hadDrawing) refresh()
+        return
+      }
       selectedId.current = id
       canvasBridge.getState().setSelected(id)
+      refresh()
+    }
+    function selectDrawing(id: string) {
+      select(null)
+      selectedDrawing.current = id
+      refresh()
+    }
+    function cancelDrawingDrag() {
+      if (drawingDrag.current === null) return
+      drawingDrag.current = null
+      setCursor(null)
+      refresh()
+    }
+    /** commitDrawingMove shows the move at once and asks the server; a refusal puts the drawing back. */
+    function commitDrawingMove(base: Drawing, dx: number, dy: number) {
+      const moved = moveDrawing(base, dx, dy)
+      const seq = (pendingDrawings.current.get(base.id)?.seq ?? 0) + 1
+      pendingDrawings.current.set(base.id, { base, shown: moved, seq })
+      const settle = () => {
+        if (pendingDrawings.current.get(base.id)?.seq !== seq) return
+        pendingDrawings.current.delete(base.id)
+        refresh()
+      }
+      const conn = connectionRef.current
+      const sent =
+        conn === null
+          ? Promise.reject(new CommandError('disconnected'))
+          : conn.command(MessageType.DrawingUpdate, { drawingId: base.id, data: moved.data })
+      void sent.then(
+        () => {
+          setTimeout(settle, confirmFallbackMs)
+        },
+        (err: unknown) => {
+          if (pendingDrawings.current.get(base.id)?.seq !== seq) return
+          pendingDrawings.current.delete(base.id)
+          announceRef.current(tRef.current(commandErrorKey(err)), true)
+          refresh()
+        },
+      )
+      refresh()
+    }
+    function deleteSelectedDrawing() {
+      const id = selectedDrawing.current
+      if (id === null) return
+      selectedDrawing.current = null
+      void toolEnv.command(MessageType.DrawingDelete, { drawingId: id }).then(
+        () => {
+          announceRef.current(tRef.current('tools.draw.deleted'), false)
+        },
+        (err: unknown) => {
+          announceRef.current(tRef.current(commandErrorKey(err)), true)
+        },
+      )
       refresh()
     }
     function cancelDrag() {
@@ -608,7 +947,9 @@ export function SceneCanvas({
       if (toolInHand()) return
       const id = renderer.tokenAt(p)
       const tk = tokenById(id)
-      setCursor(tk !== null && canMove(tk, meRef.current) ? 'grab' : null)
+      const grabbable =
+        (tk !== null && canMove(tk, meRef.current)) || (tk === null && drawingAt(p) !== null)
+      setCursor(grabbable ? 'grab' : null)
       if (id !== hoverId.current) {
         hoverId.current = id
         refresh()
@@ -617,13 +958,34 @@ export function SceneCanvas({
 
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
+      stopGlide()
       apply(onWheel(cameraRef.current, { deltaY: e.deltaY, ctrlKey: e.ctrlKey, point: local(e) }))
     }
     const down = (e: PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1) return
       host.setPointerCapture(e.pointerId)
+      stopGlide()
       const p = local(e)
       pointer.current = p
+      // Ctrl+click on an empty place is a ping, whatever the tool in hand.
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.button === 0 &&
+        toolRef.current !== 'ping' &&
+        renderer.tokenAt(p) === null
+      ) {
+        placePing(toolEnv, screenToWorld(cameraRef.current, p), {
+          isGM: meRef.current.isGM,
+          shiftKey: e.shiftKey,
+        })
+        return
+      }
+      if (toolPointer !== null && toolPointer !== e.pointerId) {
+        // A second finger: the stroke is dropped, the fingers pan and zoom the map.
+        toolPointer = null
+        tools.draw.cancel()
+        tools.template.cancel()
+      }
       if (fogToolRef.current !== null) {
         const fd = fogDraw.current
         if (fd !== null && fd.pointerId !== null && fd.pointerId !== e.pointerId) {
@@ -646,12 +1008,36 @@ export function SceneCanvas({
         setPanning(true)
         return
       }
-      if (drag.current !== null) {
-        // A second finger: the token stays where it was, the fingers pan and zoom the map.
+      const active = toolRef.current
+      if (active !== null) {
+        if (e.button === 0 && !spaceHeld && gesture.pointers.size === 0) {
+          toolDown(active, e, p)
+          return
+        }
+        gesture = pointerDown(gesture, e.pointerId, p)
+        setPanning(true)
+        return
+      }
+      if (drag.current !== null || drawingDrag.current !== null) {
+        // A second finger: the token or drawing stays where it was, the fingers pan and zoom the map.
         cancelDrag()
+        cancelDrawingDrag()
       } else if (e.button === 0 && !spaceHeld && gesture.pointers.size === 0) {
         const id = renderer.tokenAt(p)
         const tk = tokenById(id)
+        const dr = tk === null ? drawingAt(p) : null
+        if (dr !== null) {
+          selectDrawing(dr.id)
+          drawingDrag.current = {
+            id: dr.id,
+            grab: screenToWorld(cameraRef.current, p),
+            dx: 0,
+            dy: 0,
+            pointerId: e.pointerId,
+          }
+          setCursor('grabbing')
+          return
+        }
         if (tk !== null) {
           select(tk.id)
           if (canMove(tk, meRef.current)) {
@@ -673,6 +1059,18 @@ export function SceneCanvas({
     const move = (e: PointerEvent) => {
       const p = local(e)
       pointer.current = p
+      const active = toolRef.current
+      if (active === 'ruler') tools.ruler.move(toolPointerOf(p, e))
+      else if (active === 'draw') tools.draw.move(toolPointerOf(p, e), e.pointerId)
+      else if (active === 'template') tools.template.move(toolPointerOf(p, e), e.pointerId)
+      const dd = drawingDrag.current
+      if (dd !== null && e.pointerId === dd.pointerId) {
+        const w = screenToWorld(cameraRef.current, p)
+        dd.dx = w.x - dd.grab.x
+        dd.dy = w.y - dd.grab.y
+        refresh()
+        return
+      }
       if (fogToolRef.current !== null) {
         const fd = fogDraw.current
         const at = screenToWorld(cameraRef.current, p)
@@ -724,6 +1122,25 @@ export function SceneCanvas({
       if (gesture.pointers.size === 0 && e.buttons === 0) hoverAt(p)
     }
     const up = (e: PointerEvent) => {
+      const active = toolRef.current
+      if (toolPointer === e.pointerId && active !== null) {
+        toolPointer = null
+        toolUp(active, e)
+        return
+      }
+      const dd = drawingDrag.current
+      if (dd !== null && e.pointerId === dd.pointerId) {
+        drawingDrag.current = null
+        const shown = sceneRef.current?.drawings.find((d) => d.id === dd.id)
+        // A click without a move is just a selection.
+        const moved = Math.hypot(dd.dx, dd.dy) * cameraRef.current.zoom > 2
+        if (shown !== undefined && moved && e.type === 'pointerup') {
+          commitDrawingMove(shown, dd.dx, dd.dy)
+        }
+        hoverAt(local(e))
+        refresh()
+        return
+      }
       const fd = fogDraw.current
       if (fd !== null && fd.pointerId === e.pointerId) {
         if (e.type === 'pointerup') finishFog()
@@ -770,6 +1187,10 @@ export function SceneCanvas({
       if (e.button === 1) e.preventDefault()
     }
     const doubleClick = (e: MouseEvent) => {
+      if (toolRef.current === 'ruler') {
+        tools.ruler.clear()
+        return
+      }
       closeFogPolygon()
       if (!meRef.current.isGM || toolInHand()) return
       const id = renderer.tokenAt(local(e))
@@ -779,6 +1200,12 @@ export function SceneCanvas({
     }
     // The browser menu stays everywhere but over a token the GM can act on.
     const contextMenu = (e: MouseEvent) => {
+      // The right button removes the ruler.
+      if (toolRef.current === 'ruler' && tools.ruler.has()) {
+        e.preventDefault()
+        tools.ruler.clear()
+        return
+      }
       if (!meRef.current.isGM || toolInHand()) return
       const id = renderer.tokenAt(local(e))
       if (id === null) return
@@ -828,7 +1255,12 @@ export function SceneCanvas({
         return
       }
       if (e.key === 'Escape') {
+        tools.ruler.clear()
+        tools.draw.cancel()
+        tools.template.cancel()
+        toolPointer = null
         cancelDrag()
+        cancelDrawingDrag()
         select(null)
         return
       }
@@ -846,6 +1278,11 @@ export function SceneCanvas({
             : tRef.current('table.token.selected', { name }),
           false,
         )
+        return
+      }
+      if (focused && e.key === 'Delete' && selectedDrawing.current !== null) {
+        e.preventDefault()
+        deleteSelectedDrawing()
         return
       }
       const selected = tokenById(selectedId.current)
@@ -925,8 +1362,9 @@ export function SceneCanvas({
       document.removeEventListener('keydown', key)
       document.removeEventListener('keyup', keyUp)
       drag.current = null
+      drawingDrag.current = null
     }
-  }, [renderer, apply, refresh, showNote])
+  }, [renderer, apply, refresh, showNote, stopGlide])
 
   function step(factor: number) {
     if (renderer !== null) apply(zoomCenter(cameraRef.current, renderer.viewport(), factor))
@@ -941,6 +1379,35 @@ export function SceneCanvas({
         aria-label={scene === null ? emptyText : t('table.canvas.label', { name: scene.name })}
         tabIndex={0}
       />
+      {textInput !== null && tool === 'draw' && (
+        <input
+          ref={(el) => {
+            el?.focus()
+          }}
+          className="canvas__text-input"
+          aria-label={t('tools.draw.textInput')}
+          maxLength={TEXT_LENGTH_MAX}
+          style={{
+            left: textInput.screen.x,
+            top: textInput.screen.y,
+            fontSize: Math.max(12, drawOptions.textSize * zoom),
+            color: textInput.color,
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              toolsRef.current?.draw.createText(textInput.world, e.currentTarget.value.trim())
+            } else if (e.key !== 'Escape') {
+              return
+            }
+            setTextInput(null)
+            hostRef.current?.focus()
+          }}
+          onBlur={() => {
+            setTextInput(null)
+          }}
+        />
+      )}
       {note !== null && (
         <p
           className={note.error ? 'canvas__note canvas__note--error' : 'canvas__note'}

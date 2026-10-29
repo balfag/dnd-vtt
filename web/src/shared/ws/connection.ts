@@ -1,4 +1,4 @@
-import type { StoreApi } from 'zustand/vanilla'
+﻿import type { StoreApi } from 'zustand/vanilla'
 import type { GameState } from '../../features/game/store'
 import {
   CloseCode,
@@ -7,6 +7,8 @@ import {
   isErrorMessage,
   isHelloAck,
   isSnapshot,
+  isPingShown,
+  isRulerShown,
   isTokenDragging,
   MessageType,
   pingCommand,
@@ -171,7 +173,8 @@ export class GameConnection {
       return
     }
     // Transient messages have no seq: they bypass the order checks and are never replayed.
-    if (isTokenDragging(env) && this.isSynced()) this.store.getState().applyTransient(env)
+    const transient = isTokenDragging(env) || isRulerShown(env) || isPingShown(env)
+    if (transient && this.isSynced()) this.store.getState().applyTransient(env)
   }
 
   private settle(msg: Envelope, re: string): void {

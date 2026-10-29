@@ -430,5 +430,37 @@
     "restrained": "Restrained",
     "stunned": "Stunned",
     "unconscious": "Unconscious"
+  },
+  "tools": {
+    "ruler": {
+      "name": "Ruler",
+      "hint": "Drag to measure. Click adds a waypoint, double-click clears",
+      "distance": "{{ft}} ft"
+    },
+    "ping": {
+      "name": "Ping",
+      "hintGm": "Click to ping, Shift+click to show everyone",
+      "announce": "Ping on the map from {{name}}"
+    },
+    "draw": {
+      "name": "Draw",
+      "freehand": "Freehand",
+      "rect": "Rectangle",
+      "circle": "Circle",
+      "text": "Text",
+      "color": "Colour",
+      "textSize": "Text size, px",
+      "textInput": "Text on the map",
+      "deleted": "Drawing deleted"
+    },
+    "template": {
+      "name": "Area template",
+      "cone": "Cone",
+      "sphere": "Sphere",
+      "line": "Line",
+      "cube": "Cube",
+      "cylinder": "Cylinder",
+      "size": "Size, feet"
+    }
   }
 }

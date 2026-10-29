@@ -1,10 +1,14 @@
-import { useStore } from 'zustand'
+﻿import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import {
   isChatMessage,
   isCombatChanged,
+  isDrawingChanged,
+  isDrawingRemoved,
   isFogChanged,
+  isPingShown,
   isPresence,
+  isRulerShown,
   isSceneActivated,
   isSceneChanged,
   isScenesChanged,
@@ -15,6 +19,7 @@ import {
   MessageType,
   type ChatMessage,
   type Combat,
+  type Drawing,
   type Envelope,
   type PlayerInfo,
   type SceneListItem,
@@ -62,7 +67,28 @@ export interface RemoteDrag {
 
 /** A remote drag with no update for this long is forgotten. */
 export const DRAG_TTL_MS = 2000
+/** A ruler of another player that was not refreshed for this long is forgotten. */
+export const RULER_TTL_MS = 5000
+/** A ping is shown for this long. */
+export const PING_TTL_MS = 2000
 
+/** A ruler another player is measuring with now: transient, kept outside the snapshot and seq. */
+export interface RemoteRuler {
+  points: [number, number][]
+  /** Date.now() of the last update. */
+  at: number
+}
+
+/** A ping on the shown scene. */
+export interface PingMark {
+  id: string
+  playerId: string
+  x: number
+  y: number
+  focus: boolean
+  /** Date.now() when it arrived. */
+  at: number
+}
 export interface GameState {
   connection: ConnectionState
   me: SnapshotMe | null
@@ -70,6 +96,10 @@ export interface GameState {
   lastSeq: number
   /** Other clients' drags by token id. */
   dragging: Record<string, RemoteDrag>
+  /** Rulers of other players by player id, on the shown scene. */
+  rulers: Record<string, RemoteRuler>
+  /** Pings of the last 2 s on the shown scene. */
+  pings: PingMark[]
   /** The scene the GM looked at before the last snapshot replaced the view; null when there is none to restore. */
   viewBeforeSync: string | null
   setConnection(c: ConnectionState): void
@@ -84,6 +114,8 @@ export interface GameState {
   applyTransient(env: Envelope): void
   /** pruneDragging forgets drags with no update for DRAG_TTL_MS. */
   pruneDragging(now: number): void
+  /** pruneTools forgets rulers and pings that have outlived their time. */
+  pruneTools(now: number): void
   /** prependHistory puts older messages (ascending) before the loaded ones, skipping known ids. */
   prependHistory(messages: ChatMessage[]): void
   reset(): void
@@ -94,15 +126,19 @@ export const historyPageSize = 50
 
 const initial: Pick<
   GameState,
-  'connection' | 'me' | 'game' | 'lastSeq' | 'dragging' | 'viewBeforeSync'
+  'connection' | 'me' | 'game' | 'lastSeq' | 'dragging' | 'rulers' | 'pings' | 'viewBeforeSync'
 > = {
   connection: { state: 'idle' },
   me: null,
   game: null,
   lastSeq: 0,
   dragging: {},
+  rulers: {},
+  pings: [],
   viewBeforeSync: null,
 }
+
+let pingCount = 0
 
 export function createGameStore(): StoreApi<GameState> {
   return createStore<GameState>()((set) => ({
@@ -131,13 +167,19 @@ export function createGameStore(): StoreApi<GameState> {
           lastSeq: s.seq,
           viewBeforeSync: resumed ? (state.game?.viewSceneId ?? null) : null,
           dragging: {},
+          rulers: {},
+          pings: [],
         }
       })
     },
     setViewedScene: (scene) => {
       set((state) => {
         if (state.game === null) return {}
-        return { game: { ...state.game, scene, viewSceneId: scene.id, combat: null } }
+        return {
+          game: { ...state.game, scene, viewSceneId: scene.id, combat: null },
+          rulers: {},
+          pings: [],
+        }
       })
     },
     clearViewBeforeSync: () => {
@@ -166,6 +208,8 @@ export function createGameStore(): StoreApi<GameState> {
                 }
               : { ...game, activeSceneId: next.id },
             dragging: {},
+            rulers: {},
+            pings: [],
           }
         }
         if (isFogChanged(e)) {
@@ -195,6 +239,20 @@ export function createGameStore(): StoreApi<GameState> {
           }
           const tokens = game.scene.tokens.filter((t) => t.id !== id)
           return { lastSeq: e.seq, dragging, game: { ...game, scene: { ...game.scene, tokens } } }
+        }
+        if (isDrawingChanged(e)) {
+          const drawing = e.d.drawing
+          if (game.scene?.id !== drawing.sceneId) return { lastSeq: e.seq }
+          const drawings = upsertDrawing(game.scene.drawings, drawing)
+          return { lastSeq: e.seq, game: { ...game, scene: { ...game.scene, drawings } } }
+        }
+        if (isDrawingRemoved(e)) {
+          const id = e.d.drawingId
+          if (game.scene === null || !game.scene.drawings.some((d) => d.id === id)) {
+            return { lastSeq: e.seq }
+          }
+          const drawings = game.scene.drawings.filter((d) => d.id !== id)
+          return { lastSeq: e.seq, game: { ...game, scene: { ...game.scene, drawings } } }
         }
         if (isSceneChanged(e)) {
           // scene.changed has no tokens: merge, so the client keeps its own.
@@ -238,14 +296,34 @@ export function createGameStore(): StoreApi<GameState> {
       })
     },
     applyTransient: (env) => {
-      if (!isTokenDragging(env)) return
       const now = Date.now()
-      set((state) => ({
-        dragging: {
-          ...liveDrags(state.dragging, now),
-          [env.d.tokenId]: { x: env.d.x, y: env.d.y, at: now },
-        },
-      }))
+      if (isTokenDragging(env)) {
+        set((state) => ({
+          dragging: {
+            ...liveDrags(state.dragging, now),
+            [env.d.tokenId]: { x: env.d.x, y: env.d.y, at: now },
+          },
+        }))
+      } else if (isRulerShown(env)) {
+        const { playerId, sceneId, points } = env.d
+        set((state) => {
+          if (state.game?.scene?.id !== sceneId) return {}
+          const rest = Object.fromEntries(
+            Object.entries(liveRulers(state.rulers, now)).filter(([id]) => id !== playerId),
+          )
+          return {
+            rulers: points.length === 0 ? rest : { ...rest, [playerId]: { points, at: now } },
+          }
+        })
+      } else if (isPingShown(env)) {
+        const { playerId, sceneId, x, y, focus } = env.d
+        set((state) => {
+          if (state.game?.scene?.id !== sceneId) return {}
+          pingCount++
+          const mark = { id: `ping-${String(pingCount)}`, playerId, x, y, focus, at: now }
+          return { pings: [...livePings(state.pings, now), mark] }
+        })
+      }
     },
     pruneDragging: (now) => {
       set((state) => {
@@ -253,6 +331,14 @@ export function createGameStore(): StoreApi<GameState> {
         return Object.keys(live).length === Object.keys(state.dragging).length
           ? state
           : { dragging: live }
+      })
+    },
+    pruneTools: (now) => {
+      set((state) => {
+        const rulers = liveRulers(state.rulers, now)
+        const pings = livePings(state.pings, now)
+        const sameRulers = Object.keys(rulers).length === Object.keys(state.rulers).length
+        return sameRulers && pings.length === state.pings.length ? state : { rulers, pings }
       })
     },
     prependHistory: (messages) => {
@@ -286,6 +372,20 @@ function withoutDrag(
 
 function liveDrags(dragging: Record<string, RemoteDrag>, now: number): Record<string, RemoteDrag> {
   return Object.fromEntries(Object.entries(dragging).filter(([, d]) => now - d.at < DRAG_TTL_MS))
+}
+
+function liveRulers(rulers: Record<string, RemoteRuler>, now: number): Record<string, RemoteRuler> {
+  return Object.fromEntries(Object.entries(rulers).filter(([, r]) => now - r.at < RULER_TTL_MS))
+}
+
+function livePings(pings: PingMark[], now: number): PingMark[] {
+  return pings.filter((p) => now - p.at < PING_TTL_MS)
+}
+
+function upsertDrawing(drawings: Drawing[], drawing: Drawing): Drawing[] {
+  return drawings.some((d) => d.id === drawing.id)
+    ? drawings.map((d) => (d.id === drawing.id ? drawing : d))
+    : [...drawings, drawing]
 }
 
 function upsertToken(tokens: Token[], token: Token): Token[] {

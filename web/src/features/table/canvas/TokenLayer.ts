@@ -1,4 +1,4 @@
-import { Container, Ellipse, Graphics, Sprite, Text, Texture, type Application } from 'pixi.js'
+﻿import { Container, Ellipse, Graphics, Sprite, Text, Texture, type Application } from 'pixi.js'
 import type { AssetRef, PlayerInfo, SceneView, Token } from '../../../shared/protocol'
 import { worldToScreen, type Camera, type Point } from './camera'
 import { tokenStyle, type TokenStyle } from './tokenStyle'
@@ -37,7 +37,7 @@ export interface TokenLayers {
   overlay: Container
 }
 
-interface Colors {
+export interface Colors {
   chalk: string
   fog: string
   slate: string
@@ -92,7 +92,7 @@ function dashedEllipse(g: Graphics, rx: number, ry: number): void {
 }
 
 /** dashedRect strokes the rectangle (x, y, w, h) as dashes. */
-function dashedRect(g: Graphics, x: number, y: number, w: number, h: number): void {
+export function dashedRect(g: Graphics, x: number, y: number, w: number, h: number): void {
   const sides: [number, number, number, number][] = [
     [x, y, x + w, y],
     [x + w, y, x + w, y + h],
@@ -110,7 +110,7 @@ function dashedRect(g: Graphics, x: number, y: number, w: number, h: number): vo
 }
 
 /** A plaque: rounded slate background and a line of text that does not scale with the zoom. */
-class Label {
+export class Label {
   readonly root = new Container()
   private readonly bg = new Graphics()
   private readonly text: Text
@@ -143,6 +143,11 @@ class Label {
 
   height(): number {
     return this.text.height + labelPadY * 2
+  }
+
+  /** setFill changes the colour of the text. */
+  setFill(color: string): void {
+    this.text.style.fill = color
   }
 
   set(text: string): void {

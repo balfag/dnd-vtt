@@ -1,4 +1,4 @@
-// Tool icons: one line of 1.6px, drawn in currentColor, no icon library.
+﻿// Tool icons: one line of 1.6px, drawn in currentColor, no icon library.
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -56,6 +56,45 @@ export function HideFogIcon() {
     </Icon>
   )
 }
+/** RulerIcon is a slanted ruler with ticks: measure a distance. */
+export function RulerIcon() {
+  return (
+    <Icon>
+      <path d="M4.5 15.5l11-11 4 4-11 11z" />
+      <path d="M8 12l2 2M11 9l1.5 1.5M14 6l2 2" />
+    </Icon>
+  )
+}
+
+/** PingIcon is a dot with a ring: mark a place for everyone. */
+export function PingIcon() {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="12" r="6.5" />
+    </Icon>
+  )
+}
+
+/** DrawIcon is a pencil: draw on the map. */
+export function DrawIcon() {
+  return (
+    <Icon>
+      <path d="M4 20l1-4.5L16.5 4a2 2 0 0 1 3 3L8 18.5z" />
+      <path d="M14.5 6l3 3" />
+    </Icon>
+  )
+}
+
+/** TemplateIcon is a cone: an area of effect. */
+export function TemplateIcon() {
+  return (
+    <Icon>
+      <path d="M4 12L20 5v14z" />
+    </Icon>
+  )
+}
+
 export function PlusIcon() {
   return (
     <Icon>
