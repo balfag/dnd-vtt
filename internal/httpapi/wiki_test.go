@@ -1,10 +1,17 @@
 package httpapi
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/balfag/dnd-vtt/internal/asset"
 )
 
 const emptyPageDoc = `{"type":"doc","content":[{"type":"paragraph"}]}`
@@ -46,6 +53,12 @@ func TestWikiRequiresGM(t *testing.T) {
 	if rec.Code != http.StatusOK || len(set.Tags) != 1 {
 		t.Fatalf("set tags = %d", rec.Code)
 	}
+	rec = f.do(http.MethodPost, "/api/campaigns/"+f.campaignID+"/wiki/templates", `{"fromPageId":"`+page.ID+`","name":"T"}`, withCookie(f.gm))
+	var tpl templateJSON
+	decodeBody(t, rec, &tpl)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("save template = %d", rec.Code)
+	}
 	_, link := f.startGame(f.gm, f.campaignID)
 	player, _ := f.playerSession(link, "bob")
 
@@ -64,6 +77,12 @@ func TestWikiRequiresGM(t *testing.T) {
 		{http.MethodGet, "/api/campaigns/" + f.campaignID + "/wiki/tags", ""},
 		{http.MethodPatch, "/api/wiki/tags/" + set.Tags[0].ID, `{"name":"z"}`},
 		{http.MethodDelete, "/api/wiki/tags/" + set.Tags[0].ID, ""},
+		{http.MethodGet, "/api/campaigns/" + f.campaignID + "/wiki/templates", ""},
+		{http.MethodPost, "/api/campaigns/" + f.campaignID + "/wiki/templates", `{"fromPageId":"` + page.ID + `","name":"T"}`},
+		{http.MethodPatch, "/api/wiki/templates/" + tpl.ID, `{"name":"U"}`},
+		{http.MethodDelete, "/api/wiki/templates/" + tpl.ID, ""},
+		{http.MethodGet, "/api/wiki/pages/" + page.ID + "/export.md", ""},
+		{http.MethodGet, "/api/campaigns/" + f.campaignID + "/wiki/export.zip", ""},
 	}
 	for _, rt := range routes {
 		t.Run(rt.method+" "+rt.path, func(t *testing.T) {
@@ -594,5 +613,167 @@ func TestWikiDatabaseRelations(t *testing.T) {
 	f.call(http.MethodGet, "/api/wiki/pages/"+boss.ID+"/backlinks", "", http.StatusOK, &back)
 	if len(back) != 0 {
 		t.Errorf("backlinks after null = %+v", back)
+	}
+}
+
+func TestWikiTemplates(t *testing.T) {
+	f := newWikiFixture(t)
+	icon := "\U0001F37A"
+	src := f.createPage(`{"title":"Tavern","icon":"` + icon + `"}`)
+	content := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Menu"}]}]}`
+	rec := f.do(http.MethodPut, "/api/wiki/pages/"+src.ID, `{"version":1,"title":"Tavern","icon":"`+icon+`","content":`+content+`}`, withCookie(f.gm))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save page = %d %s", rec.Code, rec.Body.String())
+	}
+
+	base := "/api/campaigns/" + f.campaignID + "/wiki/templates"
+	rec = f.do(http.MethodPost, base, `{"fromPageId":"`+src.ID+`","name":"Inn"}`, withCookie(f.gm))
+	var tpl templateJSON
+	decodeBody(t, rec, &tpl)
+	if rec.Code != http.StatusCreated || tpl.ID == "" || tpl.Name != "Inn" || tpl.Icon != icon || tpl.CreatedAt == 0 {
+		t.Fatalf("save template = %d %+v", rec.Code, tpl)
+	}
+
+	var list []templateJSON
+	rec = f.do(http.MethodGet, base, "", withCookie(f.gm))
+	decodeBody(t, rec, &list)
+	if rec.Code != http.StatusOK || len(list) != 1 || list[0] != tpl {
+		t.Errorf("list = %d %+v", rec.Code, list)
+	}
+
+	page := f.createPage(`{"title":"New","templateId":"` + tpl.ID + `"}`)
+	if page.Icon != icon || !strings.Contains(string(page.Content), "Menu") {
+		t.Errorf("page from template = %+v", page)
+	}
+
+	rec = f.do(http.MethodPatch, "/api/wiki/templates/"+tpl.ID, `{"name":"Pub"}`, withCookie(f.gm))
+	decodeBody(t, rec, &tpl)
+	if rec.Code != http.StatusOK || tpl.Name != "Pub" {
+		t.Errorf("rename = %d %+v", rec.Code, tpl)
+	}
+
+	errs := []struct {
+		name, method, path, body string
+		want                     int
+	}{
+		{"template with content", http.MethodPost, "/api/campaigns/" + f.campaignID + "/wiki/pages", `{"title":"X","templateId":"` + tpl.ID + `","content":` + emptyPageDoc + `}`, http.StatusBadRequest},
+		{"unknown template", http.MethodPost, "/api/campaigns/" + f.campaignID + "/wiki/pages", `{"title":"X","templateId":"nope"}`, http.StatusNotFound},
+		{"unknown source", http.MethodPost, base, `{"fromPageId":"nope","name":"X"}`, http.StatusNotFound},
+		{"empty name", http.MethodPost, base, `{"fromPageId":"` + src.ID + `","name":""}`, http.StatusBadRequest},
+		{"rename to empty", http.MethodPatch, "/api/wiki/templates/" + tpl.ID, `{"name":""}`, http.StatusBadRequest},
+		{"rename unknown", http.MethodPatch, "/api/wiki/templates/nope", `{"name":"X"}`, http.StatusNotFound},
+		{"delete unknown", http.MethodDelete, "/api/wiki/templates/nope", "", http.StatusNotFound},
+		{"unknown campaign", http.MethodGet, "/api/campaigns/nope/wiki/templates", "", http.StatusNotFound},
+	}
+	for _, tt := range errs {
+		if rec := f.do(tt.method, tt.path, tt.body, withCookie(f.gm)); rec.Code != tt.want {
+			t.Errorf("%s = %d %s, want %d", tt.name, rec.Code, rec.Body.String(), tt.want)
+		}
+	}
+
+	if rec := f.do(http.MethodDelete, "/api/wiki/templates/"+tpl.ID, "", withCookie(f.gm)); rec.Code != http.StatusNoContent {
+		t.Errorf("delete = %d", rec.Code)
+	}
+	rec = f.do(http.MethodGet, base, "", withCookie(f.gm))
+	list = nil
+	decodeBody(t, rec, &list)
+	if len(list) != 0 || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("list after delete = %s", rec.Body.String())
+	}
+}
+
+func TestWikiExportPageHeaders(t *testing.T) {
+	f := newWikiFixture(t)
+	tests := []struct{ title, disposition string }{
+		{"Таверна", `attachment; filename="page.md"; filename*=UTF-8''%D0%A2%D0%B0%D0%B2%D0%B5%D1%80%D0%BD%D0%B0.md`},
+		{"A b (c)'*", `attachment; filename="page.md"; filename*=UTF-8''A%20b%20%28c%29%27.md`},
+		{"🍺", `attachment; filename="page.md"; filename*=UTF-8''%F0%9F%8D%BA.md`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			p := f.createPage(jsonBody(t, map[string]string{"title": tt.title}))
+			rec := f.do(http.MethodGet, "/api/wiki/pages/"+p.ID+"/export.md", "", withCookie(f.gm))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("export = %d %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Type"); got != "text/markdown; charset=utf-8" {
+				t.Errorf("Content-Type = %q", got)
+			}
+			if got := rec.Header().Get("Content-Disposition"); got != tt.disposition {
+				t.Errorf("Content-Disposition = %q, want %q", got, tt.disposition)
+			}
+			if !strings.HasPrefix(rec.Body.String(), "---\ntitle: ") {
+				t.Errorf("body = %q", rec.Body.String())
+			}
+		})
+	}
+	if rec := f.do(http.MethodGet, "/api/wiki/pages/nope/export.md", "", withCookie(f.gm)); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown page = %d, want 404", rec.Code)
+	}
+}
+
+func TestWikiExportZip(t *testing.T) {
+	f := newAssetFixture(t, asset.Options{})
+	img := f.mustUpload("map.png", testPNG(t, 2, 2))
+	sum := sha256.Sum256(testPNG(t, 2, 2))
+	sha := hex.EncodeToString(sum[:])
+
+	create := func(body string) pageJSON {
+		rec := f.do(http.MethodPost, "/api/campaigns/"+f.campaignID+"/wiki/pages", body, withCookie(f.gm))
+		var p pageJSON
+		decodeBody(t, rec, &p)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create page = %d %s", rec.Code, rec.Body.String())
+		}
+		return p
+	}
+	parent := create(`{"title":"Мир"}`)
+	child := create(`{"title":"Город","parentId":"` + parent.ID + `"}`)
+	content := `{"type":"doc","content":[{"type":"image","attrs":{"assetId":"` + img.ID + `","alt":"map"}}]}`
+	if rec := f.do(http.MethodPut, "/api/wiki/pages/"+child.ID, `{"version":1,"title":"Город","content":`+content+`}`, withCookie(f.gm)); rec.Code != http.StatusOK {
+		t.Fatalf("save page = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec := f.do(http.MethodGet, "/api/campaigns/"+f.campaignID+"/wiki/export.zip", "", withCookie(f.gm))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export = %d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/zip" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	wantDisposition := `attachment; filename="wiki.zip"; filename*=UTF-8''wiki-Camp-2026-01-01.zip`
+	if got := rec.Header().Get("Content-Disposition"); got != wantDisposition {
+		t.Errorf("Content-Disposition = %q, want %q", got, wantDisposition)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, zf := range zr.File {
+		names = append(names, zf.Name)
+	}
+	slices.Sort(names)
+	want := []string{"assets/" + sha + ".png", "Мир.md", "Мир/Город.md"}
+	slices.Sort(want)
+	if !slices.Equal(names, want) {
+		t.Errorf("archive = %q, want %q", names, want)
+	}
+
+	if rec := f.do(http.MethodGet, "/api/campaigns/nope/wiki/export.zip", "", withCookie(f.gm)); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown campaign = %d, want 404", rec.Code)
+	}
+}
+
+func TestWikiExportZipNameOfACampaignWithCyrillic(t *testing.T) {
+	f := newWikiFixture(t)
+	cid := f.createCampaign(f.gm, "Забытые: земли")
+	rec := f.do(http.MethodGet, "/api/campaigns/"+cid+"/wiki/export.zip", "", withCookie(f.gm))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export = %d", rec.Code)
+	}
+	want := `attachment; filename="wiki.zip"; filename*=UTF-8''wiki-%D0%97%D0%B0%D0%B1%D1%8B%D1%82%D1%8B%D0%B5%20%D0%B7%D0%B5%D0%BC%D0%BB%D0%B8-2026-01-01.zip`
+	if got := rec.Header().Get("Content-Disposition"); got != want {
+		t.Errorf("Content-Disposition = %q, want %q", got, want)
 	}
 }
