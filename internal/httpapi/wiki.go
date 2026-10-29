@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/wiki/doc"
@@ -418,4 +419,91 @@ func (a *api) deleteWikiTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type segmentJSON struct {
+	Text  string `json:"text"`
+	Match bool   `json:"match,omitempty"`
+}
+
+type searchHitJSON struct {
+	ID       string        `json:"id"`
+	Title    string        `json:"title"`
+	Icon     string        `json:"icon"`
+	Kind     string        `json:"kind"`
+	IsRecord bool          `json:"isRecord"`
+	Path     []string      `json:"path"`
+	Snippet  []segmentJSON `json:"snippet"`
+}
+
+type mentionHitJSON struct {
+	Kind   string `json:"kind"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Detail string `json:"detail"`
+}
+
+func (a *api) searchWiki(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	query := r.URL.Query()
+	q := wiki.SearchQuery{Q: query.Get("q"), TagID: query.Get("tag")}
+	if raw := query.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 50 {
+			writeError(w, http.StatusBadRequest, "bad_request", "limit must be a number from 1 to 50")
+			return
+		}
+		q.Limit = n
+	}
+	hits, err := a.d.Wiki.Search(r.Context(), r.PathValue("id"), q)
+	if err != nil {
+		a.wikiError(w, "search wiki", err)
+		return
+	}
+	out := make([]searchHitJSON, len(hits))
+	for i, h := range hits {
+		segs := make([]segmentJSON, len(h.Snippet))
+		for j, s := range h.Snippet {
+			segs[j] = segmentJSON{Text: s.Text, Match: s.Match}
+		}
+		out[i] = searchHitJSON{
+			ID: h.ID, Title: h.Title, Icon: h.Icon, Kind: h.Kind, IsRecord: h.IsRecord,
+			Path: h.Path, Snippet: segs,
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) mentionSearchWiki(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	hits, err := a.d.Wiki.MentionSearch(r.Context(), r.PathValue("id"), r.URL.Query().Get("q"))
+	if err != nil {
+		a.wikiError(w, "search wiki mentions", err)
+		return
+	}
+	out := make([]mentionHitJSON, len(hits))
+	for i, h := range hits {
+		out[i] = mentionHitJSON{Kind: h.Kind, ID: h.ID, Label: h.Label, Detail: h.Detail}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) getWikiBacklinks(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	refs, err := a.d.Wiki.Backlinks(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.wikiError(w, "list wiki backlinks", err)
+		return
+	}
+	out := make([]pageRefJSON, len(refs))
+	for i, p := range refs {
+		out[i] = pageRefJSON{ID: p.ID, Title: p.Title, Icon: p.Icon, Kind: p.Kind}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
