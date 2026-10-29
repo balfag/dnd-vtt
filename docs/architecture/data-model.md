@@ -105,7 +105,7 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - `kind` — `text` \| `roll` \| `system` \| `handout` (M3); `visibility` — `public` \| `private` \| `gm` \| `self` \| `blind` (`private` — только для `text` и `handout`; `gm`/`self`/`blind` — только для `roll`; у `handout` — только `public` или `private`).
 - `author_player_id` → `player(id)`; пуст у `system`. `game_session_id` → `game_session(id)` `ON DELETE SET NULL` — в какой игре написано.
 - `recipients` — массив `playerId` (1–20) для `private`, иначе `[]`.
-- `payload`: для `text`/`system` — `{text}` (1–2000 символов); для `roll` — `{formula, label, result}`, где `result` — `dice.Result` целиком: бросок можно показать и проверить потом; для `handout` — `{title, content}` (`title` 0–200 символов, `content` — фрагмент по схеме вики v1, до 256 КиБ).
+- `payload`: для `text`/`system` — `{text}` (1–2000 символов); для `roll` — `{formula, label, result}`, где `result` — `dice.Result` целиком: бросок можно показать и проверить потом; для `handout` — `{title, content}` (`title` 0–200 символов, `content` — фрагмент по схеме вики v1, до 48 КиБ).
 - `chat_message_asset: message_id, asset_id` (M3) — изображения handout'а: первичный ключ `(message_id, asset_id)`, `message_id` → `chat_message(id)` `ON DELETE CASCADE`, `asset_id` → `asset(id)` `ON DELETE RESTRICT`; по ней сервер проверяет доступ игрока к ассету.
 - Индекс `(campaign_id, id)`: история читается страницами по убыванию `id` (ULID сортируется по времени).
 - Видимость при чтении — правила протокола; фильтр применяется к каждой строке на сервере.
