@@ -17,6 +17,7 @@
 ## Дизайн
 - [visual-language.md](design/visual-language.md): визуальный язык клиента — палитра, шрифты, раскладка, принципы (правила процесса — [skills/frontend.md](../skills/frontend.md))
 - [table-screen.md](design/table-screen.md): экран стола
+- [wiki-screen.md](design/wiki-screen.md): вики и рабочая область
 
 ## Системы
 - [vtt.md](systems/vtt.md): виртуальный стол
