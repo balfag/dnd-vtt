@@ -90,7 +90,7 @@ export function PopupMenu({ doc, at, label, items, onClose }: PopupMenuProps) {
 }
 
 /** PanelTab is the tab of a panel: its name, the menu "⋯" and "✕"; dockview supplies role="tab" and the name around it. */
-export function PanelTab({ api, containerApi }: IDockviewPanelHeaderProps) {
+export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProps) {
   const { t } = useTranslation()
   const { panels, popout } = useWorkspace()
   const def = findPanel(panels, api.id)
@@ -120,7 +120,7 @@ export function PanelTab({ api, containerApi }: IDockviewPanelHeaderProps) {
       key: 'popout',
       label: t('workspace.popout'),
       onSelect: () => {
-        popout(def.kind)
+        popout(api.id)
       },
     })
   }
@@ -162,7 +162,7 @@ export function PanelTab({ api, containerApi }: IDockviewPanelHeaderProps) {
         setMenu({ x: e.clientX, y: e.clientY, align: 'start', doc: e.currentTarget.ownerDocument })
       }}
     >
-      <span className="wtab__title">{def.title}</span>
+      <span className="wtab__title">{def.titleFor?.(params) ?? def.title}</span>
       <button
         ref={menuButton}
         type="button"
