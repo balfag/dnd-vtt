@@ -10,7 +10,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/wiki/doc"
 )
 
-var update = flag.Bool("update", false, "rewrite the golden .md files")
+var update = flag.Bool("update", false, "rewrite the golden files")
 
 // goldenLinker knows the page 01ARZ3NDEKTSV4RRFFQ69G5FAV (renamed since the
 // mention was written) and not the page ...FAW.
@@ -58,7 +58,7 @@ func TestToMarkdownGolden(t *testing.T) {
 				t.Fatal(err)
 			}
 			got += "\n"
-			golden := strings.TrimSuffix(in, ".json") + ".md"
+			golden := strings.TrimSuffix(in, ".json") + ".golden"
 			if *update {
 				if err := os.WriteFile(golden, []byte(got), 0o600); err != nil {
 					t.Fatal(err)
