@@ -6,7 +6,6 @@ import {
   restoreTrash,
   type TrashItem,
 } from '../../../shared/api/wiki'
-import { Button } from '../../../ui/Button'
 import { wikiStore } from '../store'
 import { ConfirmDialog } from '../tree/ConfirmDialog'
 import { Section, SectionRow } from '../tree/Section'
@@ -47,7 +46,7 @@ export function TrashSection() {
             key={item.id}
             icon={item.icon}
             label={nameOf(item)}
-            meta={`${t('wiki.tools.trash.deleted', { date: date(item.deletedAt) })} · ${t('wiki.tools.trash.purgeAt', { date: date(item.purgeAt) })}`}
+            meta={`${t('wiki.tools.trash.deleted', { date: date(item.deletedAt) })}\n${t('wiki.tools.trash.purgeAt', { date: date(item.purgeAt) })}`}
             menuLabel={t('wiki.tools.trash.rowMenu', { name: nameOf(item) })}
             extra={
               <button
@@ -75,15 +74,15 @@ export function TrashSection() {
       </ul>
       {items.length > 0 && (
         <div className="tsec__foot">
-          <Button
-            variant="secondary"
-            fullWidth={false}
+          <button
+            type="button"
+            className="srow__action"
             onClick={() => {
               emptying.ask(null)
             }}
           >
             {t('wiki.tools.trash.emptyAll')}
-          </Button>
+          </button>
         </div>
       )}
 
