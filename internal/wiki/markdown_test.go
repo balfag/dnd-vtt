@@ -49,7 +49,7 @@ func TestToMarkdownGolden(t *testing.T) {
 	for _, in := range inputs {
 		name := strings.TrimSuffix(filepath.Base(in), ".json")
 		t.Run(name, func(t *testing.T) {
-			raw, err := os.ReadFile(in)
+			raw, err := os.ReadFile(in) //nolint:gosec // G304: the path comes from a glob of testdata
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -60,11 +60,11 @@ func TestToMarkdownGolden(t *testing.T) {
 			got += "\n"
 			golden := strings.TrimSuffix(in, ".json") + ".md"
 			if *update {
-				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+				if err := os.WriteFile(golden, []byte(got), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			want, err := os.ReadFile(golden)
+			want, err := os.ReadFile(golden) //nolint:gosec // G304: the path comes from a glob of testdata
 			if err != nil {
 				t.Fatal(err)
 			}

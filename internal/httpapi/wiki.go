@@ -879,7 +879,7 @@ func (a *api) exportWikiPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", attachment("page.md", name))
 	w.Header().Set("Content-Length", strconv.Itoa(len(md)))
-	_, _ = w.Write(md)
+	_, _ = w.Write(md) //nolint:gosec // G705: Markdown served as an attachment, not HTML
 }
 
 // assetFiles lets the wiki export read the files of the assets.
