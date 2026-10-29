@@ -1,0 +1,31 @@
+{
+  "t": "handout.show",
+  "id": "c-60",
+  "d": {
+    "title": "Старая карта",
+    "content": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Карта подземелья"
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "attrs": {
+            "assetId": "01J00000000000000000000AS1",
+            "alt": ""
+          }
+        }
+      ]
+    },
+    "to": [
+      "01J00000000000000000000PL3"
+    ]
+  }
+}

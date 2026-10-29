@@ -43,6 +43,7 @@ export const MessageType = {
   RollRequest: 'roll.request',
   ChatHistory: 'chat.history',
   ChatMessage: 'chat.message',
+  HandoutShow: 'handout.show',
   CombatStart: 'combat.start',
   CombatEnd: 'combat.end',
   CombatAdd: 'combat.add',
@@ -253,7 +254,7 @@ export interface ChatMessage {
   createdAt: number
   /** null for system messages. */
   authorPlayerId: string | null
-  kind: 'text' | 'roll' | 'system'
+  kind: 'text' | 'roll' | 'system' | 'handout'
   visibility: 'public' | 'private' | RollVisibility
   /** Private messages only. */
   to?: string[]
@@ -261,6 +262,19 @@ export interface ChatMessage {
   text?: string
   /** Roll messages only. */
   roll?: ChatRoll
+  /** Handout messages only. */
+  handout?: ChatHandout
+}
+/** ChatHandout is the payload of a handout message: a normalized wiki document fragment. */
+export interface ChatHandout {
+  title: string
+  content: unknown
+}
+/** HandoutShow is the data of handout.show; to makes the handout private. */
+export interface HandoutShow {
+  title: string
+  content: unknown
+  to?: string[]
 }
 /** Combatant is a participant of the tracker; name is empty when the viewer may not see it. */
 export interface Combatant {
@@ -671,6 +685,10 @@ function isDiceResult(v: unknown): v is DiceResult {
   )
 }
 
+function isChatHandout(v: unknown): v is ChatHandout {
+  return isObject(v) && typeof v.title === 'string' && isObject(v.content)
+}
+
 function isChatRoll(v: unknown): v is ChatRoll {
   return (
     isObject(v) &&
@@ -680,7 +698,7 @@ function isChatRoll(v: unknown): v is ChatRoll {
   )
 }
 
-const chatKinds: readonly unknown[] = ['text', 'roll', 'system']
+const chatKinds: readonly unknown[] = ['text', 'roll', 'system', 'handout']
 const chatVisibilities: readonly unknown[] = ['public', 'private', 'gm', 'self', 'blind']
 
 /** isChatMessageData checks a message and that its parts agree: a roll has a roll, a private message has recipients. */
@@ -696,6 +714,8 @@ function isChatMessageData(v: unknown): v is ChatMessage {
     (v.text === undefined || typeof v.text === 'string') &&
     (v.roll === undefined || isChatRoll(v.roll)) &&
     (v.kind === 'roll') === (v.roll !== undefined) &&
+    (v.handout === undefined || isChatHandout(v.handout)) &&
+    (v.kind === 'handout') === (v.handout !== undefined) &&
     (v.visibility === 'private') === (v.to !== undefined && v.to.length > 0)
   )
 }

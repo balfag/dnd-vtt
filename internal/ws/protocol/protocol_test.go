@@ -120,6 +120,13 @@ func examples(t *testing.T) map[string]Envelope {
 		Kind: "roll", Visibility: "blind", Roll: &ChatRoll{Formula: "2d20kh1+5", Label: "Скрытность"},
 	}
 
+	handoutContent := json.RawMessage(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Карта подземелья"}]},{"type":"image","attrs":{"assetId":"01J00000000000000000000AS1","alt":""}}]}`)
+	chatHandout := ChatMessage{
+		ID: "01J00000000000000000000CM5", CreatedAt: 1760530500000, AuthorPlayerID: &anna,
+		Kind: "handout", Visibility: "private", To: []string{boris},
+		Handout: &ChatHandout{Title: "Старая карта", Content: handoutContent},
+	}
+
 	gobCombatant := "01J00000000000000000000CB1"
 	secretCombatant := "01J00000000000000000000CB2"
 	combatGM := Combat{
@@ -245,6 +252,9 @@ func examples(t *testing.T) map[string]Envelope {
 		"chat_message_private":           with(mustNew(t, TypeChatMessage, chatPrivate), func(e *Envelope) { e.Seq = 28 }),
 		"chat_message_roll":              with(mustNew(t, TypeChatMessage, chatRoll), func(e *Envelope) { e.Seq = 29 }),
 		"chat_message_roll_blind_author": with(mustNew(t, TypeChatMessage, chatBlindAuthor), func(e *Envelope) { e.Seq = 30 }),
+		"handout_show_command": with(mustNew(t, TypeHandoutShow, HandoutShow{Title: "Старая карта", Content: handoutContent, To: []string{boris}}),
+			func(e *Envelope) { e.ID = "c-60" }),
+		"chat_message_handout": with(mustNew(t, TypeChatMessage, chatHandout), func(e *Envelope) { e.Seq = 31 }),
 		"chat_history_ack": with(mustNew(t, TypeAck, ChatHistoryAck{Messages: []ChatMessage{chatText, chatPrivate, chatRoll}}),
 			func(e *Envelope) { e.Re = "c-15" }),
 		"combat_start_command": with(mustNew(t, TypeCombatStart, SceneRef{SceneID: crypt.ID}),
@@ -424,6 +434,8 @@ func TestGolden(t *testing.T) {
 				data = &ChatHistory{}
 			case TypeChatMessage:
 				data = &ChatMessage{}
+			case TypeHandoutShow:
+				data = &HandoutShow{}
 			case TypeSnapshot:
 				data = &Snapshot{}
 			case TypePresence:
