@@ -1,7 +1,7 @@
-[
+﻿[
 {"schemaVersion":1,"id":"acolyte","name":"Acolyte","source":"srd-5.2.1","abilityOptions":["int","wis","cha"],"feat":"magic-initiate",
  "proficiencies":[{"kind":"skill","key":"insight"},{"kind":"skill","key":"religion"},{"kind":"tool","key":"calligraphers-supplies"}],
- "choices":[{"id":"acolyte-magic-initiate-list","count":1,"from":["cleric"]}],
+ "featPresets":{"mi-list":["cleric"]},
  "description":"Ability scores: Intelligence, Wisdom, Charisma. Feat: Magic Initiate (Cleric). Skills: Insight, Religion. Tool: Calligrapher's Supplies."},
 {"schemaVersion":1,"id":"soldier","name":"Soldier","source":"srd-5.2.1","abilityOptions":["str","dex","con"],"feat":"savage-attacker",
  "proficiencies":[{"kind":"skill","key":"athletics"},{"kind":"skill","key":"intimidation"}],

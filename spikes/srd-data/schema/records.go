@@ -114,11 +114,13 @@ type Species struct {
 // an origin feat, skill/tool proficiencies.
 type Background struct {
 	Meta
-	AbilityOptions []string      `json:"abilityOptions"`
-	Feat           string        `json:"feat"`
-	Proficiencies  []Proficiency `json:"proficiencies"`
-	Choices        []Choice      `json:"choices,omitempty"`
-	Description    string        `json:"description,omitempty"`
+	AbilityOptions []string `json:"abilityOptions"`
+	Feat           string   `json:"feat"`
+	// FeatPresets fixes some of the granted feat's choices (Magic Initiate: Cleric).
+	FeatPresets   map[string][]string `json:"featPresets,omitempty"`
+	Proficiencies []Proficiency       `json:"proficiencies"`
+	Choices       []Choice            `json:"choices,omitempty"`
+	Description   string              `json:"description,omitempty"`
 }
 
 // Feat. Category: origin | general | fighting_style | epic_boon.

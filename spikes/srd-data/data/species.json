@@ -1,4 +1,4 @@
-[
+﻿[
 {"schemaVersion":1,"id":"human","name":"Human","source":"srd-5.2.1","creatureType":"humanoid","size":"medium","speed":30,"traits":[
   {"id":"resourceful","name":"Resourceful","description":"You gain Heroic Inspiration whenever you finish a Long Rest.",
    "effects":[{"type":"special","handler":"heroic_inspiration_on_rest","reason":"a rest-triggered resource flag; the resource itself is a boolean on the character"}]},
@@ -13,9 +13,9 @@
   {"id":"elven-lineage","name":"Elven Lineage","description":"Choose a lineage (Drow, High Elf, Wood Elf): a level 1 benefit and a spell learned at levels 3 and 5.",
    "effects":[{"type":"choice","choice":{"id":"elven-lineage","count":1,"from":["drow","high-elf","wood-elf"],
     "thenBy":{
-     "drow":[{"type":"modifier","modifiers":[{"target":"sense.darkvision","op":"set","value":"120"}]},{"type":"grant","grant":"spell:dancing-lights"},{"type":"grant","grant":"spell:faerie-fire","when":"level>=3"}],
-     "high-elf":[{"type":"grant","grant":"spell:prestidigitation"},{"type":"grant","grant":"spell:detect-magic","when":"level>=3"}],
-     "wood-elf":[{"type":"modifier","modifiers":[{"target":"speed","op":"set","value":"35"}]},{"type":"grant","grant":"spell:druidcraft"},{"type":"grant","grant":"spell:longstrider","when":"level>=3"}]}}}]},
+     "drow":[{"type":"modifier","modifiers":[{"target":"sense.darkvision","op":"set","value":"120"}]},{"type":"grant","grant":"spell:dancing-lights"},{"type":"grant","grant":"spell:faerie-fire","when":"level>=3"},{"type":"grant","grant":"spell:darkness","when":"level>=5"}],
+     "high-elf":[{"type":"grant","grant":"spell:prestidigitation"},{"type":"grant","grant":"spell:detect-magic","when":"level>=3"},{"type":"grant","grant":"spell:misty-step","when":"level>=5"}],
+     "wood-elf":[{"type":"modifier","modifiers":[{"target":"speed","op":"set","value":"35"}]},{"type":"grant","grant":"spell:druidcraft"},{"type":"grant","grant":"spell:longstrider","when":"level>=3"},{"type":"grant","grant":"spell:pass-without-trace","when":"level>=5"}]}}}]},
   {"id":"fey-ancestry","name":"Fey Ancestry","description":"Advantage on saving throws you make to avoid or end the Charmed condition.",
    "effects":[{"type":"modifier","modifiers":[{"target":"save.vs.charmed","op":"advantage"}]}]},
   {"id":"keen-senses","name":"Keen Senses","description":"You have proficiency in the Insight, Perception, or Survival skill.",

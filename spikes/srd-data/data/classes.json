@@ -21,7 +21,7 @@
    "uses":{"max":"@col.secondWindUses","recharge":"long_rest"},
    "effects":[{"type":"heal","heal":{"dice":"1d10 + @level"}}]},
   {"id":"weapon-mastery","name":"Weapon Mastery","level":1,"description":"Use the mastery property of a number of weapon kinds you have proficiency with.",
-   "effects":[{"type":"choice","choice":{"id":"weapon-mastery","count":3,"fromKind":"weapon_mastery"}}]},
+   "effects":[{"type":"choice","choice":{"id":"weapon-mastery","countExpr":"@col.weaponMastery","fromKind":"weapon_mastery"}}]},
   {"id":"action-surge","name":"Action Surge","level":2,"description":"On your turn, take one additional action except the Magic action.",
    "uses":{"max":"1","recharge":"short_rest"},"effects":[{"type":"grant","grant":"extra_action:any_except_magic"}]},
   {"id":"tactical-mind","name":"Tactical Mind","level":2,"description":"When you fail an ability check you can expend a use of Second Wind to add 1d10 to the roll; if the check still fails, the use is not expended.",

@@ -72,11 +72,13 @@ type Proficiency struct {
 // applied once per picked value with "$choice" substituted. FromKind lets From
 // be resolved from content ("feat:origin", "spell:cantrip:wizard").
 type Choice struct {
-	ID       string   `json:"id"`
-	Count    int      `json:"count"`
-	From     []string `json:"from,omitempty"`
-	FromKind string   `json:"fromKind,omitempty"`
-	Then     []Effect `json:"then,omitempty"`
+	ID    string `json:"id"`
+	Count int    `json:"count,omitempty"`
+	// CountExpr overrides Count when the number of picks comes from a class table column.
+	CountExpr Expr     `json:"countExpr,omitempty"`
+	From      []string `json:"from,omitempty"`
+	FromKind  string   `json:"fromKind,omitempty"`
+	Then      []Effect `json:"then,omitempty"`
 	// ThenBy maps a picked value to extra effects (lineage -> benefits).
 	ThenBy map[string][]Effect `json:"thenBy,omitempty"`
 }
