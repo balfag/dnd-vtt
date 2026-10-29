@@ -1,0 +1,13 @@
+{"type":"doc","content":[
+{"type":"paragraph","content":[
+  {"type":"text","text":"See "},
+  {"type":"mention","attrs":{"kind":"page","id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","label":"Old name"}},
+  {"type":"text","text":", "},
+  {"type":"mention","attrs":{"kind":"page","id":"01ARZ3NDEKTSV4RRFFQ69G5FAW","label":"Gone page"}},
+  {"type":"text","text":", "},
+  {"type":"mention","attrs":{"kind":"scene","id":"01ARZ3NDEKTSV4RRFFQ69G5FAX","label":"Cellar"}},
+  {"type":"text","text":" and roll "},
+  {"type":"inlineRoll","attrs":{"formula":"2d6+3"}},
+  {"type":"text","text":"."}
+]}
+]}

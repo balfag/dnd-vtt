@@ -2,11 +2,19 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
+	"github.com/balfag/dnd-vtt/internal/asset"
+	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/wiki/doc"
 )
@@ -90,6 +98,8 @@ type newPageRequest struct {
 	Content  json.RawMessage     `json:"content"`
 	Props    json.RawMessage     `json:"props"`
 	Database *newDatabaseRequest `json:"database"`
+
+	TemplateID string `json:"templateId"`
 }
 
 type savePageRequest struct {
@@ -219,6 +229,7 @@ func (a *api) createWikiPage(w http.ResponseWriter, r *http.Request) {
 	}
 	np := wiki.NewPage{
 		ParentID: orEmpty(req.ParentID), Kind: req.Kind, Title: req.Title, Icon: req.Icon, Content: content, Props: req.Props,
+		TemplateID: req.TemplateID,
 	}
 	if req.Database != nil {
 		nd := &wiki.NewDatabase{}
@@ -757,4 +768,177 @@ func (a *api) setWikiPageProps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Props json.RawMessage `json:"props"`
 	}{props})
+}
+
+type templateJSON struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Icon      string `json:"icon"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+func newTemplateJSON(t wiki.Template) templateJSON {
+	return templateJSON{ID: t.ID, Name: t.Name, Icon: t.Icon, CreatedAt: t.CreatedAt.UnixMilli()}
+}
+
+type saveTemplateRequest struct {
+	FromPageID string `json:"fromPageId"`
+	Name       string `json:"name"`
+}
+
+type renameTemplateRequest struct {
+	Name string `json:"name"`
+}
+
+func (a *api) listWikiTemplates(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	templates, err := a.d.Wiki.Templates(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.wikiError(w, "list wiki templates", err)
+		return
+	}
+	out := make([]templateJSON, len(templates))
+	for i, t := range templates {
+		out[i] = newTemplateJSON(t)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) saveWikiTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req saveTemplateRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	t, err := a.d.Wiki.SaveTemplate(r.Context(), r.PathValue("id"), req.FromPageID, req.Name)
+	if err != nil {
+		a.wikiError(w, "save wiki template", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, newTemplateJSON(t))
+}
+
+func (a *api) renameWikiTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req renameTemplateRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	t, err := a.d.Wiki.RenameTemplate(r.Context(), r.PathValue("id"), req.Name)
+	if err != nil {
+		a.wikiError(w, "rename wiki template", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newTemplateJSON(t))
+}
+
+func (a *api) deleteWikiTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.DeleteTemplate(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "delete wiki template", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// attachment is the Content-Disposition of a download: an ASCII fallback and
+// the real name in the RFC 5987 form.
+func attachment(fallback, name string) string {
+	const attrChar = "!#$&+.^_`|~-"
+	var enc strings.Builder
+	for _, b := range []byte(name) {
+		switch {
+		case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9', strings.IndexByte(attrChar, b) >= 0:
+			enc.WriteByte(b)
+		default:
+			fmt.Fprintf(&enc, "%%%02X", b)
+		}
+	}
+	return fmt.Sprintf("attachment; filename=%q; filename*=UTF-8''%s", fallback, enc.String())
+}
+
+func (a *api) exportWikiPage(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	name, md, err := a.d.Wiki.ExportPage(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.wikiError(w, "export wiki page", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", attachment("page.md", name))
+	w.Header().Set("Content-Length", strconv.Itoa(len(md)))
+	_, _ = w.Write(md)
+}
+
+// assetFiles lets the wiki export read the files of the assets.
+type assetFiles struct{ svc *asset.Service }
+
+func (f assetFiles) Open(ctx context.Context, id string) (io.ReadCloser, string, string, error) {
+	as, err := f.svc.Get(ctx, id)
+	if err != nil {
+		return nil, "", "", err
+	}
+	file, err := f.svc.Open(as)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return file, strings.TrimPrefix(filepath.Ext(f.svc.Path(as)), "."), as.SHA256, nil
+}
+
+// downloadWriter sets the headers of the archive just before the first byte,
+// so that an error found earlier can still be answered with JSON.
+type downloadWriter struct {
+	w       http.ResponseWriter
+	name    string
+	started bool
+}
+
+func (d *downloadWriter) Write(p []byte) (int, error) {
+	if !d.started {
+		d.started = true
+		d.w.Header().Set("Content-Type", "application/zip")
+		d.w.Header().Set("Content-Disposition", attachment("wiki.zip", d.name))
+	}
+	return d.w.Write(p)
+}
+
+func (a *api) exportWiki(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	campaign, err := a.d.Game.GetCampaign(r.Context(), r.PathValue("id"))
+	if errors.Is(err, game.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	if err != nil {
+		a.internalError(w, "get campaign", err)
+		return
+	}
+	now := time.Now
+	if a.d.Now != nil {
+		now = a.d.Now
+	}
+	dw := &downloadWriter{w: w, name: "wiki-" + wiki.SafeFileName(campaign.Name) + "-" + now().Format("2006-01-02") + ".zip"}
+	if err := a.d.Wiki.ExportAll(r.Context(), campaign.ID, dw, assetFiles{a.d.Assets}); err != nil {
+		if !dw.started {
+			a.wikiError(w, "export wiki", err)
+			return
+		}
+		// The status is sent already: cut the connection so the client sees a broken download.
+		a.d.Logger.Error("export wiki", "err", err)
+		panic(http.ErrAbortHandler)
+	}
 }
