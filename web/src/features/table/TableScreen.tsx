@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { DockviewApi, IDockviewPanel } from 'dockview-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
@@ -28,6 +29,10 @@ import { PlaceTokenPopover } from '../tokens/PlaceTokenPopover'
 import { runTokenAction, type TokenAction } from '../tokens/tokenActions'
 import { TokenContextMenu } from '../tokens/TokenContextMenu'
 import { TokenDialog } from '../tokens/TokenDialog'
+import { layoutKey } from '../workspace/layout'
+import { panelOptions, type PanelDef } from '../workspace/panels'
+import { Workspace } from '../workspace/Workspace'
+import { useWorkspaceOpen, useWorkspaceReset } from '../workspace/workspaceCommands'
 import { SceneCanvas, type CanvasTool, type PlaceToolState } from './canvas/SceneCanvas'
 import { ConnectionNote } from './ConnectionNote'
 import { PrepFrame } from './PrepFrame'
@@ -95,6 +100,9 @@ const sharedToolKeys: Partial<Record<string, TableTool>> = {
   t: 'template',
 }
 
+/** SIDE_WIDTH_REM is the width of the group at the right of the canvas in the default layout. */
+const SIDE_WIDTH_REM = 22
+
 /** TableScreen is the table: the game connection, the top bar, the tools and the scene canvas. */
 export default function TableScreen() {
   const { t } = useTranslation()
@@ -107,6 +115,8 @@ export default function TableScreen() {
   const [panelTab, setPanelTab] = useState<string | undefined>(undefined)
   const [unread, setUnread] = useState(0)
   const narrow = useNarrow()
+  const resetLayout = useWorkspaceReset()
+  const openPanel = useWorkspaceOpen()
   const [tool, setTool] = useState<TableTool>('select')
   // The image of the tokens the place tool puts; it is kept while the tool is in hand.
   const [placeImage, setPlaceImage] = useState<PlaceToolState['image']>(null)
@@ -320,151 +330,256 @@ export default function TableScreen() {
   const menuToken = menu === null ? null : (tokens.find((tk) => tk.id === menu.tokenId) ?? null)
   const emptyText = isGm ? t('table.empty.gm') : t('table.empty.player')
 
+  const accountId = state.me.accountId
+  const stage = (
+    <>
+      <SceneCanvas
+        scene={scene}
+        emptyText={emptyText}
+        players={game?.players ?? []}
+        me={{ isGM: isGm, playerId: snapshotMe?.playerId ?? null }}
+        connection={connection}
+        announce={announce}
+        fogTool={fogTool}
+        campaignId={campaignId}
+        placeTool={placeTool}
+        onOpenToken={(id) => {
+          doTokenAction('properties', id)
+        }}
+        onTokenMenu={(id, at) => {
+          setMenu({ tokenId: id, at })
+        }}
+        onTokenAction={doTokenAction}
+        tool={canvasTool}
+        drawOptions={drawOptions}
+        templateOptions={templateOptions}
+      />
+      {canvasTool !== null && (
+        <ToolOptions
+          tool={canvasTool}
+          isGm={isGm}
+          draw={drawOptions}
+          onDraw={setDrawOptions}
+          template={templateOptions}
+          onTemplate={setTemplateOptions}
+          myColor={myColor}
+        />
+      )}
+      <TokenList scene={scene} />
+      {placeTool !== null && (
+        <PlaceTokenPopover
+          campaignId={campaignId}
+          assetId={placeImage?.assetId ?? null}
+          onChange={(asset) => {
+            setPlaceImage(
+              asset === null ? null : { assetId: asset.id, originalName: asset.originalName },
+            )
+          }}
+          onClose={() => {
+            setTool('select')
+            document.querySelector<HTMLElement>('[data-tool="place"]')?.focus()
+          }}
+        />
+      )}
+      {fogTool !== null && scene !== null && (
+        <FogToolbar
+          scene={scene}
+          tool={fogTool}
+          onChange={(next) => {
+            setFogOptions({ shape: next.shape, radiusCells: next.radiusCells })
+          }}
+          command={command}
+          announce={announce}
+        />
+      )}
+      {preparing && (
+        <PrepFrame
+          viewedName={scene.name}
+          hasActive={game?.activeSceneId != null}
+          onShow={async () => {
+            await command(MessageType.SceneActivate, { sceneId: scene.id })
+          }}
+        />
+      )}
+      {menu !== null && menuToken !== null && (
+        <TokenContextMenu
+          token={menuToken}
+          at={menu.at}
+          onAction={(action) => {
+            setMenu(null)
+            doTokenAction(action, menuToken.id)
+          }}
+          onClose={() => {
+            setMenu(null)
+            document.querySelector<HTMLElement>('.canvas__host')?.focus()
+          }}
+        />
+      )}
+      {editing !== null && (
+        <TokenDialog
+          key={editing.key}
+          open={editing.open}
+          original={editing.token}
+          players={game?.players ?? []}
+          campaignId={campaignId}
+          command={command}
+          onSaved={() => {
+            announce(t('tokens.announce.saved'), false)
+          }}
+          onClose={() => {
+            setEditing((e) => (e === null ? null : { ...e, open: false }))
+          }}
+        />
+      )}
+      {deleting !== null && (
+        <Dialog
+          title={t('tokens.menu.delete')}
+          open={deleting.open}
+          closeLabel={t('ui.dialog.cancel')}
+          onClose={() => {
+            setDeleting((d) => (d === null ? null : { ...d, open: false }))
+          }}
+          actions={
+            <Button
+              variant="danger"
+              fullWidth={false}
+              onClick={() => {
+                deleteToken(deleting.token.id)
+              }}
+            >
+              {t('tokens.menu.delete')}
+            </Button>
+          }
+        >
+          <p>
+            {deleting.token.name === ''
+              ? t('tokens.deleteConfirmUnnamed')
+              : t('tokens.deleteConfirm', { name: deleting.token.name })}
+          </p>
+        </Dialog>
+      )}
+      <ConnectionNote />
+      <TableAnnouncer announcement={announcement} />
+      {game !== null && scene === null && <p className="table__empty">{emptyText}</p>}
+    </>
+  )
+  const toolRail = <ToolRail tool={shownTool} onTool={setTool} isGm={isGm} />
+
+  const topBar = (
+    <TopBar
+      campaignName={game?.campaign.name ?? ''}
+      sceneName={scene?.name ?? null}
+      players={game?.players ?? []}
+      isGm={isGm}
+      onOpenScenes={() => {
+        if (narrow) setPanelTab('scenes')
+        else openPanel('scenes')
+      }}
+      onResetLayout={
+        narrow
+          ? undefined
+          : () => {
+              resetLayout(layoutKey(accountId, campaignId, 'table'))
+            }
+      }
+      onLeave={() => {
+        if (isGm) navigate('/')
+        else void logout()
+      }}
+    />
+  )
+
+  if (!narrow) {
+    // The catalogue of the panels of the table (docs/architecture/workspace.md).
+    const catalogue: PanelDef[] = [
+      {
+        kind: 'scene',
+        title: t('table.section.map'),
+        closable: false,
+        popout: false,
+        gmOnly: false,
+        render: () => (
+          <div className="scenepanel">
+            {toolRail}
+            <main className="table__stage">{stage}</main>
+          </div>
+        ),
+      },
+      {
+        kind: 'chat',
+        title: t('chat.tab'),
+        closable: true,
+        popout: true,
+        gmOnly: false,
+        render: () => <ChatPanel command={command} />,
+      },
+      {
+        kind: 'combat',
+        title: t('combat.tab'),
+        closable: true,
+        popout: true,
+        gmOnly: false,
+        render: () => <CombatPanel command={command} />,
+      },
+      {
+        kind: 'scenes',
+        title: t('scenes.tab'),
+        closable: true,
+        popout: true,
+        gmOnly: true,
+        render: () => <ScenesPanel command={command} />,
+      },
+    ]
+    const panels = catalogue.filter((p) => isGm || !p.gmOnly)
+    /** defaultLayout is the layout of M1: the canvas, and at its right the group of chat, fight and (the GM's) scenes. */
+    const defaultLayout = (api: DockviewApi) => {
+      const [sceneDef, ...side] = panels
+      if (sceneDef === undefined) return
+      const sceneItem = api.addPanel(panelOptions(sceneDef))
+      let anchor: IDockviewPanel | undefined
+      for (const def of side) {
+        const added = api.addPanel({
+          ...panelOptions(def),
+          inactive: anchor !== undefined,
+          ...(anchor === undefined
+            ? {
+                initialWidth: SIDE_WIDTH_REM * rootFontSize(),
+                position: { referencePanel: sceneItem, direction: 'right' as const },
+              }
+            : { position: { referencePanel: anchor } }),
+        })
+        anchor ??= added
+      }
+      api.getPanel('chat')?.api.setActive()
+    }
+    return (
+      <div className="table table--wide">
+        {topBar}
+        {game === null ? (
+          <div className="workspace">
+            <ConnectionNote />
+          </div>
+        ) : (
+          <Workspace
+            key={layoutKey(accountId, campaignId, 'table')}
+            storageKey={layoutKey(accountId, campaignId, 'table')}
+            panels={panels}
+            defaultLayout={defaultLayout}
+            popoutTitle={(panel) =>
+              t('workspace.popoutTitle', { panel, campaign: game.campaign.name })
+            }
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="table" data-section={section}>
-      <TopBar
-        campaignName={game?.campaign.name ?? ''}
-        sceneName={scene?.name ?? null}
-        players={game?.players ?? []}
-        isGm={isGm}
-        onOpenScenes={() => {
-          setPanelTab('scenes')
-        }}
-        onLeave={() => {
-          if (isGm) navigate('/')
-          else void logout()
-        }}
-      />
-      <ToolRail tool={shownTool} onTool={setTool} isGm={isGm} />
-      <main className="table__stage" inert={narrow && section !== 'map'}>
-        <SceneCanvas
-          scene={scene}
-          emptyText={emptyText}
-          players={game?.players ?? []}
-          me={{ isGM: isGm, playerId: snapshotMe?.playerId ?? null }}
-          connection={connection}
-          announce={announce}
-          fogTool={fogTool}
-          campaignId={campaignId}
-          placeTool={placeTool}
-          onOpenToken={(id) => {
-            doTokenAction('properties', id)
-          }}
-          onTokenMenu={(id, at) => {
-            setMenu({ tokenId: id, at })
-          }}
-          onTokenAction={doTokenAction}
-          tool={canvasTool}
-          drawOptions={drawOptions}
-          templateOptions={templateOptions}
-        />
-        {canvasTool !== null && (
-          <ToolOptions
-            tool={canvasTool}
-            isGm={isGm}
-            draw={drawOptions}
-            onDraw={setDrawOptions}
-            template={templateOptions}
-            onTemplate={setTemplateOptions}
-            myColor={myColor}
-          />
-        )}
-        <TokenList scene={scene} />
-        {placeTool !== null && (
-          <PlaceTokenPopover
-            campaignId={campaignId}
-            assetId={placeImage?.assetId ?? null}
-            onChange={(asset) => {
-              setPlaceImage(
-                asset === null ? null : { assetId: asset.id, originalName: asset.originalName },
-              )
-            }}
-            onClose={() => {
-              setTool('select')
-              document.querySelector<HTMLElement>('[data-tool="place"]')?.focus()
-            }}
-          />
-        )}
-        {fogTool !== null && scene !== null && (
-          <FogToolbar
-            scene={scene}
-            tool={fogTool}
-            onChange={(next) => {
-              setFogOptions({ shape: next.shape, radiusCells: next.radiusCells })
-            }}
-            command={command}
-            announce={announce}
-          />
-        )}
-        {preparing && (
-          <PrepFrame
-            viewedName={scene.name}
-            hasActive={game?.activeSceneId != null}
-            onShow={async () => {
-              await command(MessageType.SceneActivate, { sceneId: scene.id })
-            }}
-          />
-        )}
-        {menu !== null && menuToken !== null && (
-          <TokenContextMenu
-            token={menuToken}
-            at={menu.at}
-            onAction={(action) => {
-              setMenu(null)
-              doTokenAction(action, menuToken.id)
-            }}
-            onClose={() => {
-              setMenu(null)
-              document.querySelector<HTMLElement>('.canvas__host')?.focus()
-            }}
-          />
-        )}
-        {editing !== null && (
-          <TokenDialog
-            key={editing.key}
-            open={editing.open}
-            original={editing.token}
-            players={game?.players ?? []}
-            campaignId={campaignId}
-            command={command}
-            onSaved={() => {
-              announce(t('tokens.announce.saved'), false)
-            }}
-            onClose={() => {
-              setEditing((e) => (e === null ? null : { ...e, open: false }))
-            }}
-          />
-        )}
-        {deleting !== null && (
-          <Dialog
-            title={t('tokens.menu.delete')}
-            open={deleting.open}
-            closeLabel={t('ui.dialog.cancel')}
-            onClose={() => {
-              setDeleting((d) => (d === null ? null : { ...d, open: false }))
-            }}
-            actions={
-              <Button
-                variant="danger"
-                fullWidth={false}
-                onClick={() => {
-                  deleteToken(deleting.token.id)
-                }}
-              >
-                {t('tokens.menu.delete')}
-              </Button>
-            }
-          >
-            <p>
-              {deleting.token.name === ''
-                ? t('tokens.deleteConfirmUnnamed')
-                : t('tokens.deleteConfirm', { name: deleting.token.name })}
-            </p>
-          </Dialog>
-        )}
-        <ConnectionNote />
-        <TableAnnouncer announcement={announcement} />
-        {game !== null && scene === null && <p className="table__empty">{emptyText}</p>}
+      {topBar}
+      {toolRail}
+      <main className="table__stage" inert={section !== 'map'}>
+        {stage}
       </main>
       <SidePanel
         tabs={[
@@ -477,7 +592,7 @@ export default function TableScreen() {
         selected={panelTab}
         onSelect={(id) => {
           setPanelTab(id)
-          if (narrow) setSection(id === 'scenes' || id === 'combat' ? id : 'chat')
+          setSection(id === 'scenes' || id === 'combat' ? id : 'chat')
         }}
       />
       <SectionTabs
@@ -492,4 +607,9 @@ export default function TableScreen() {
       />
     </div>
   )
+}
+
+/** rootFontSize is the size of 1rem in pixels. */
+function rootFontSize(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
 }

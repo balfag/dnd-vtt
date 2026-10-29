@@ -9,6 +9,8 @@ interface TopBarProps {
   isGm: boolean
   /** onOpenScenes opens the scenes panel; the GM's scene name is its button. */
   onOpenScenes: () => void
+  /** onResetLayout puts the default layout of the workspace back; it is absent on a narrow screen, where there is no workspace. */
+  onResetLayout?: () => void
   onLeave: () => void
 }
 
@@ -37,6 +39,7 @@ export function TopBar({
   players,
   isGm,
   onOpenScenes,
+  onResetLayout,
   onLeave,
 }: TopBarProps) {
   const { t } = useTranslation()
@@ -71,6 +74,11 @@ export function TopBar({
         </ul>
       )}
 
+      {onResetLayout !== undefined && (
+        <button type="button" className="topbar__button" onClick={onResetLayout}>
+          {t('workspace.reset')}
+        </button>
+      )}
       <button type="button" className="topbar__button" onClick={onLeave}>
         {isGm ? t('table.leave') : t('common.signOut')}
       </button>

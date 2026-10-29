@@ -116,6 +116,11 @@
   background: var(--board);
 }
 
+/* Two buttons at the right: the first takes the free space, the second follows it. */
+.topbar__button + .topbar__button {
+  margin-left: 0;
+}
+
 /* Tool strip. */
 .rail {
   display: flex;
@@ -159,6 +164,31 @@
 .rail__button[aria-pressed='true'] {
   background: var(--board);
   box-shadow: inset 3px 0 0 var(--verdigris);
+}
+
+/* Wide screen: the top bar over the workspace, where the canvas is a panel. */
+.table--wide {
+  grid-template-columns: 1fr;
+}
+
+.table--wide .topbar {
+  grid-column: 1;
+}
+
+.table--wide .workspace {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+/* The canvas panel: the tool strip and the stage side by side. */
+.scenepanel {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.scenepanel .table__stage {
+  flex: 1;
 }
 
 /* Canvas. */
