@@ -134,18 +134,14 @@
   color: var(--chalk);
 }
 
-/* The buttons of a tab show on the current tab, under the pointer and under the keyboard. */
+/* The buttons of a tab are on the current tab only: on the others the middle of the tab is the name. */
 .wtab__button {
-  opacity: 0;
+  display: none;
 }
 
-.dv-active-tab .wtab__button,
-.wtab:hover .wtab__button,
-.wtab:focus-within .wtab__button,
-.wtab__button[aria-expanded='true'] {
-  opacity: 1;
+.dv-active-tab .wtab__button {
+  display: grid;
 }
-
 .wadd {
   display: flex;
   align-items: center;

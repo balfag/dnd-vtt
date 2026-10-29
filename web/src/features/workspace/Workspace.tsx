@@ -198,6 +198,10 @@ export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: Wo
           popoutUrl: POPOUT_URL,
           onDidOpen: ({ window: popup }) => {
             popup.document.title = title
+            // The blank page may not be loaded yet, and loading sets its own title.
+            popup.addEventListener('load', () => {
+              popup.document.title = title
+            })
           },
         })
         .then(
