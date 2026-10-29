@@ -1,7 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './client'
 import {
+  addProperty,
+  addView,
   createWikiPage,
+  deleteProperty,
+  deleteView,
+  getDatabase,
+  isDatabase,
+  isDbRecord,
+  isProperty,
+  isView,
+  setRecordProps,
+  updateProperty,
+  updateView,
   deleteWikiPage,
   getBacklinks,
   getWikiPage,
@@ -250,5 +262,158 @@ describe('tags, search, trash and templates', () => {
   it('builds the export addresses', () => {
     expect(pageExportUrl('p 1')).toBe('/api/wiki/pages/p%201/export.md')
     expect(wikiExportUrl('c1')).toBe('/api/campaigns/c1/wiki/export.zip')
+  })
+})
+
+const property = {
+  id: 'pr1',
+  name: 'Статус',
+  type: 'select',
+  position: 0,
+  options: { options: [{ id: 'o1', name: 'жив', color: 'green' }] },
+}
+const view = {
+  id: 'v1',
+  name: 'Таблица',
+  kind: 'table',
+  position: 0,
+  config: { filters: [], sorts: [], visible: ['pr1'], widths: { title: 300 } },
+}
+const record = {
+  id: 'r1',
+  title: 'Барлиман',
+  icon: '🧔',
+  coverAssetId: null,
+  props: { pr1: 'o1' },
+  tags: [{ id: 't1', name: 'NPC' }],
+  createdAt: 1760530000000,
+  updatedAt: 1760530000001,
+}
+const database = { properties: [property], views: [view], records: [record] }
+
+describe('database shape checks', () => {
+  it('accept correct objects', () => {
+    expect(isProperty(property)).toBe(true)
+    expect(isView(view)).toBe(true)
+    expect(isDbRecord(record)).toBe(true)
+    expect(isDatabase(database)).toBe(true)
+    expect(isView({ ...view, kind: 'cards' })).toBe(true)
+    expect(
+      isView({
+        ...view,
+        config: {
+          ...view.config,
+          filters: [
+            { propertyId: 'pr1', op: 'eq', value: 'o1' },
+            { field: 'title', op: 'empty' },
+          ],
+          sorts: [{ field: 'createdAt', dir: 'desc' }],
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('reject a missing field or a wrong type', () => {
+    expect(isProperty({ ...property, type: 'rating' })).toBe(false)
+    expect(isProperty({ ...property, options: null })).toBe(false)
+    expect(isProperty({ ...property, position: '0' })).toBe(false)
+    expect(isView({ ...view, kind: 'board' })).toBe(false)
+    expect(isView({ ...view, config: { ...view.config, visible: [1] } })).toBe(false)
+    expect(isView({ ...view, config: { ...view.config, widths: { title: '300' } } })).toBe(false)
+    expect(isView({ ...view, config: { ...view.config, sorts: [{ field: 'title' }] } })).toBe(false)
+    expect(isDbRecord({ ...record, coverAssetId: 5 })).toBe(false)
+    expect(isDbRecord({ ...record, tags: [{ id: 't1' }] })).toBe(false)
+    expect(isDbRecord({ ...record, props: [] })).toBe(false)
+    expect(isDatabase({ ...database, records: [{ id: 'x' }] })).toBe(false)
+    expect(isDatabase({ properties: [], views: [] })).toBe(false)
+  })
+})
+
+describe('databases', () => {
+  it('reads a database', async () => {
+    const mock = stubFetch(200, database)
+    await expect(getDatabase('d 1')).resolves.toEqual(database)
+    expect(call(mock).url).toBe('/api/wiki/databases/d%201')
+  })
+
+  it('rejects a database with a broken record', async () => {
+    stubFetch(200, { ...database, records: [{ id: 'r1' }] })
+    await expect(getDatabase('d1')).rejects.toMatchObject({ code: 'unknown' })
+  })
+
+  it('makes a database with its properties and views', async () => {
+    const mock = stubFetch(201, { ...page, kind: 'database' })
+    const body = {
+      kind: 'database' as const,
+      title: 'NPC',
+      database: {
+        properties: [{ name: 'Статус', type: 'text' as const, options: {} }],
+        views: [{ name: 'Таблица', kind: 'table' as const }],
+      },
+    }
+    await createWikiPage('c1', body)
+    expect(call(mock).init.body).toBe(JSON.stringify(body))
+  })
+
+  it('makes a record with values', async () => {
+    const mock = stubFetch(201, page)
+    await createWikiPage('c1', { parentId: 'd1', props: { pr1: 'o1' } })
+    expect(call(mock).init.body).toBe(JSON.stringify({ parentId: 'd1', props: { pr1: 'o1' } }))
+  })
+
+  it('adds, changes and deletes a property', async () => {
+    let mock = stubFetch(201, property)
+    await expect(addProperty('d1', { name: 'Статус', type: 'select' })).resolves.toEqual(property)
+    expect(call(mock).url).toBe('/api/wiki/databases/d1/properties')
+    expect(call(mock).init.method).toBe('POST')
+    expect(call(mock).init.body).toBe(
+      JSON.stringify({ name: 'Статус', type: 'select', options: {} }),
+    )
+
+    mock = stubFetch(200, property)
+    await updateProperty('pr1', { name: 'Новое', position: 2 })
+    expect(call(mock).url).toBe('/api/wiki/properties/pr1')
+    expect(call(mock).init.method).toBe('PATCH')
+    expect(call(mock).init.body).toBe(JSON.stringify({ name: 'Новое', position: 2 }))
+
+    mock = stubFetch(204)
+    await deleteProperty('pr1')
+    expect(call(mock).url).toBe('/api/wiki/properties/pr1')
+    expect(call(mock).init.method).toBe('DELETE')
+  })
+
+  it('adds, changes and deletes a view; the last one cannot go', async () => {
+    let mock = stubFetch(201, view)
+    await expect(addView('d1', { name: 'Таблица', kind: 'table' })).resolves.toEqual(view)
+    expect(call(mock).url).toBe('/api/wiki/databases/d1/views')
+
+    mock = stubFetch(200, view)
+    await updateView('v1', { config: view.config })
+    expect(call(mock).url).toBe('/api/wiki/views/v1')
+    expect(call(mock).init.method).toBe('PATCH')
+
+    mock = stubFetch(204)
+    await deleteView('v1')
+    expect(call(mock).init.method).toBe('DELETE')
+
+    stubFetch(409, { error: { code: 'conflict' } })
+    await expect(deleteView('v1')).rejects.toMatchObject({ status: 409, code: 'conflict' })
+  })
+
+  it('sets the values of a record; null removes one', async () => {
+    const mock = stubFetch(200, { props: { pr1: 'o1' } })
+    await expect(setRecordProps('r 1', { pr1: 'o1', pr2: null })).resolves.toEqual({ pr1: 'o1' })
+    const { url, init } = call(mock)
+    expect(url).toBe('/api/wiki/pages/r%201/props')
+    expect(init.method).toBe('PATCH')
+    expect(init.body).toBe(JSON.stringify({ props: { pr1: 'o1', pr2: null } }))
+  })
+
+  it('reports a refused value as a 400', async () => {
+    stubFetch(400, { error: { code: 'bad_request' } })
+    await expect(setRecordProps('r1', { pr1: 'x' })).rejects.toMatchObject({
+      status: 400,
+      code: 'bad_request',
+    })
   })
 })
