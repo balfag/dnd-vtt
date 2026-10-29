@@ -549,7 +549,9 @@
     "retry": "Retry",
     "untitled": "Untitled",
     "mention": {
-      "tableOnly": "Opens on the table during a game"
+      "tableOnly": "Opens on the table during a game",
+      "tokenOtherScene": "The token is on another scene — open it in \"Scenes\"",
+      "sceneFailed": "Could not open the scene"
     },
     "tools": {
       "search": {
@@ -731,6 +733,45 @@
       },
       "backlinks": "Mentioned on pages",
       "imageFailed": "Could not upload the image."
+    }
+  },
+  "handout": {
+    "untitled": "Untitled",
+    "show": {
+      "button": "Show to players",
+      "image": "Show the image to players",
+      "title": "Show to players",
+      "to": "To",
+      "all": "All players",
+      "selected": "Selected",
+      "players": "Players",
+      "titleField": "Title",
+      "preview": "What the players will see",
+      "sendAll": "Show to everyone",
+      "sendOne": "Show to {{name}}",
+      "sendMany": "Show to {{count}} players",
+      "send": "Show",
+      "noRecipients": "Pick at least one player",
+      "noPlayers": "There are no players in the campaign yet",
+      "tooBig": "The fragment is too big — select less",
+      "failed": "Could not show it. Try again",
+      "shown": "Shown to the players"
+    },
+    "modal": {
+      "from": "from the GM",
+      "fromPrivate": "from the GM, just for you",
+      "stays": "It stays in the chat — you can open it again any time",
+      "close": "Close",
+      "announce": "The GM showed you: {{title}}",
+      "imageOpen": "Open the image full screen"
+    },
+    "row": {
+      "author": "GM",
+      "privateMe": "just for you",
+      "privateTo": "private: {{names}}",
+      "open": "Open",
+      "openLabel": "Open: {{title}}",
+      "icon": "Handout"
     }
   }
 }

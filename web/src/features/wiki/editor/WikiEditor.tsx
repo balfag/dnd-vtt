@@ -2,6 +2,7 @@ import type { Editor, JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { BubbleBar } from './BubbleBar'
+import { ImageAction, type ShownImage } from './ImageAction'
 import { createExtensions } from './extensions'
 import { HandlersRef, type EditorHandlers, type MentionItem } from './handlers'
 import { createMentionSuggestion } from './mentionSuggestion'
@@ -27,8 +28,10 @@ export interface WikiEditorProps {
   uploadImage?: (file: File) => Promise<string>
   /** placeholder of an empty document. */
   placeholder?: string
-  /** extraActions are added to the bar over a selection (the next task adds "show to players"). */
-  extraActions?: ReactNode
+  /** extraActions are added to the bar over a selection (the "show to players" button); a function gets the editor to read the selection from. */
+  extraActions?: ReactNode | ((editor: Editor) => ReactNode)
+  /** onShowImage adds a "show to players" button over an image the pointer is on. */
+  onShowImage?: (image: ShownImage) => void
 }
 
 function pickHandlers(props: WikiEditorProps): EditorHandlers {
@@ -112,6 +115,7 @@ export function WikiEditor(props: WikiEditorProps) {
   )
 
   const editorRef = useRef<Editor | null>(null)
+  const boxRef = useRef<HTMLDivElement | null>(null)
   const editor = useEditor({
     extensions,
     content: props.content as JSONContent,
@@ -153,9 +157,20 @@ export function WikiEditor(props: WikiEditorProps) {
   }, [editor, props.editable])
 
   return (
-    <div className={props.editable ? 'wiki-editor' : 'wiki-editor wiki-editor--readonly'}>
+    <div
+      ref={boxRef}
+      className={props.editable ? 'wiki-editor' : 'wiki-editor wiki-editor--readonly'}
+    >
       <EditorContent editor={editor} />
-      <BubbleBar editor={editor} extraActions={props.extraActions} />
+      <BubbleBar
+        editor={editor}
+        extraActions={
+          typeof props.extraActions === 'function' ? props.extraActions(editor) : props.extraActions
+        }
+      />
+      {props.onShowImage !== undefined && props.editable && (
+        <ImageAction container={boxRef} onShow={props.onShowImage} />
+      )}
     </div>
   )
 }

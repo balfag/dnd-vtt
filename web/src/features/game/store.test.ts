@@ -896,6 +896,82 @@ describe('game store', () => {
       expect(store.getState().lastSeq).toBe(5)
     })
 
+    describe('handouts', () => {
+      function handout(n: number): ChatMessage {
+        return {
+          id: `h${String(n)}`,
+          createdAt: 2000 + n,
+          authorPlayerId: 'p1',
+          kind: 'handout',
+          visibility: 'public',
+          handout: { title: `Note ${String(n)}`, content: { type: 'doc' } },
+        }
+      }
+      const queue = (store: StoreApi<GameState>) => store.getState().handoutQueue.map((m) => m.id)
+
+      it('a handout of the snapshot is a row of the chat, not a window', () => {
+        const store = withChat([handout(1)])
+        expect(ids(store)).toEqual(['h1'])
+        expect(queue(store)).toEqual([])
+      })
+
+      it('a handout of the history is a row of the chat, not a window', () => {
+        const store = withChat(range(5, 6))
+        store.getState().prependHistory([handout(1)])
+        expect(ids(store)).toEqual(['h1', 'm5', 'm6'])
+        expect(queue(store)).toEqual([])
+      })
+
+      it('a live handout is queued, in order, and dismissed by id', () => {
+        const store = withChat([])
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(1) })
+        store.getState().applyEvent({ t: 'chat.message', seq: 6, d: handout(2) })
+        expect(queue(store)).toEqual(['h1', 'h2'])
+        store.getState().dismissHandout('h1')
+        expect(queue(store)).toEqual(['h2'])
+      })
+
+      it('a live handout that is known already is not queued again', () => {
+        const store = withChat([handout(1)])
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(1) })
+        expect(queue(store)).toEqual([])
+      })
+
+      it('the GM gets no window for the handout they sent', () => {
+        const store = createGameStore()
+        const snap = snapshot()
+        snap.me = { accountId: 'a0', isGm: true, playerId: 'p1' }
+        store.getState().applySnapshot(snap)
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(1) })
+        expect(ids(store)).toEqual(['h1'])
+        expect(queue(store)).toEqual([])
+      })
+
+      it('sync.noop leaves the queue as it is', () => {
+        const store = withChat([])
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(1) })
+        store.getState().applyEvent({ t: 'sync.noop', seq: 6 })
+        expect(queue(store)).toEqual(['h1'])
+        expect(store.getState().lastSeq).toBe(6)
+      })
+
+      it('showHandout opens a handout of the chat first and without a copy', () => {
+        const store = withChat([handout(1), handout(2)])
+        store.getState().showHandout(handout(1))
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(3) })
+        store.getState().showHandout(handout(2))
+        store.getState().showHandout(handout(3))
+        expect(queue(store)).toEqual(['h3', 'h2', 'h1'])
+      })
+
+      it('reset forgets the queue', () => {
+        const store = withChat([])
+        store.getState().applyEvent({ t: 'chat.message', seq: 5, d: handout(1) })
+        store.getState().reset()
+        expect(queue(store)).toEqual([])
+      })
+    })
+
     it('prependHistory puts older messages first, in order, without duplicates', () => {
       const store = withChat(range(5, 7))
       store.getState().prependHistory([...range(2, 4), msg(5), msg(4)])

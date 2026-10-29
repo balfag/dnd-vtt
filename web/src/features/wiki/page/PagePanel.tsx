@@ -22,6 +22,7 @@ import {
 } from '../../../shared/api/wiki'
 import { Button } from '../../../ui/Button'
 import { ErrorNote } from '../../../ui/ErrorNote'
+import { selectionDoc } from '../../handout/selectionDoc'
 import { isSearchShortcut } from '../search/query'
 import { wikiStore } from '../store'
 import { pageEditors, useWikiActions } from '../wikiContext'
@@ -215,12 +216,44 @@ function PageView({ page, onReload }: PageViewProps) {
     [actions, page.campaignId],
   )
 
+  const table = actions.table
   const onMentionClick = useCallback(
     (kind: string, id: string) => {
       if (kind === 'page') actions.open(id)
+      else if (table !== undefined) table.mention(kind, id)
       else actions.notify('wiki.mention.tableOnly')
     },
-    [actions],
+    [actions, table],
+  )
+  // The rolls and the handouts need a game: only the table has one.
+  const onRoll = useMemo(
+    () =>
+      table === undefined
+        ? undefined
+        : (formula: string, visibility: 'gm' | 'public' | 'blind') => {
+            table.roll(formula, visibility, title)
+          },
+    [table, title],
+  )
+  const handoutLabel = useCallback(
+    (kind: string, id: string): string | null => {
+      const label = resolveLabel(kind, id)
+      return typeof label === 'string' ? label : null
+    },
+    [resolveLabel],
+  )
+  const showImage = useMemo(
+    () =>
+      table === undefined
+        ? undefined
+        : (image: { assetId: string; alt: string }) => {
+            table.showHandout({
+              title,
+              doc: { type: 'doc', content: [{ type: 'image', attrs: image }] },
+              resolveLabel: handoutLabel,
+            })
+          },
+    [table, title, handoutLabel],
   )
 
   return (
@@ -290,6 +323,30 @@ function PageView({ page, onReload }: PageViewProps) {
               mentions={mentions}
               resolveLabel={resolveLabel}
               onMentionClick={onMentionClick}
+              onRoll={onRoll}
+              onShowImage={showImage}
+              extraActions={
+                table === undefined
+                  ? undefined
+                  : (editor) => (
+                      <button
+                        type="button"
+                        className="wiki-bubble__button wiki-bubble__button--handout"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                        }}
+                        onClick={() => {
+                          table.showHandout({
+                            title,
+                            doc: selectionDoc(editor),
+                            resolveLabel: handoutLabel,
+                          })
+                        }}
+                      >
+                        {t('handout.show.button')}
+                      </button>
+                    )
+              }
               uploadImage={uploadImage}
             />
           </Suspense>
