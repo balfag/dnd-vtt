@@ -12,9 +12,11 @@
 - [data-model.md](architecture/data-model.md): сущности и хранение
 - [protocol.md](architecture/protocol.md): WebSocket-протокол клиент↔сервер
 - [security.md](architecture/security.md): аккаунты, вход, роли, видимость данных
+- [workspace.md](architecture/workspace.md): рабочая область клиента — панели, тайлинг, выносные окна
 
 ## Дизайн
 - [visual-language.md](design/visual-language.md): визуальный язык клиента — палитра, шрифты, раскладка, принципы (правила процесса — [skills/frontend.md](../skills/frontend.md))
+- [table-screen.md](design/table-screen.md): экран стола
 
 ## Системы
 - [vtt.md](systems/vtt.md): виртуальный стол
@@ -37,6 +39,9 @@
 - [0009](adr/0009-rules-engine-content-as-data.md): правила 5e как данные и поэтапный движок правил
 - [0010](adr/0010-local-mcp-server.md): MCP-сервер для ИИ-ассистента мастера
 - [0011](adr/0011-community-content-library-github.md): общая библиотека контента на GitHub
+- [0012](adr/0012-pixijs-scene-canvas.md): холст сцены на PixiJS
+- [0013](adr/0013-playwright-e2e.md): Playwright для e2e-тестов
+- [0014](adr/0014-workspace-dockview.md): рабочая область на dockview
 
 ## Процесс
 - [roles.md](process/roles.md): владелец, архитектор, исполнитель; статусы задач
