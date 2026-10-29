@@ -20,8 +20,8 @@ const (
 )
 
 const (
-	MaxPageBytes     = 1 << 20   // raw JSON of a page or template
-	MaxHandoutBytes  = 256 << 10 // raw JSON of a handout
+	MaxPageBytes     = 1 << 20  // raw JSON of a page or template
+	MaxHandoutBytes  = 48 << 10 // raw JSON of a handout; fits a handout.show command into the 64 KiB websocket frame
 	MaxHandoutImages = 20
 	MaxDepth         = 50    // the doc node is depth 1
 	MaxNodes         = 50000 // every node object counts, text nodes included

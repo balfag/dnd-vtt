@@ -420,3 +420,60 @@ func TestPlayerReadsImagesOfVisibleTokensOnly(t *testing.T) {
 		t.Errorf("GM reads the image of a hidden token: %d", got)
 	}
 }
+
+func TestPlayerReadsImagesOfHandoutsShownToThem(t *testing.T) {
+	f := newAssetFixture(t, asset.Options{})
+	ctx := context.Background()
+	gsID, link := f.startGame(f.gm, f.campaignID)
+	bob, bobMe := f.playerSession(link, "bob")
+	carl, _ := f.playerSession(link, "carl")
+	if bobMe.Player == nil {
+		t.Fatal("bob has no participant")
+	}
+
+	handout := func(name string, width int, to []string) assetJSON {
+		t.Helper()
+		img := f.mustUpload(name+".png", testPNG(t, width, 20))
+		content := json.RawMessage(`{"type":"doc","content":[{"type":"image","attrs":{"assetId":"` + img.ID + `"}}]}`)
+		if _, err := f.chat.SendHandout(ctx, f.campaignID, gsID, "", "Letter", content, to); err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+	public := handout("public", 21, nil)
+	private := handout("private", 22, []string{bobMe.Player.ID})
+	unshown := f.mustUpload("unshown.png", testPNG(t, 23, 20))
+
+	status := func(a assetJSON, c *http.Cookie) int { return f.do(http.MethodGet, a.URL, "", withCookie(c)).Code }
+	for _, tt := range []struct {
+		name   string
+		img    assetJSON
+		cookie *http.Cookie
+		want   int
+	}{
+		{"public handout, bob", public, bob, http.StatusOK},
+		{"public handout, carl", public, carl, http.StatusOK},
+		{"private handout, addressee", private, bob, http.StatusOK},
+		{"private handout, another player", private, carl, http.StatusNotFound},
+		{"an image that was never shown", unshown, bob, http.StatusNotFound},
+		{"private handout, GM", private, f.gm, http.StatusOK},
+	} {
+		if got := status(tt.img, tt.cookie); got != tt.want {
+			t.Errorf("%s = %d, want %d", tt.name, got, tt.want)
+		}
+	}
+
+	// A player of another campaign does not read it even from a running game.
+	if rec := f.do(http.MethodPost, "/api/game-sessions/"+gsID+"/end", "", withCookie(f.gm)); rec.Code != http.StatusNoContent {
+		t.Fatalf("end game = %d", rec.Code)
+	}
+	if got := status(public, bob); got != http.StatusUnauthorized {
+		t.Errorf("after the game ended = %d, want 401", got)
+	}
+	otherID := f.createCampaign(f.gm, "Other")
+	_, otherLink := f.startGame(f.gm, otherID)
+	eve, _ := f.playerSession(otherLink, "eve")
+	if got := status(public, eve); got != http.StatusNotFound {
+		t.Errorf("player of another campaign = %d, want 404", got)
+	}
+}

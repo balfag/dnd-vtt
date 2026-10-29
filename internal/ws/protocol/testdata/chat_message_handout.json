@@ -1,0 +1,38 @@
+{
+  "t": "chat.message",
+  "seq": 31,
+  "d": {
+    "id": "01J00000000000000000000CM5",
+    "createdAt": 1760530500000,
+    "authorPlayerId": "01J00000000000000000000PL2",
+    "kind": "handout",
+    "visibility": "private",
+    "to": [
+      "01J00000000000000000000PL3"
+    ],
+    "handout": {
+      "title": "Старая карта",
+      "content": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Карта подземелья"
+              }
+            ]
+          },
+          {
+            "type": "image",
+            "attrs": {
+              "assetId": "01J00000000000000000000AS1",
+              "alt": ""
+            }
+          }
+        ]
+      }
+    }
+  }
+}

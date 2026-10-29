@@ -44,6 +44,7 @@ type App struct {
 	assets  *asset.Service
 	vtt     *vtt.Service
 	wiki    *wiki.Service
+	chat    *chat.Service
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -83,6 +84,7 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 		assets:      asset.NewService(db, cfg.DataDir, asset.Options{}),
 		vtt:         vttSvc,
 		wiki:        wiki.NewService(db, wiki.Options{}),
+		chat:        chatSvc,
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -103,6 +105,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			Assets:  a.assets,
 			VTT:     a.vtt,
 			Wiki:    a.wiki,
+			Chat:    a.chat,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

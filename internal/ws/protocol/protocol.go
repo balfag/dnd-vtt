@@ -615,6 +615,24 @@ type ChatMessage struct {
 	To             []string  `json:"to,omitempty"`   // private only
 	Text           string    `json:"text,omitempty"` // text and system
 	Roll           *ChatRoll `json:"roll,omitempty"` // roll only
+
+	Handout *ChatHandout `json:"handout,omitempty"` // handout only
+}
+
+// TypeHandoutShow shows a fragment of a wiki page to the players (GM only).
+const TypeHandoutShow = "handout.show"
+
+// HandoutShow is the data of handout.show; To makes the handout private.
+type HandoutShow struct {
+	Title   string          `json:"title"`
+	Content json.RawMessage `json:"content"`
+	To      []string        `json:"to,omitempty"`
+}
+
+// ChatHandout is the payload of a handout message.
+type ChatHandout struct {
+	Title   string          `json:"title"`
+	Content json.RawMessage `json:"content"` // normalized wiki document fragment
 }
 
 // Message types of the initiative tracker of M1.

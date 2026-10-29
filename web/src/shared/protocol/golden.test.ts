@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import chatHistoryAck from '../../../../internal/ws/protocol/testdata/chat_history_ack.json'
 import chatHistoryCommandExample from '../../../../internal/ws/protocol/testdata/chat_history_command.json'
+import chatMessageHandout from '../../../../internal/ws/protocol/testdata/chat_message_handout.json'
 import chatMessagePrivate from '../../../../internal/ws/protocol/testdata/chat_message_private.json'
 import chatMessageRoll from '../../../../internal/ws/protocol/testdata/chat_message_roll.json'
 import chatMessageRollBlindAuthor from '../../../../internal/ws/protocol/testdata/chat_message_roll_blind_author.json'
 import chatMessageText from '../../../../internal/ws/protocol/testdata/chat_message_text.json'
 import chatSendExample from '../../../../internal/ws/protocol/testdata/chat_send_command.json'
+import handoutShowExample from '../../../../internal/ws/protocol/testdata/handout_show_command.json'
 import combatChangedEnded from '../../../../internal/ws/protocol/testdata/combat_changed_ended.json'
 import combatChangedGm from '../../../../internal/ws/protocol/testdata/combat_changed_gm.json'
 import combatChangedPlayer from '../../../../internal/ws/protocol/testdata/combat_changed_player.json'
@@ -159,6 +161,7 @@ describe('server examples pass their guards', () => {
     ['chat_message_private', chatMessagePrivate, isChatMessage],
     ['chat_message_roll', chatMessageRoll, isChatMessage],
     ['chat_message_roll_blind_author', chatMessageRollBlindAuthor, isChatMessage],
+    ['chat_message_handout', chatMessageHandout, isChatMessage],
     ['chat_history_ack', chatHistoryAck, isChatHistoryAck],
     ['presence_offline', presenceOffline, isPresence],
     ['presence_new_player', presenceNewPlayer, isPresence],
@@ -194,6 +197,7 @@ describe('server examples pass their guards', () => {
       fogHidePolygon,
       fogRevealCircle,
       chatSendExample,
+      handoutShowExample,
       rollRequestExample,
       chatHistoryCommandExample,
       combatAddExample,
@@ -732,6 +736,26 @@ describe('guards reject damaged messages', () => {
       corrupt(chatMessageText, ['d', 'to'], ['01J00000000000000000000PL3']),
     ],
     ['unknown visibility', isChatMessage, corrupt(chatMessageText, ['d', 'visibility'], 'friends')],
+    [
+      'handout message without a handout',
+      isChatMessage,
+      corrupt(chatMessageHandout, ['d', 'handout'], undefined, true),
+    ],
+    [
+      'text message with a handout',
+      isChatMessage,
+      corrupt(chatMessageText, ['d', 'handout'], { title: 't', content: {} }),
+    ],
+    [
+      'handout without a title',
+      isChatMessage,
+      corrupt(chatMessageHandout, ['d', 'handout', 'title'], undefined, true),
+    ],
+    [
+      'handout with a string content',
+      isChatMessage,
+      corrupt(chatMessageHandout, ['d', 'handout', 'content'], 'text'),
+    ],
     ['unknown kind', isChatMessage, corrupt(chatMessageText, ['d', 'kind'], 'emote')],
     [
       'author is missing',
