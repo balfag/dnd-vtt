@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../../shared/api/wiki'
 import { PopupMenu, type MenuItem } from '../../workspace/PanelTab'
@@ -44,6 +44,7 @@ export function TreeRow(p: TreeRowProps) {
   const { node } = p
   const isDatabase = node.kind === 'database'
   const name = node.title === '' ? t('wiki.untitled') : node.title
+  const nameId = useId()
   const menuButton = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState<{
     x: number
@@ -92,6 +93,8 @@ export function TreeRow(p: TreeRowProps) {
       }}
       className={classes}
       role="treeitem"
+      aria-labelledby={p.renaming ? undefined : nameId}
+      aria-label={p.renaming ? name : undefined}
       aria-level={p.depth + 1}
       aria-setsize={p.siblings.size}
       aria-posinset={p.siblings.index + 1}
@@ -138,7 +141,10 @@ export function TreeRow(p: TreeRowProps) {
           onCancel={p.onCancelRename}
         />
       ) : (
-        <span className={node.title === '' ? 'trow__name trow__name--empty' : 'trow__name'}>
+        <span
+          id={nameId}
+          className={node.title === '' ? 'trow__name trow__name--empty' : 'trow__name'}
+        >
           {name}
         </span>
       )}
