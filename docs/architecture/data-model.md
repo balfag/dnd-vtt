@@ -1,6 +1,6 @@
 # Модель данных
 
-> Статус: `draft` (разделы «Аккаунты и игровые сессии», Scene, Token, Drawing, ChatMessage, Combat, Asset — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
+> Статус: `draft` (разделы «Аккаунты и игровые сессии», Scene, Token, Drawing, ChatMessage, Combat, Asset, «Вики (M3)» — `review`). Хранилище: [ADR-0003](../adr/0003-sqlite-pure-go.md), доступ: [ADR-0008](../adr/0008-accounts-and-game-sessions.md)
 
 ## Хранение
 
@@ -30,8 +30,11 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
    ├─* GameSession (игровая встреча)
    ├─* Asset
    ├─* ChatMessage (текст и броски)
-   └─* WikiPage (дерево) ─0..1 WikiDatabase
-                               └─* WikiProperty
+   ├─* WikiPage (дерево; kind page | database)
+   │      ├─* WikiProperty, WikiView (у базы)
+   │      ├─* WikiPage-записи (дочерние базы)
+   │      └─* WikiTag (через WikiPageTag), WikiLink
+   └─* WikiTemplate
 ```
 
 ### Campaign
@@ -99,10 +102,11 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 ### ChatMessage
 `id, campaign_id, game_session_id?, author_player_id?, kind, visibility, recipients JSON, payload JSON, created_at`
 
-- `kind` — `text` \| `roll` \| `system` (`handout` — в M3); `visibility` — `public` \| `private` \| `gm` \| `self` \| `blind` (`private` — только для `text`; `gm`/`self`/`blind` — только для `roll`).
+- `kind` — `text` \| `roll` \| `system` \| `handout` (M3); `visibility` — `public` \| `private` \| `gm` \| `self` \| `blind` (`private` — только для `text` и `handout`; `gm`/`self`/`blind` — только для `roll`; у `handout` — только `public` или `private`).
 - `author_player_id` → `player(id)`; пуст у `system`. `game_session_id` → `game_session(id)` `ON DELETE SET NULL` — в какой игре написано.
 - `recipients` — массив `playerId` (1–20) для `private`, иначе `[]`.
-- `payload`: для `text`/`system` — `{text}` (1–2000 символов); для `roll` — `{formula, label, result}`, где `result` — `dice.Result` целиком: бросок можно показать и проверить потом.
+- `payload`: для `text`/`system` — `{text}` (1–2000 символов); для `roll` — `{formula, label, result}`, где `result` — `dice.Result` целиком: бросок можно показать и проверить потом; для `handout` — `{title, content}` (`title` 0–200 символов, `content` — фрагмент по схеме вики v1, до 256 КиБ).
+- `chat_message_asset: message_id, asset_id` (M3) — изображения handout'а: первичный ключ `(message_id, asset_id)`, `message_id` → `chat_message(id)` `ON DELETE CASCADE`, `asset_id` → `asset(id)` `ON DELETE RESTRICT`; по ней сервер проверяет доступ игрока к ассету.
 - Индекс `(campaign_id, id)`: история читается страницами по убыванию `id` (ULID сортируется по времени).
 - Видимость при чтении — правила протокола; фильтр применяется к каждой строке на сервере.
 
@@ -116,13 +120,57 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - `turn_combatant_id` → `combatant(id)` `ON DELETE SET NULL`; при удалении участника, чей был ход, сервис сам переводит ход раньше удаления.
 - `actor_id` у участника добавит M4 вместе с актёрами.
 
-### WikiPage
-`id, campaign_id, parent_id?, title, icon, sort, content JSON (ProseMirror doc), database_id? (если страница — запись базы), props JSON (значения свойств записи), created_at, updated_at`
+### Вики (M3)
 
-### WikiDatabase / WikiProperty / WikiView
-`database: id, page_id (страница-контейнер), name`
-`property: id, database_id, name, type (text|number|select|multi_select|checkbox|date|relation|url), options JSON, sort`
-`view: id, database_id, name, kind (table|cards), filters JSON, sorts JSON, visible_props JSON`
+Поведение — [gm-wiki.md](../systems/gm-wiki.md), запросы — [protocol.md](protocol.md#вики-m3). Все таблицы ниже — с `campaign_id` или ссылкой на страницу; удаление кампании удаляет вики (`ON DELETE CASCADE`).
+
+#### WikiPage
+`id, campaign_id, parent_id?, kind, title, icon, cover_asset_id?, position, content JSON, content_text, props JSON, version, created_at, updated_at, deleted_at?, trash_root_id?`
+
+- `parent_id` → `wiki_page(id)` `ON DELETE CASCADE`; пусто — страница в корне. Глубина — до 20 уровней (проверяет сервис). **Запись базы** — страница, чей родитель имеет `kind = 'database'`; отдельной колонки для этого нет.
+- `kind` — `page` \| `database`. У базы `content` — всегда пустой документ, дочерние — только записи.
+- `title` — 0–200 символов; `icon` — пусто или до 8 символов (кодовых точек).
+- `cover_asset_id` → `asset(id)` `ON DELETE RESTRICT`.
+- `position` — `INTEGER` ≥ 0, порядок среди соседей; перемещение перенумеровывает соседей в одной транзакции (`0, 1, 2…`).
+- `content` — ProseMirror JSON по схеме вики v1 (см. [protocol.md](protocol.md#содержимое-страницы)), до 1 МиБ; `content_text` — плоский текст для поиска, его строит сервер при сохранении.
+- `props` — объект `{ "<propertyId>": значение }` только у записей базы, иначе `{}`. Формат значения — по типу свойства ([gm-wiki.md](../systems/gm-wiki.md#свойства)).
+- `version` — `INTEGER` ≥ 1, растёт на 1 при каждом сохранении содержимого (`PUT`); теги, свойства записи и перемещение на неё не влияют.
+- Корзина: `deleted_at` — время удаления, одинаковое у всего удалённого поддерева; `trash_root_id` — id страницы, с которой началось удаление (у неё самой — свой id). Окончательное удаление — `DELETE` корня корзины (поддерево уходит каскадом) через 30 дней после `deleted_at`.
+- Индексы: `(campaign_id, parent_id, position)`, `(campaign_id, deleted_at)`.
+
+#### WikiProperty / WikiView
+`wiki_property: id, database_page_id, name, type, options JSON, position`
+`wiki_view: id, database_page_id, name, kind, config JSON, position`
+
+- `database_page_id` → `wiki_page(id)` `ON DELETE CASCADE` (страница с `kind = 'database'`).
+- `wiki_property.name` — 1–100 символов, уникально в базе; `type` — `text` \| `number` \| `select` \| `multi_select` \| `checkbox` \| `date` \| `url` \| `relation` \| `game_link`; до 30 свойств на базу.
+- `options` по типу: `number` — `{"format":"integer"|"decimal"}`; `select`/`multi_select` — `{"options":[{"id","name","color"}]}` (`color` — `gray` \| `brown` \| `orange` \| `yellow` \| `green` \| `blue` \| `purple` \| `red`); `relation` — `{"targetDatabaseId"}`; остальные — `{}`.
+- `wiki_view.name` — 1–100 символов; `kind` — `table` \| `cards`; 1–10 видов на базу.
+- `config`: `{"filters":[{"propertyId"|"field","op","value"?}], "sorts":[{"propertyId"|"field","dir":"asc"|"desc"}], "visible":["<propertyId>"], "widths":{"<propertyId>|title": px}}`; `field` — `title` \| `createdAt` \| `updatedAt` \| `tags`. Сервер проверяет форму и ссылки на свойства этой базы; при удалении свойства вычищает ссылки на него из видов.
+
+#### WikiTag / WikiPageTag
+`wiki_tag: id, campaign_id, name, name_key`
+`wiki_page_tag: page_id, tag_id`
+
+- `name` — 1–40 символов, как ввёл мастер; `name_key` — `strings.ToLower(name)` в Go (`COLLATE NOCASE` в SQLite не понимает кириллицу); уникальная пара `(campaign_id, name_key)`.
+- `wiki_page_tag` — первичный ключ `(page_id, tag_id)`, обе ссылки `ON DELETE CASCADE`; до 20 тегов на страницу.
+
+#### WikiLink и ссылки на ассеты
+`wiki_link: page_id, target_kind, target_id, source`
+`wiki_page_asset: page_id, asset_id`
+`wiki_template_asset: template_id, asset_id`
+
+- Сервер пересчитывает их при каждом сохранении содержимого, свойств записи и шаблона: старые строки владельца удаляются, новые вставляются в той же транзакции.
+- `wiki_link` — для обратных ссылок и текущих имён упоминаний: `target_kind` — `page` \| `scene` \| `token`; `source` — `mention` (упоминание в содержимом) \| `property` (значение `relation` или `game_link` записи); первичный ключ `(page_id, target_kind, target_id, source)`; индекс `(target_kind, target_id)`. На `target_id` внешнего ключа нет: удалённый объект — ссылка без цели.
+- `wiki_page_asset` / `wiki_template_asset` — изображения в содержимом: `asset_id` → `asset(id)` `ON DELETE RESTRICT` (ассет, который использует вики, в том числе страница в корзине или шаблон, удалить нельзя — `409`); владелец — `ON DELETE CASCADE`.
+
+#### WikiTemplate
+`id, campaign_id, name, icon, content JSON, created_at`
+
+- Свой шаблон страницы мастера. `name` — 1–100 символов; `icon` и `content` — как у страницы. До 100 шаблонов на кампанию. Встроенные шаблоны в БД не хранятся.
+
+#### Полнотекстовый поиск
+`wiki_fts` — виртуальная таблица FTS5 `(page_id UNINDEXED, title, body)` с `tokenize='unicode61 remove_diacritics 2'`. Сервис обновляет строку страницы в той же транзакции, что и саму страницу; страница в корзине из `wiki_fts` удаляется, при восстановлении добавляется снова.
 
 ### Asset
 `id, campaign_id, sha256, mime, size, width, height, original_name, kind, created_at`
@@ -145,4 +193,5 @@ Campaign 1─* Scene 1─* Token *─0..1 Actor
 - Колонки со ссылкой на таблицу из более позднего майлстоуна (`campaign.active_scene_id`, `player.actor_id`) добавляет миграция, создающая эту таблицу: `ALTER TABLE ... ADD COLUMN ... REFERENCES ...`.
 - Внутри миграции нельзя менять `PRAGMA foreign_keys`: в транзакции эта прагма игнорируется.
 - Миграции M1: `0005_assets` (`asset`), `0006_scenes` (`scene`, `token`, `drawing`, `campaign.active_scene_id`), `0007_chat` (`chat_message`), `0008_combat` (`combat`, `combatant`). Номера закреплены за задачами: если задачи мерджатся не по порядку, исполнитель следующей задачи берёт следующий свободный номер и пишет об этом в «Отклонениях».
+- Миграции M3: `0009_wiki` (все таблицы `wiki_*` и `wiki_fts`), `0010_handouts` (пересборка `chat_message` с новыми `CHECK` для `handout` и таблица `chat_message_asset`). Пересборка — по схеме SQLite «создать новую таблицу, скопировать строки, удалить старую, переименовать» в одной транзакции; на `chat_message` никто не ссылается внешним ключом, поэтому `PRAGMA foreign_keys` трогать не нужно (и нельзя, см. выше); индекс `chat_message_campaign_id` создаётся заново.
 - JSON-поля: при изменении формата повышается `schema_version` и пишется функция апгрейда в Go.
