@@ -102,6 +102,8 @@ export interface GameState {
   pings: PingMark[]
   /** The scene the GM looked at before the last snapshot replaced the view; null when there is none to restore. */
   viewBeforeSync: string | null
+  /** Handouts to show in a window, the first one now: live events only, not the snapshot or the history. */
+  handoutQueue: ChatMessage[]
   setConnection(c: ConnectionState): void
   applySnapshot(s: Snapshot): void
   /** setViewedScene shows a scene the GM asked for with scene.view. */
@@ -116,6 +118,10 @@ export interface GameState {
   pruneDragging(now: number): void
   /** pruneTools forgets rulers and pings that have outlived their time. */
   pruneTools(now: number): void
+  /** showHandout puts a handout of the chat first in the queue, so its window opens (again). */
+  showHandout(message: ChatMessage): void
+  /** dismissHandout takes the handout with the id out of the queue. */
+  dismissHandout(id: string): void
   /** prependHistory puts older messages (ascending) before the loaded ones, skipping known ids. */
   prependHistory(messages: ChatMessage[]): void
   reset(): void
@@ -126,7 +132,15 @@ export const historyPageSize = 50
 
 const initial: Pick<
   GameState,
-  'connection' | 'me' | 'game' | 'lastSeq' | 'dragging' | 'rulers' | 'pings' | 'viewBeforeSync'
+  | 'connection'
+  | 'me'
+  | 'game'
+  | 'lastSeq'
+  | 'dragging'
+  | 'rulers'
+  | 'pings'
+  | 'viewBeforeSync'
+  | 'handoutQueue'
 > = {
   connection: { state: 'idle' },
   me: null,
@@ -136,6 +150,7 @@ const initial: Pick<
   rulers: {},
   pings: [],
   viewBeforeSync: null,
+  handoutQueue: [],
 }
 
 let pingCount = 0
@@ -278,7 +293,10 @@ export function createGameStore(): StoreApi<GameState> {
         }
         if (isChatMessage(e)) {
           if (game.chat.some((m) => m.id === e.d.id)) return { lastSeq: e.seq }
-          return { lastSeq: e.seq, game: { ...game, chat: [...game.chat, e.d] } }
+          const chat = { ...game, chat: [...game.chat, e.d] }
+          // The GM sent it: the window is for the players.
+          if (e.d.kind !== 'handout' || state.me?.isGm === true) return { lastSeq: e.seq, game: chat }
+          return { lastSeq: e.seq, game: chat, handoutQueue: [...state.handoutQueue, e.d] }
         }
         if (!isPresence(e)) return { lastSeq: e.seq }
         const { playerId, online, player } = e.d
@@ -340,6 +358,14 @@ export function createGameStore(): StoreApi<GameState> {
         const sameRulers = Object.keys(rulers).length === Object.keys(state.rulers).length
         return sameRulers && pings.length === state.pings.length ? state : { rulers, pings }
       })
+    },
+    showHandout: (message) => {
+      set((state) => ({
+        handoutQueue: [message, ...state.handoutQueue.filter((m) => m.id !== message.id)],
+      }))
+    },
+    dismissHandout: (id) => {
+      set((state) => ({ handoutQueue: state.handoutQueue.filter((m) => m.id !== id) }))
     },
     prependHistory: (messages) => {
       set((state) => {
