@@ -13,6 +13,7 @@ import {
 import { useWorkspaceOpenInstance } from '../workspace/workspaceCommands'
 import { wikiStore } from './store'
 import { builtinTemplates } from './templates/builtin'
+import { buildDatabase, databaseTemplates, databaseTemplateTitle } from './templates/databases'
 import { pageEditors, searchField, type TableLinks, type WikiActions } from './wikiContext'
 
 interface WikiControllerOptions {
@@ -111,7 +112,13 @@ export function useWikiController({
       create: async (parentId, template) => {
         try {
           const body: Parameters<typeof createWikiPage>[1] = { parentId }
-          if (template !== undefined && 'custom' in template) {
+          if (template !== undefined && 'database' in template) {
+            const tpl = databaseTemplates.find((d) => d.id === template.database)
+            body.kind = 'database'
+            body.title = tpl === undefined ? t('wiki.db.new.title') : databaseTemplateTitle(t, tpl)
+            if (tpl !== undefined) body.icon = tpl.icon
+            body.database = buildDatabase(t, tpl)
+          } else if (template !== undefined && 'custom' in template) {
             body.templateId = template.custom
           } else if (template !== undefined) {
             const builtin = builtinTemplates.find((b) => b.id === template.builtin)

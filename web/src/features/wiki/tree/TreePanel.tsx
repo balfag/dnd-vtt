@@ -99,10 +99,6 @@ export function TreePanel() {
   }
 
   function openRow(node: PageNode, newGroup: boolean) {
-    if (node.kind === 'database') {
-      actions.notify('wiki.tree.databaseLater')
-      return
-    }
     actions.open(node.id, { newGroup })
   }
 
@@ -112,8 +108,7 @@ export function TreePanel() {
   }
 
   function openHit(hit: SearchHit) {
-    if (hit.kind === 'database') actions.notify('wiki.tree.databaseLater')
-    else actions.open(hit.id)
+    actions.open(hit.id)
   }
 
   function searchFor(text: string) {

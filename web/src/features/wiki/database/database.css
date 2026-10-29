@@ -1,0 +1,740 @@
+/* Databases of the wiki (docs/design/wiki-screen.md, "Базы данных"). Tokens are those of the app. */
+.db {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 24px 0 0 48px;
+}
+
+.db__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-right: 48px;
+}
+
+.db__icon {
+  align-self: center;
+  color: var(--fog);
+  font: 400 34px/1 var(--sans);
+}
+
+/* The title is as wide as its text, so the count stands right after it: the box takes the width of a copy of the text. */
+.db__titlebox {
+  display: inline-grid;
+  min-width: 6rem;
+  max-width: 100%;
+}
+
+.db__titlebox::after {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  padding: 0 2px;
+  font: 700 31px/1.2 var(--serif);
+  white-space: pre;
+  content: attr(data-value) ' ';
+}
+
+.db__title {
+  grid-area: 1 / 1;
+  /* A width of 0 stretched to 100% keeps the default size of an input out of the width of the box. */
+  width: 0;
+  min-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: 700 31px/1.2 var(--serif);
+}
+
+.db__title::placeholder {
+  color: var(--fog);
+}
+
+.db__title:hover,
+.db__title:focus {
+  background: var(--board);
+}
+
+.db__count {
+  color: var(--fog);
+  font-size: 14px;
+}
+
+/* Views on the left, "Filter / Sort / Properties" on the right, one line under them. */
+.db__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+  padding-right: 48px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dbtabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dbtabs__list {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.dbtabs__tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fog);
+  font: 400 15px/1.3 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dbtabs__tab:hover {
+  color: var(--chalk);
+}
+
+.dbtabs__tab[aria-selected='true'] {
+  border-bottom-color: var(--verdigris);
+  color: var(--chalk);
+}
+
+.dbtabs__button,
+.dbtabs__add {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font: 400 15px/1.3 var(--sans);
+  cursor: pointer;
+}
+
+.dbtabs__button:hover,
+.dbtabs__add:hover:not(:disabled) {
+  color: var(--chalk);
+}
+
+.dbtabs__add:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.db__tools {
+  display: flex;
+  gap: 4px;
+}
+
+.db__tool {
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--fog);
+  font: 400 15px/1.3 var(--sans);
+  cursor: pointer;
+}
+
+.db__tool:hover,
+.db__tool[aria-expanded='true'] {
+  color: var(--chalk);
+}
+
+.db__badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--board);
+  color: var(--chalk);
+  font-size: 13px;
+}
+
+/* Active conditions: buttons that open the editor of the condition. */
+.db__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 48px 10px 0;
+}
+
+.db__chip {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chalk);
+  font: 400 14px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.db__chip:hover {
+  background: var(--board);
+}
+
+.db__shown {
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.db__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 48px;
+  padding-bottom: 64px;
+}
+
+.db__empty {
+  margin: 16px 0 0;
+  color: var(--fog);
+}
+
+.db__new {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--fog);
+  font: 400 15px/1.4 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.db__new:hover {
+  background: var(--board);
+  color: var(--chalk);
+}
+
+/* The table: lines, no fills, no stripes. */
+.dbt__scroll {
+  overflow-x: auto;
+}
+
+.dbt {
+  min-width: min-content;
+  font-size: 15px;
+}
+
+.dbt__row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  border-bottom: 1px solid var(--line);
+}
+
+.dbt__head {
+  position: relative;
+  padding: 8px 12px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.dbt__headname {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbt__resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 2;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.dbt__resize::after {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.dbt__resize:hover::after,
+.dbt__resize:focus-visible::after {
+  width: 2px;
+  background: var(--verdigris);
+}
+
+.dbt__cell {
+  position: relative;
+  min-width: 0;
+  padding: 4px 12px;
+  border-right: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.dbt__cell:last-child {
+  border-right: 0;
+}
+
+.dbt__cell:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: -2px;
+}
+
+.dbt__cell--editing {
+  outline: 2px solid var(--verdigris);
+  outline-offset: -2px;
+}
+
+.dbt__cell:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.dbt__title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: 500 15px/1.4 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dbt__title:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--fog);
+  text-underline-offset: 3px;
+}
+
+.dbt__untitled {
+  color: var(--fog);
+  font-weight: 400;
+}
+
+.dbt__menu {
+  flex: none;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font-size: 15px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dbt__row:hover .dbt__menu,
+.dbt__cell:focus-within .dbt__menu,
+.dbt__menu:focus-visible {
+  opacity: 1;
+}
+
+/* The value of a property: the same in a table cell, a card and the head of a record. */
+.dbv {
+  min-height: 28px;
+  padding: 3px 0;
+}
+
+.dbv__text--number {
+  font-variant-numeric: tabular-nums;
+}
+
+.dbv__input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: 400 15px/1.4 var(--sans);
+}
+
+.dbv__input:focus-visible {
+  outline: 0;
+}
+
+.dbv__input[aria-invalid='true'] {
+  color: var(--seal);
+}
+
+.dbv__error {
+  margin: 2px 0 0;
+  color: var(--seal);
+  font-size: 13px;
+}
+
+.dbv__check {
+  width: 16px;
+  height: 16px;
+  margin: 4px 0 0;
+  accent-color: var(--verdigris);
+}
+
+.dbv__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.dbv__url,
+.dbv__link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--fog);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.dbv__kind {
+  color: var(--fog);
+  font-size: 13px;
+  text-decoration: underline dotted var(--fog);
+  text-underline-offset: 3px;
+}
+
+/* A variant of a select: a square of its color and the word, no pill. */
+.dbopt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dbopt__mark {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+}
+
+/* The list under a cell: search, then the variants, records or scenes. */
+.dbpick {
+  position: fixed;
+  z-index: 10001;
+  max-width: min(26rem, calc(100vw - 16px));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  color: var(--chalk);
+  font-size: 15px;
+}
+
+.dbpick__search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--chalk);
+  font: 400 14px/1.3 var(--sans);
+}
+
+.dbpick__search:focus-visible {
+  outline: 0;
+}
+
+.dbpick__list {
+  max-height: 16rem;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dbpick__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 9px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.dbpick__item--active {
+  border-left-color: var(--verdigris);
+  background: var(--slate);
+}
+
+.dbpick__item--create {
+  color: var(--fog);
+}
+
+.dbpick__item[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.dbpick__check {
+  flex: none;
+  width: 12px;
+  color: var(--verdigris);
+}
+
+.dbpick__detail {
+  color: var(--fog);
+}
+
+.dbpick__note {
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--fog);
+  font-size: 14px;
+  list-style: none;
+}
+
+/* Cards. */
+.dbcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 16px 0 12px;
+  list-style: none;
+}
+
+.dbcard {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dbcard:hover {
+  background: var(--board);
+}
+
+.dbcard__cover {
+  height: 96px;
+  background-position: center;
+  background-size: cover;
+}
+
+.dbcard__body {
+  padding: 10px 12px 12px;
+}
+
+.dbcard__title {
+  margin: 0;
+  font: 700 17px/1.25 var(--serif);
+}
+
+.dbcard__open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dbcard__props {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0 0;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.dbcard__prop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.dbcard__prop dt::after {
+  content: ':';
+}
+
+.dbcard__prop dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.dbcard .dbv {
+  min-height: 0;
+  padding: 0;
+}
+
+/* Popovers of the toolbar: filter, sort, properties. */
+.dbpop {
+  position: fixed;
+  z-index: 10000;
+  width: min(34rem, calc(100vw - 16px));
+  max-height: min(32rem, calc(100vh - 80px));
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  color: var(--chalk);
+  font-size: 15px;
+}
+
+.dbedit input[type='checkbox'] {
+  flex: none;
+  accent-color: var(--verdigris);
+}
+
+.dbedit__note {
+  margin: 0 0 8px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.dbedit__rows {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.dbedit__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dbedit__select,
+.dbedit__input {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--slate);
+  color: var(--chalk);
+  font: 400 14px/1.3 var(--sans);
+}
+
+.dbedit__select {
+  flex: 0 1 9rem;
+}
+
+.dbedit__input {
+  flex: 1 1 8rem;
+}
+
+.dbedit__remove {
+  flex: none;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dbedit__remove:hover:not(:disabled) {
+  background: var(--slate);
+  color: var(--chalk);
+}
+
+.dbedit__remove:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.dbedit__add,
+.dbedit__link {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fog);
+  font: 400 14px/1.3 var(--sans);
+  cursor: pointer;
+}
+
+.dbedit__add:hover:not(:disabled),
+.dbedit__link:hover {
+  color: var(--chalk);
+}
+
+.dbedit__add:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dbprops__item {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dbprops__type {
+  flex: none;
+  color: var(--fog);
+  font-size: 13px;
+}
+
+.dbprops__options {
+  padding: 2px 0 0 24px;
+}
+
+/* The dialogs for a property and a view. */
+.dbform {
+  display: grid;
+  gap: 6px;
+}
+
+.dbform__label {
+  margin-top: 6px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+/* The properties of a record, under its title: two columns between thin lines. */
+.recprops {
+  margin: 12px 0 8px;
+  font-size: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.recprops__row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) 1fr;
+  gap: 12px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.recprops__name {
+  padding-top: 6px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.recprops__value {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .db {
+    padding-left: 16px;
+  }
+
+  .db__head,
+  .db__bar,
+  .db__scroll {
+    padding-right: 16px;
+  }
+}

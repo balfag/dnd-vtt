@@ -42,8 +42,11 @@ export interface WikiActions {
   notify: (textKey: string) => void
 }
 
-/** NewPageTemplate is what a new page is made from: a built-in template or one of the GM's own. */
-export type NewPageTemplate = { builtin: string } | { custom: string }
+/**
+ * NewPageTemplate is what a new page is made from: a built-in template or one of the GM's own;
+ * database makes a database instead of a page, from a built-in database template (null: an empty one).
+ */
+export type NewPageTemplate = { builtin: string } | { custom: string } | { database: string | null }
 
 /** searchField lets the rest of the screen reach the search field; the field of the tree sets it. */
 export const searchField: { focus: (() => void) | null; pending: boolean } = {

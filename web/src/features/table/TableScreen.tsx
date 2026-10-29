@@ -192,6 +192,7 @@ export default function TableScreen() {
   // The wiki panels work on the same data as the wiki screen; a page may act on the game from here.
   const wikiCampaignId = game?.campaign.id ?? ''
   const wikiTree = useWiki((s) => s.tree)
+  const wikiRecords = useWiki((s) => s.recordTitles)
   const [handout, setHandout] = useState<{
     source: HandoutSource
     key: number
@@ -242,7 +243,12 @@ export default function TableScreen() {
   const isWikiPanelValid = useCallback(
     (id: string) => {
       const pageId = pageIdOfPanel(id)
-      return pageId === null || wikiTree === null || wikiTree.some((n) => n.id === pageId)
+      return (
+        pageId === null ||
+        wikiTree === null ||
+        wikiTree.some((n) => n.id === pageId) ||
+        pageId in wikiStore.getState().recordTitles
+      )
     },
     [wikiTree],
   )
@@ -620,7 +626,7 @@ export default function TableScreen() {
         gmOnly: true,
         render: () => <ScenesPanel command={command} />,
       },
-      ...wikiPanels(t, wikiTree),
+      ...wikiPanels(t, wikiTree, wikiRecords),
     ]
     const panels = catalogue.filter((p) => isGm || !p.gmOnly)
     /** defaultLayout is the layout of M1: the canvas, and at its right the group of chat, fight and (the GM's) scenes. */

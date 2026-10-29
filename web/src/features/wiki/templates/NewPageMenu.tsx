@@ -4,6 +4,7 @@ import { listTemplates, type Template } from '../../../shared/api/wiki'
 import { PopupMenu, type MenuItem } from '../../workspace/PanelTab'
 import { useWikiActions, type NewPageTemplate } from '../wikiContext'
 import { builtinTemplates } from './builtin'
+import { databaseTemplates, databaseTemplateTitle } from './databases'
 
 interface NewPageMenuProps {
   doc: Document
@@ -54,6 +55,21 @@ export function NewPageMenu({ doc, at, onPick, onClose }: NewPageMenuProps) {
       separated: i === 0,
       onSelect: () => {
         onPick({ custom: tpl.id })
+      },
+    })),
+    {
+      key: 'database:empty',
+      label: t('wiki.db.new.empty'),
+      separated: true,
+      onSelect: () => {
+        onPick({ database: null })
+      },
+    },
+    ...databaseTemplates.map((d) => ({
+      key: `database:${d.id}`,
+      label: t('wiki.db.new.template', { name: `${d.icon} ${databaseTemplateTitle(t, d)}` }),
+      onSelect: () => {
+        onPick({ database: d.id })
       },
     })),
   ]
