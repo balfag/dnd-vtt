@@ -66,11 +66,30 @@ type savedPageJSON struct {
 	Refs      map[string]refInfoJSON `json:"refs"`
 }
 
+type newPropertyRequest struct {
+	Name    string          `json:"name"`
+	Type    string          `json:"type"`
+	Options json.RawMessage `json:"options"`
+}
+
+type newViewRequest struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+type newDatabaseRequest struct {
+	Properties []newPropertyRequest `json:"properties"`
+	Views      []newViewRequest     `json:"views"`
+}
+
 type newPageRequest struct {
-	ParentID *string         `json:"parentId"`
-	Title    string          `json:"title"`
-	Icon     string          `json:"icon"`
-	Content  json.RawMessage `json:"content"`
+	ParentID *string             `json:"parentId"`
+	Kind     string              `json:"kind"`
+	Title    string              `json:"title"`
+	Icon     string              `json:"icon"`
+	Content  json.RawMessage     `json:"content"`
+	Props    json.RawMessage     `json:"props"`
+	Database *newDatabaseRequest `json:"database"`
 }
 
 type savePageRequest struct {
@@ -198,9 +217,20 @@ func (a *api) createWikiPage(w http.ResponseWriter, r *http.Request) {
 	if bytes.Equal(bytes.TrimSpace(content), []byte("null")) {
 		content = nil
 	}
-	page, err := a.d.Wiki.Create(r.Context(), r.PathValue("id"), wiki.NewPage{
-		ParentID: orEmpty(req.ParentID), Title: req.Title, Icon: req.Icon, Content: content,
-	})
+	np := wiki.NewPage{
+		ParentID: orEmpty(req.ParentID), Kind: req.Kind, Title: req.Title, Icon: req.Icon, Content: content, Props: req.Props,
+	}
+	if req.Database != nil {
+		nd := &wiki.NewDatabase{}
+		for _, p := range req.Database.Properties {
+			nd.Properties = append(nd.Properties, wiki.NewProperty{Name: p.Name, Type: p.Type, Options: p.Options})
+		}
+		for _, v := range req.Database.Views {
+			nd.Views = append(nd.Views, wiki.NewView{Name: v.Name, Kind: v.Kind})
+		}
+		np.Database = nd
+	}
+	page, err := a.d.Wiki.Create(r.Context(), r.PathValue("id"), np)
 	if err != nil {
 		a.wikiError(w, "create wiki page", err)
 		return
@@ -506,4 +536,225 @@ func (a *api) getWikiBacklinks(w http.ResponseWriter, r *http.Request) {
 		out[i] = pageRefJSON{ID: p.ID, Title: p.Title, Icon: p.Icon, Kind: p.Kind}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+type propertyJSON struct {
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Type     string          `json:"type"`
+	Position int             `json:"position"`
+	Options  json.RawMessage `json:"options"`
+}
+
+type viewJSON struct {
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Kind     string          `json:"kind"`
+	Position int             `json:"position"`
+	Config   json.RawMessage `json:"config"`
+}
+
+type recordJSON struct {
+	ID           string          `json:"id"`
+	Title        string          `json:"title"`
+	Icon         string          `json:"icon"`
+	CoverAssetID *string         `json:"coverAssetId"`
+	Props        json.RawMessage `json:"props"`
+	Tags         []tagJSON       `json:"tags"`
+	CreatedAt    int64           `json:"createdAt"`
+	UpdatedAt    int64           `json:"updatedAt"`
+}
+
+type databaseJSON struct {
+	Properties []propertyJSON `json:"properties"`
+	Views      []viewJSON     `json:"views"`
+	Records    []recordJSON   `json:"records"`
+}
+
+func newPropertyJSON(p wiki.Property) propertyJSON {
+	return propertyJSON{ID: p.ID, Name: p.Name, Type: p.Type, Position: p.Position, Options: p.Options}
+}
+
+func newViewJSON(v wiki.View) viewJSON {
+	return viewJSON{ID: v.ID, Name: v.Name, Kind: v.Kind, Position: v.Position, Config: v.Config}
+}
+
+type patchPropertyRequest struct {
+	Name     *string         `json:"name"`
+	Options  json.RawMessage `json:"options"`
+	Position *int            `json:"position"`
+}
+
+type addViewRequest struct {
+	Name   string          `json:"name"`
+	Kind   string          `json:"kind"`
+	Config json.RawMessage `json:"config"`
+}
+
+type patchViewRequest struct {
+	Name     *string         `json:"name"`
+	Config   json.RawMessage `json:"config"`
+	Position *int            `json:"position"`
+}
+
+type setPropsRequest struct {
+	Props map[string]json.RawMessage `json:"props"`
+}
+
+// nilIfNull maps a JSON null to nil: "not given".
+func nilIfNull(raw json.RawMessage) json.RawMessage {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	return raw
+}
+
+func (a *api) getWikiDatabase(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	db, err := a.d.Wiki.Database(r.Context(), r.PathValue("pageId"))
+	if err != nil {
+		a.wikiError(w, "get wiki database", err)
+		return
+	}
+	out := databaseJSON{
+		Properties: make([]propertyJSON, len(db.Properties)),
+		Views:      make([]viewJSON, len(db.Views)),
+		Records:    make([]recordJSON, len(db.Records)),
+	}
+	for i, p := range db.Properties {
+		out.Properties[i] = newPropertyJSON(p)
+	}
+	for i, v := range db.Views {
+		out.Views[i] = newViewJSON(v)
+	}
+	for i, rec := range db.Records {
+		tags := make([]tagJSON, len(rec.Tags))
+		for j, t := range rec.Tags {
+			tags[j] = tagJSON{ID: t.ID, Name: t.Name}
+		}
+		out.Records[i] = recordJSON{
+			ID: rec.ID, Title: rec.Title, Icon: rec.Icon, CoverAssetID: optional(rec.CoverAssetID), Props: rec.Props,
+			Tags: tags, CreatedAt: rec.CreatedAt.UnixMilli(), UpdatedAt: rec.UpdatedAt.UnixMilli(),
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) addWikiProperty(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req newPropertyRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	p, err := a.d.Wiki.AddProperty(r.Context(), r.PathValue("pageId"), wiki.NewProperty{Name: req.Name, Type: req.Type, Options: req.Options})
+	if err != nil {
+		a.wikiError(w, "add wiki property", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, newPropertyJSON(p))
+}
+
+func (a *api) patchWikiProperty(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req patchPropertyRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	p, err := a.d.Wiki.UpdateProperty(r.Context(), r.PathValue("id"), wiki.PropertyPatch{
+		Name: req.Name, Options: nilIfNull(req.Options), Position: req.Position,
+	})
+	if err != nil {
+		a.wikiError(w, "update wiki property", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newPropertyJSON(p))
+}
+
+func (a *api) deleteWikiProperty(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.DeleteProperty(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "delete wiki property", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) addWikiView(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req addViewRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	v, err := a.d.Wiki.AddView(r.Context(), r.PathValue("pageId"), req.Name, req.Kind, nilIfNull(req.Config))
+	if err != nil {
+		a.wikiError(w, "add wiki view", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, newViewJSON(v))
+}
+
+func (a *api) patchWikiView(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req patchViewRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	v, err := a.d.Wiki.UpdateView(r.Context(), r.PathValue("id"), wiki.ViewPatch{
+		Name: req.Name, Config: nilIfNull(req.Config), Position: req.Position,
+	})
+	if err != nil {
+		a.wikiError(w, "update wiki view", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newViewJSON(v))
+}
+
+func (a *api) deleteWikiView(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.DeleteView(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "delete wiki view", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) setWikiPageProps(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req setPropsRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	if req.Props == nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "props is required")
+		return
+	}
+	props, err := a.d.Wiki.SetProps(r.Context(), r.PathValue("id"), req.Props)
+	if err != nil {
+		a.wikiError(w, "set wiki props", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Props json.RawMessage `json:"props"`
+	}{props})
 }

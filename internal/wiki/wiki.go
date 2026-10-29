@@ -76,6 +76,10 @@ type NewPage struct {
 	Title    string
 	Icon     string
 	Content  json.RawMessage // nil: doc.Empty()
+
+	Kind     string          // "" or "page" | "database"
+	Props    json.RawMessage // only when the parent is a database
+	Database *NewDatabase    // only with Kind "database"
 }
 
 type SavePage struct {

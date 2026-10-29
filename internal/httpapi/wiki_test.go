@@ -159,8 +159,8 @@ func TestWikiBadRequests(t *testing.T) {
 	}{
 		{"put without content", http.MethodPut, one, `{"version":1,"title":"A"}`, http.StatusBadRequest},
 		{"put with an invalid document", http.MethodPut, one, `{"version":1,"title":"A","content":{"type":"x"}}`, http.StatusBadRequest},
-		{"post with kind", http.MethodPost, pages, `{"kind":"database"}`, http.StatusBadRequest},
-		{"post with props", http.MethodPost, pages, `{"props":{}}`, http.StatusBadRequest},
+		{"post with an unknown kind", http.MethodPost, pages, `{"kind":"folder"}`, http.StatusBadRequest},
+		{"post with props on a page", http.MethodPost, pages, `{"props":{"x":1}}`, http.StatusBadRequest},
 		{"post with an unknown parent", http.MethodPost, pages, `{"parentId":"01HZX3K9M2N4P6Q8R0S1T2V3W4"}`, http.StatusBadRequest},
 		{"post too large", http.MethodPost, pages, `{"title":"` + strings.Repeat("a", 1<<20+64<<10) + `"}`, http.StatusRequestEntityTooLarge},
 		{"put too large", http.MethodPut, one, `{"version":1,"title":"` + strings.Repeat("a", 1<<20+64<<10) + `"}`, http.StatusRequestEntityTooLarge},
@@ -388,5 +388,211 @@ func TestWikiTags(t *testing.T) {
 	}
 	if rec := f.do(http.MethodDelete, "/api/wiki/tags/"+morven, "", withCookie(f.gm)); rec.Code != http.StatusNotFound {
 		t.Errorf("second delete = %d, want 404", rec.Code)
+	}
+}
+
+func (f *wikiFixture) call(method, path, body string, want int, out any) {
+	f.t.Helper()
+	rec := f.do(method, path, body, withCookie(f.gm))
+	if rec.Code != want {
+		f.t.Fatalf("%s %s = %d %s, want %d", method, path, rec.Code, rec.Body.String(), want)
+	}
+	if out != nil {
+		decodeBody(f.t, rec, out)
+	}
+}
+
+func TestWikiDatabaseRequiresGM(t *testing.T) {
+	f := newWikiFixture(t)
+	db := f.createPage(`{"kind":"database","title":"DB","database":{"properties":[{"name":"N","type":"text"}]}}`)
+	var data databaseJSON
+	f.call(http.MethodGet, "/api/wiki/databases/"+db.ID, "", http.StatusOK, &data)
+	rec := f.createPage(`{"parentId":"` + db.ID + `","title":"R"}`)
+	_, link := f.startGame(f.gm, f.campaignID)
+	player, _ := f.playerSession(link, "bob")
+
+	routes := []struct{ method, path, body string }{
+		{http.MethodPost, "/api/campaigns/" + f.campaignID + "/wiki/pages", `{"kind":"database"}`},
+		{http.MethodGet, "/api/wiki/databases/" + db.ID, ""},
+		{http.MethodPost, "/api/wiki/databases/" + db.ID + "/properties", `{"name":"X","type":"text"}`},
+		{http.MethodPatch, "/api/wiki/properties/" + data.Properties[0].ID, `{"name":"Y"}`},
+		{http.MethodDelete, "/api/wiki/properties/" + data.Properties[0].ID, ""},
+		{http.MethodPost, "/api/wiki/databases/" + db.ID + "/views", `{"name":"V","kind":"table"}`},
+		{http.MethodPatch, "/api/wiki/views/" + data.Views[0].ID, `{"name":"V"}`},
+		{http.MethodDelete, "/api/wiki/views/" + data.Views[0].ID, ""},
+		{http.MethodPatch, "/api/wiki/pages/" + rec.ID + "/props", `{"props":{}}`},
+	}
+	for _, rt := range routes {
+		t.Run(rt.method+" "+rt.path, func(t *testing.T) {
+			if rec := f.do(rt.method, rt.path, rt.body, withCookie(player)); rec.Code != http.StatusForbidden {
+				t.Errorf("player = %d, want 403", rec.Code)
+			}
+			if rec := f.do(rt.method, rt.path, rt.body); rec.Code != http.StatusUnauthorized {
+				t.Errorf("anonymous = %d, want 401", rec.Code)
+			}
+		})
+	}
+}
+
+func TestWikiDatabaseLifecycle(t *testing.T) {
+	f := newWikiFixture(t)
+
+	db := f.createPage(`{"kind":"database","title":"NPC","database":{"properties":[
+		{"name":"Status","type":"select","options":{"options":[{"name":"alive","color":"green"},{"name":"dead","color":"red"}]}}]}}`)
+	if db.Kind != "database" {
+		t.Fatalf("kind = %q", db.Kind)
+	}
+	var data databaseJSON
+	f.call(http.MethodGet, "/api/wiki/databases/"+db.ID, "", http.StatusOK, &data)
+	if len(data.Properties) != 1 || len(data.Views) != 1 || data.Views[0].Name != "Table" || data.Records == nil || len(data.Records) != 0 {
+		t.Fatalf("database = %+v", data)
+	}
+	status := data.Properties[0]
+	var opts struct {
+		Options []struct{ ID, Name string }
+	}
+	if err := json.Unmarshal(status.Options, &opts); err != nil || len(opts.Options) != 2 || opts.Options[0].ID == "" {
+		t.Fatalf("options = %s %v", status.Options, err)
+	}
+	alive, dead := opts.Options[0].ID, opts.Options[1].ID
+
+	var prop propertyJSON
+	f.call(http.MethodPost, "/api/wiki/databases/"+db.ID+"/properties", `{"name":"Age","type":"number","options":{"format":"integer"}}`, http.StatusCreated, &prop)
+	if prop.Position != 1 || string(prop.Options) != `{"format":"integer"}` {
+		t.Errorf("property = %+v", prop)
+	}
+
+	r1 := f.createPage(`{"parentId":"` + db.ID + `","title":"Barliman","props":{"` + status.ID + `":"` + alive + `"}}`)
+	r2 := f.createPage(`{"parentId":"` + db.ID + `","title":"Nob"}`)
+	if !r1.IsRecord || !strings.Contains(string(r1.Props), alive) {
+		t.Errorf("record = %+v", r1)
+	}
+	if rec := f.do(http.MethodPost, "/api/campaigns/"+f.campaignID+"/wiki/pages",
+		`{"parentId":"`+db.ID+`","props":{"`+status.ID+`":"made-up"}}`, withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad value = %d, want 400", rec.Code)
+	}
+
+	f.call(http.MethodGet, "/api/wiki/databases/"+db.ID, "", http.StatusOK, &data)
+	if len(data.Records) != 2 || data.Records[0].ID != r1.ID || data.Records[0].Tags == nil ||
+		!strings.Contains(string(data.Records[0].Props), alive) || data.Records[0].CreatedAt == 0 {
+		t.Errorf("records = %+v", data.Records)
+	}
+
+	var tree struct {
+		Pages []pageNodeJSON `json:"pages"`
+	}
+	f.call(http.MethodGet, "/api/campaigns/"+f.campaignID+"/wiki/tree", "", http.StatusOK, &tree)
+	if len(tree.Pages) != 1 || tree.Pages[0].RecordCount != 2 {
+		t.Errorf("tree = %+v", tree)
+	}
+
+	var set struct{ Props map[string]any }
+	f.call(http.MethodPatch, "/api/wiki/pages/"+r2.ID+"/props",
+		`{"props":{"`+status.ID+`":"`+dead+`","`+prop.ID+`":41}}`, http.StatusOK, &set)
+	if set.Props[status.ID] != dead || set.Props[prop.ID] != float64(41) {
+		t.Errorf("props = %+v", set.Props)
+	}
+	set.Props = nil
+	f.call(http.MethodPatch, "/api/wiki/pages/"+r2.ID+"/props", `{"props":{"`+prop.ID+`":null}}`, http.StatusOK, &set)
+	if _, has := set.Props[prop.ID]; has || set.Props[status.ID] != dead {
+		t.Errorf("props after null = %+v", set.Props)
+	}
+	for name, tc := range map[string]struct{ path, body string }{
+		"bad value":  {"/api/wiki/pages/" + r2.ID + "/props", `{"props":{"` + prop.ID + `":1.5}}`},
+		"no props":   {"/api/wiki/pages/" + r2.ID + "/props", `{}`},
+		"not record": {"/api/wiki/pages/" + db.ID + "/props", `{"props":{}}`},
+		"extra key":  {"/api/wiki/pages/" + r2.ID + "/props", `{"props":{},"x":1}`},
+	} {
+		if rec := f.do(http.MethodPatch, tc.path, tc.body, withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", name, rec.Code)
+		}
+	}
+	if rec := f.do(http.MethodPatch, "/api/wiki/pages/nope/props", `{"props":{}}`, withCookie(f.gm)); rec.Code != http.StatusNotFound {
+		t.Errorf("missing record = %d, want 404", rec.Code)
+	}
+
+	var patched propertyJSON
+	f.call(http.MethodPatch, "/api/wiki/properties/"+prop.ID, `{"name":"Years","position":0}`, http.StatusOK, &patched)
+	if patched.Name != "Years" || patched.Position != 0 || patched.Type != "number" {
+		t.Errorf("patched = %+v", patched)
+	}
+	if rec := f.do(http.MethodPatch, "/api/wiki/properties/"+prop.ID, `{"type":"text"}`, withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+		t.Errorf("type change = %d, want 400", rec.Code)
+	}
+
+	var view viewJSON
+	f.call(http.MethodPost, "/api/wiki/databases/"+db.ID+"/views", `{"name":"Cards","kind":"cards","config":{"sorts":[{"field":"title","dir":"asc"}]}}`, http.StatusCreated, &view)
+	if view.Position != 1 || !strings.Contains(string(view.Config), `"sorts":[{"field":"title","dir":"asc"}]`) {
+		t.Errorf("view = %+v", view)
+	}
+	f.call(http.MethodPatch, "/api/wiki/views/"+view.ID, `{"name":"Gallery","position":0}`, http.StatusOK, &view)
+	if view.Name != "Gallery" || view.Position != 0 {
+		t.Errorf("patched view = %+v", view)
+	}
+	if rec := f.do(http.MethodPatch, "/api/wiki/views/"+view.ID, `{"config":{"zzz":1}}`, withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad config = %d, want 400", rec.Code)
+	}
+
+	// Deleting the property clears the values and the page shows it too.
+	f.call(http.MethodDelete, "/api/wiki/properties/"+status.ID, "", http.StatusNoContent, nil)
+	var page pageJSON
+	f.call(http.MethodGet, "/api/wiki/pages/"+r1.ID, "", http.StatusOK, &page)
+	if string(page.Props) != "{}" {
+		t.Errorf("props after delete = %s", page.Props)
+	}
+	f.call(http.MethodDelete, "/api/wiki/properties/"+status.ID, "", http.StatusNotFound, nil)
+
+	f.call(http.MethodGet, "/api/wiki/databases/"+db.ID, "", http.StatusOK, &data)
+	if len(data.Properties) != 1 || data.Properties[0].ID != prop.ID || data.Properties[0].Position != 0 {
+		t.Errorf("properties = %+v", data.Properties)
+	}
+
+	// The last view cannot go.
+	f.call(http.MethodDelete, "/api/wiki/views/"+view.ID, "", http.StatusNoContent, nil)
+	var left databaseJSON
+	f.call(http.MethodGet, "/api/wiki/databases/"+db.ID, "", http.StatusOK, &left)
+	f.call(http.MethodDelete, "/api/wiki/views/"+left.Views[0].ID, "", http.StatusConflict, nil)
+
+	// A page is not a database.
+	plain := f.createPage(`{"title":"Plain"}`)
+	f.call(http.MethodGet, "/api/wiki/databases/"+plain.ID, "", http.StatusNotFound, nil)
+	f.call(http.MethodPost, "/api/wiki/databases/"+plain.ID+"/properties", `{"name":"X","type":"text"}`, http.StatusNotFound, nil)
+	for name, body := range map[string]string{
+		"database with content": `{"kind":"database","content":` + emptyPageDoc + `}`,
+		"props on a page":       `{"props":{"x":1}}`,
+		"unknown kind":          `{"kind":"folder"}`,
+		"database in database":  `{"kind":"database","parentId":"` + db.ID + `"}`,
+	} {
+		if rec := f.do(http.MethodPost, "/api/campaigns/"+f.campaignID+"/wiki/pages", body, withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", name, rec.Code)
+		}
+	}
+}
+
+func TestWikiDatabaseRelations(t *testing.T) {
+	f := newWikiFixture(t)
+	npc := f.createPage(`{"kind":"database","title":"NPC"}`)
+	boss := f.createPage(`{"parentId":"` + npc.ID + `","title":"Boss"}`)
+	quests := f.createPage(`{"kind":"database","title":"Quests","database":{"properties":[
+		{"name":"Giver","type":"relation","options":{"targetDatabaseId":"` + npc.ID + `"}}]}}`)
+	var data databaseJSON
+	f.call(http.MethodGet, "/api/wiki/databases/"+quests.ID, "", http.StatusOK, &data)
+	giver := data.Properties[0].ID
+	quest := f.createPage(`{"parentId":"` + quests.ID + `","title":"Quest","props":{"` + giver + `":["` + boss.ID + `"]}}`)
+
+	var page pageJSON
+	f.call(http.MethodGet, "/api/wiki/pages/"+quest.ID, "", http.StatusOK, &page)
+	if ref := page.Refs["page:"+boss.ID]; !ref.Exists || ref.Label != "Boss" {
+		t.Errorf("refs = %+v", page.Refs)
+	}
+	var back []pageRefJSON
+	f.call(http.MethodGet, "/api/wiki/pages/"+boss.ID+"/backlinks", "", http.StatusOK, &back)
+	if len(back) != 1 || back[0].ID != quest.ID {
+		t.Errorf("backlinks = %+v", back)
+	}
+	f.call(http.MethodPatch, "/api/wiki/pages/"+quest.ID+"/props", `{"props":{"`+giver+`":null}}`, http.StatusOK, nil)
+	f.call(http.MethodGet, "/api/wiki/pages/"+boss.ID+"/backlinks", "", http.StatusOK, &back)
+	if len(back) != 0 {
+		t.Errorf("backlinks after null = %+v", back)
 	}
 }

@@ -212,7 +212,7 @@ func TestCreateInvalid(t *testing.T) {
 		{"parent of another campaign", NewPage{ParentID: foreign.ID}, false},
 		{"parent in the trash", NewPage{ParentID: trashed.ID}, false},
 		{"unknown parent", NewPage{ParentID: id.New()}, false},
-		{"database parent", NewPage{ParentID: db}, false},
+		{"database in a database", NewPage{ParentID: db, Kind: KindDatabase}, false},
 		{"record parent", NewPage{ParentID: record}, false},
 		{"title too long", NewPage{Title: strings.Repeat("я", MaxTitle+1)}, false},
 		{"bad icon", NewPage{Icon: "123456789"}, false},
