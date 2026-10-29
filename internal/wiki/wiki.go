@@ -77,6 +77,8 @@ type NewPage struct {
 	Icon     string
 	Content  json.RawMessage // nil: doc.Empty()
 
+	TemplateID string // icon and content come from this template of the campaign; Icon and Content must be empty
+
 	Kind     string          // "" or "page" | "database"
 	Props    json.RawMessage // only when the parent is a database
 	Database *NewDatabase    // only with Kind "database"

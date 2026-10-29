@@ -174,6 +174,11 @@ func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Pag
 	if err := campaignExists(ctx, tx, campaignID); err != nil {
 		return Page{}, err
 	}
+	if p.TemplateID != "" {
+		if err := applyTemplate(ctx, tx, campaignID, &p); err != nil {
+			return Page{}, err
+		}
+	}
 	if err := checkTitleIcon(p.Title, p.Icon); err != nil {
 		return Page{}, err
 	}
