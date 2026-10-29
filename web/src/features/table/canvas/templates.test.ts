@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Grid } from '../../../shared/protocol'
 import { affectedCells, templateOutline, type TemplateSpec } from './templates'
 
@@ -41,10 +41,12 @@ describe('affectedCells', () => {
 
   it('has a half angle of atan(1/2): 45 degrees would take a cell the cone does not reach', () => {
     const cone: TemplateSpec = { shape: 'cone', x: 0, y: s / 2, size: 30, direction: 0 }
-    // The centre of cell (1, 2) lies at 1.5 cells across, 1.5 along: 45 degrees off the axis.
-    expect(has(affectedCells(cone, square), 1, 2)).toBe(false)
+    const cells = affectedCells(cone, square)
+    // The centre of cell (1, 1) lies 1.5 cells along and 1 cell across: 33.7 degrees off the axis.
+    expect(has(cells, 1, 1)).toBe(false)
+    // Cell (2, 1) is at 21.8 degrees: inside.
+    expect(has(cells, 2, 1)).toBe(true)
   })
-
   it('takes 6 cells for a 30 ft line', () => {
     const cells = affectedCells({ shape: 'line', x: 0, y: s / 2, size: 30, direction: 0 }, square)
     expect(cells).toHaveLength(6)
