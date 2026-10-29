@@ -20,7 +20,6 @@ import { TreePanel } from './tree/TreePanel'
 import { useWikiController } from './useWikiController'
 import { WikiContext } from './wikiContext'
 import { wikiPanels } from './wikiPanels'
-import './wiki.css'
 
 /** TREE_WIDTH_REM is the width of the tree in the default layout. */
 const TREE_WIDTH_REM = 18

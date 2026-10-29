@@ -4,6 +4,7 @@ import type { PanelDef } from '../workspace/panels'
 import { PagePanel } from './page/PagePanel'
 import { pagePanelTitle, PAGE_PANEL_PREFIX } from './panelIds'
 import { TreePanel } from './tree/TreePanel'
+import './wiki.css'
 
 /** wikiPanels are the rows of the panel catalogue that belong to the wiki: the tree and a page. */
 export function wikiPanels(t: TFunction, tree: PageNode[] | null): PanelDef[] {
