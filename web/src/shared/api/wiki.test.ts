@@ -9,10 +9,20 @@ import {
   isPageNode,
   isPageRef,
   isSaved,
+  isSearchHit,
+  isTagCount,
+  isTemplate,
+  isTrashItem,
   isWikiPage,
+  listTags,
   moveWikiPage,
+  pageExportUrl,
+  renameTag,
   saveWikiPage,
   searchMentions,
+  searchWiki,
+  setPageTags,
+  wikiExportUrl,
   type PageNode,
   type WikiPage,
 } from './wiki'
@@ -171,5 +181,74 @@ describe('mentions and backlinks', () => {
     const mock = stubFetch(200, [ref])
     await expect(getBacklinks('p1')).resolves.toEqual([ref])
     expect(call(mock).url).toBe('/api/wiki/pages/p1/backlinks')
+  })
+})
+
+describe('tags, search, trash and templates', () => {
+  const hit = {
+    id: 'p1',
+    title: 'Барлиман',
+    icon: '🧔',
+    kind: 'page',
+    isRecord: false,
+    path: ['Персонажи', 'NPC'],
+    snippet: [{ text: 'Хозяин таверны — ' }, { text: 'Барлиман', match: true }],
+  }
+  const trash = {
+    id: 't1',
+    title: 'Склеп',
+    icon: '',
+    kind: 'page',
+    deletedAt: 1760530000000,
+    purgeAt: 1763122000000,
+    pageCount: 3,
+  }
+  const template = { id: 'm1', name: 'Таверна', icon: '🍺', createdAt: 1760530000000 }
+
+  it('checks the shapes', () => {
+    expect(isSearchHit(hit)).toBe(true)
+    expect(isSearchHit({ ...hit, snippet: [{ text: 'x', match: 'yes' }] })).toBe(false)
+    expect(isSearchHit({ ...hit, path: [1] })).toBe(false)
+    expect(isTagCount({ id: 'g1', name: 'NPC', pageCount: 2 })).toBe(true)
+    expect(isTagCount({ id: 'g1', name: 'NPC' })).toBe(false)
+    expect(isTrashItem(trash)).toBe(true)
+    expect(isTrashItem({ ...trash, purgeAt: '1' })).toBe(false)
+    expect(isTemplate(template)).toBe(true)
+    expect(isTemplate({ ...template, createdAt: undefined })).toBe(false)
+  })
+
+  it('sets the tags of a page', async () => {
+    const mock = stubFetch(200, { tags: [{ id: 'g1', name: 'NPC' }] })
+    await expect(setPageTags('p1', ['NPC'])).resolves.toEqual([{ id: 'g1', name: 'NPC' }])
+    expect(call(mock).url).toBe('/api/wiki/pages/p1/tags')
+    expect(call(mock).init.method).toBe('PUT')
+    expect(call(mock).init.body).toBe(JSON.stringify({ names: ['NPC'] }))
+  })
+
+  it('lists tags and renames with merge', async () => {
+    const mock = stubFetch(200, [{ id: 'g1', name: 'NPC', pageCount: 2 }])
+    await expect(listTags('c1')).resolves.toHaveLength(1)
+    expect(call(mock).url).toBe('/api/campaigns/c1/wiki/tags')
+
+    const patch = stubFetch(200, { id: 'g2', name: 'Союзники' })
+    await renameTag('g1', 'Союзники', true)
+    expect(call(patch).init.method).toBe('PATCH')
+    expect(call(patch).init.body).toBe(JSON.stringify({ name: 'Союзники', merge: true }))
+
+    stubFetch(409, { error: { code: 'conflict', message: 'x' } })
+    await expect(renameTag('g1', 'Союзники')).rejects.toEqual(new ApiError(409, 'conflict'))
+  })
+
+  it('searches with an escaped query and a tag', async () => {
+    const mock = stubFetch(200, [hit])
+    await expect(searchWiki('c1', { q: 'тав', tag: 'g 1' })).resolves.toEqual([hit])
+    expect(call(mock).url).toBe(
+      `/api/campaigns/c1/wiki/search?q=${encodeURIComponent('тав')}&tag=g%201`,
+    )
+  })
+
+  it('builds the export addresses', () => {
+    expect(pageExportUrl('p 1')).toBe('/api/wiki/pages/p%201/export.md')
+    expect(wikiExportUrl('c1')).toBe('/api/campaigns/c1/wiki/export.zip')
   })
 })

@@ -106,10 +106,6 @@ function isRefs(v: unknown): v is Record<string, RefInfo> {
   return isObject(v) && Object.values(v).every(isRefInfo)
 }
 
-function isTag(v: unknown): v is { id: string; name: string } {
-  return isObject(v) && typeof v.id === 'string' && typeof v.name === 'string'
-}
-
 export function isWikiPage(v: unknown): v is WikiPage {
   return (
     isObject(v) &&
@@ -183,7 +179,14 @@ export async function getWikiTree(campaignId: string): Promise<PageNode[]> {
 /** createWikiPage makes a page; it becomes the last among its siblings. */
 export async function createWikiPage(
   campaignId: string,
-  p: { parentId?: string | null; title?: string; icon?: string; content?: unknown },
+  p: {
+    parentId?: string | null
+    title?: string
+    icon?: string
+    content?: unknown
+    /** templateId is a template of the campaign; then content and icon must be absent. */
+    templateId?: string
+  },
 ): Promise<WikiPage> {
   return need(
     await apiRequest('POST', `/api/campaigns/${enc(campaignId)}/wiki/pages`, {
@@ -237,4 +240,221 @@ export async function searchMentions(campaignId: string, q: string): Promise<Men
 
 export async function getBacklinks(id: string): Promise<PageRef[]> {
   return need(await apiRequest('GET', `/api/wiki/pages/${enc(id)}/backlinks`, { guard: isRefList }))
+}
+
+export interface Tag {
+  id: string
+  name: string
+}
+
+export interface TagCount extends Tag {
+  pageCount: number
+}
+
+/** SnippetPart is a piece of the text around a search match; match marks the found words. */
+export interface SnippetPart {
+  text: string
+  match?: boolean
+}
+
+export interface SearchHit {
+  id: string
+  title: string
+  icon: string
+  kind: 'page' | 'database'
+  isRecord: boolean
+  /** path holds the titles of the ancestors. */
+  path: string[]
+  snippet: SnippetPart[]
+}
+
+export interface TrashItem {
+  id: string
+  title: string
+  icon: string
+  kind: 'page' | 'database'
+  deletedAt: number
+  purgeAt: number
+  pageCount: number
+}
+
+export interface Template {
+  id: string
+  name: string
+  icon: string
+  createdAt: number
+}
+
+export function isTag(v: unknown): v is Tag {
+  return isObject(v) && typeof v.id === 'string' && typeof v.name === 'string'
+}
+
+export function isTagCount(v: unknown): v is TagCount {
+  return isTag(v) && 'pageCount' in v && typeof v.pageCount === 'number'
+}
+
+function isSnippetPart(v: unknown): v is SnippetPart {
+  return (
+    isObject(v) && typeof v.text === 'string' && (v.match === undefined || typeof v.match === 'boolean')
+  )
+}
+
+export function isSearchHit(v: unknown): v is SearchHit {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.title === 'string' &&
+    typeof v.icon === 'string' &&
+    isPageKind(v.kind) &&
+    typeof v.isRecord === 'boolean' &&
+    Array.isArray(v.path) &&
+    v.path.every((p) => typeof p === 'string') &&
+    Array.isArray(v.snippet) &&
+    v.snippet.every(isSnippetPart)
+  )
+}
+
+export function isTrashItem(v: unknown): v is TrashItem {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.title === 'string' &&
+    typeof v.icon === 'string' &&
+    isPageKind(v.kind) &&
+    typeof v.deletedAt === 'number' &&
+    typeof v.purgeAt === 'number' &&
+    typeof v.pageCount === 'number'
+  )
+}
+
+export function isTemplate(v: unknown): v is Template {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.icon === 'string' &&
+    typeof v.createdAt === 'number'
+  )
+}
+
+function listOf<T>(item: (v: unknown) => v is T): (v: unknown) => v is T[] {
+  return (v): v is T[] => Array.isArray(v) && v.every(item)
+}
+
+function isTags(v: unknown): v is { tags: Tag[] } {
+  return isObject(v) && Array.isArray(v.tags) && v.tags.every(isTag)
+}
+
+/** setPageTags replaces the tags of a page; tags that do not exist yet are created. */
+export async function setPageTags(id: string, names: string[]): Promise<Tag[]> {
+  const res = need(
+    await apiRequest('PUT', `/api/wiki/pages/${enc(id)}/tags`, {
+      body: { names },
+      guard: isTags,
+    }),
+  )
+  return res.tags
+}
+
+export async function listTags(campaignId: string): Promise<TagCount[]> {
+  return need(
+    await apiRequest('GET', `/api/campaigns/${enc(campaignId)}/wiki/tags`, {
+      guard: listOf(isTagCount),
+    }),
+  )
+}
+
+/** renameTag renames a tag; a name taken by another tag is a 409, unless merge joins the two. */
+export async function renameTag(id: string, name: string, merge?: boolean): Promise<Tag> {
+  return need(
+    await apiRequest('PATCH', `/api/wiki/tags/${enc(id)}`, {
+      body: merge === undefined ? { name } : { name, merge },
+      guard: isTag,
+    }),
+  )
+}
+
+export async function deleteTag(id: string): Promise<void> {
+  await apiRequest('DELETE', `/api/wiki/tags/${enc(id)}`)
+}
+
+/** searchWiki finds pages by words (q) and/or by a tag (tag is an id). */
+export async function searchWiki(
+  campaignId: string,
+  p: { q: string; tag?: string; limit?: number },
+): Promise<SearchHit[]> {
+  const params = [`q=${enc(p.q)}`]
+  if (p.tag !== undefined) params.push(`tag=${enc(p.tag)}`)
+  if (p.limit !== undefined) params.push(`limit=${String(p.limit)}`)
+  return need(
+    await apiRequest('GET', `/api/campaigns/${enc(campaignId)}/wiki/search?${params.join('&')}`, {
+      guard: listOf(isSearchHit),
+    }),
+  )
+}
+
+export async function listTrash(campaignId: string): Promise<TrashItem[]> {
+  return need(
+    await apiRequest('GET', `/api/campaigns/${enc(campaignId)}/wiki/trash`, {
+      guard: listOf(isTrashItem),
+    }),
+  )
+}
+
+export async function restoreTrash(id: string): Promise<void> {
+  await apiRequest('POST', `/api/wiki/trash/${enc(id)}/restore`)
+}
+
+/** purgeTrash deletes one trash item for good. */
+export async function purgeTrash(id: string): Promise<void> {
+  await apiRequest('DELETE', `/api/wiki/trash/${enc(id)}`)
+}
+
+export async function emptyTrash(campaignId: string): Promise<void> {
+  await apiRequest('DELETE', `/api/campaigns/${enc(campaignId)}/wiki/trash`)
+}
+
+export async function listTemplates(campaignId: string): Promise<Template[]> {
+  return need(
+    await apiRequest('GET', `/api/campaigns/${enc(campaignId)}/wiki/templates`, {
+      guard: listOf(isTemplate),
+    }),
+  )
+}
+
+/** saveTemplate makes a template from a page; more than 100 templates is a 409. */
+export async function saveTemplate(
+  campaignId: string,
+  fromPageId: string,
+  name: string,
+): Promise<Template> {
+  return need(
+    await apiRequest('POST', `/api/campaigns/${enc(campaignId)}/wiki/templates`, {
+      body: { fromPageId, name },
+      guard: isTemplate,
+    }),
+  )
+}
+
+export async function renameTemplate(id: string, name: string): Promise<Template> {
+  return need(
+    await apiRequest('PATCH', `/api/wiki/templates/${enc(id)}`, {
+      body: { name },
+      guard: isTemplate,
+    }),
+  )
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await apiRequest('DELETE', `/api/wiki/templates/${enc(id)}`)
+}
+
+/** pageExportUrl is the address of the Markdown file of a page; the browser downloads it with its cookie. */
+export function pageExportUrl(id: string): string {
+  return `/api/wiki/pages/${enc(id)}/export.md`
+}
+
+/** wikiExportUrl is the address of the zip of the whole wiki. */
+export function wikiExportUrl(campaignId: string): string {
+  return `/api/campaigns/${enc(campaignId)}/wiki/export.zip`
 }
