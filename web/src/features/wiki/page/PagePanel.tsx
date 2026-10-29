@@ -23,6 +23,8 @@ import {
 import { Button } from '../../../ui/Button'
 import { ErrorNote } from '../../../ui/ErrorNote'
 import { selectionDoc } from '../../handout/selectionDoc'
+import { DatabasePanel } from '../database/DatabasePanel'
+import { RecordProps } from '../database/RecordProps'
 import { isSearchShortcut } from '../search/query'
 import { wikiStore } from '../store'
 import { pageEditors, useWikiActions } from '../wikiContext'
@@ -96,6 +98,7 @@ export function PagePanel({ pageId }: { pageId: string }) {
       </div>
     )
   }
+  if (load.page.kind === 'database') return <DatabasePanel key={load.epoch} page={load.page} />
   return <PageView key={load.epoch} page={load.page} onReload={read} />
 }
 
@@ -149,6 +152,11 @@ function PageView({ page, onReload }: PageViewProps) {
     },
     [edit, page.id],
   )
+
+  // A record is not in the tree: its tab takes the name from here.
+  useEffect(() => {
+    if (page.isRecord) wikiStore.getState().rememberRecord(page.id, page.title, page.icon)
+  }, [page.id, page.isRecord, page.title, page.icon])
 
   // The tree renames a page that is open through its panel: a second writer would make a conflict.
   useEffect(() => {
@@ -313,6 +321,7 @@ function PageView({ page, onReload }: PageViewProps) {
               void saver.flush()
             }}
           />
+          {page.isRecord && <RecordProps page={page} />}
           <Suspense fallback={null}>
             <WikiEditor
               content={page.content}

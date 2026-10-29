@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -37,7 +37,6 @@ export function PickerPopup(p: PickerPopupProps) {
   const ref = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const [active, setActive] = useState(0)
-  const [style, setStyle] = useState<React.CSSProperties>({ visibility: 'hidden' })
   const listId = useId()
   const close = useRef(p.onClose)
   useEffect(() => {
@@ -52,17 +51,17 @@ export function PickerPopup(p: PickerPopupProps) {
   const rows = p.items.length + (canCreate ? 1 : 0)
   const at = Math.min(active, Math.max(rows - 1, 0))
 
-  useLayoutEffect(() => {
+  // The cell is on the screen when the list opens, so its place is known at the first drawing.
+  const style = useMemo<React.CSSProperties>(() => {
     const rect = p.anchor.getBoundingClientRect()
     const view = doc.documentElement
     const below = view.clientHeight - rect.bottom
     const flip = below < LIST_HEIGHT && rect.top > below
-    const maxLeft = Math.max(0, view.clientWidth - 240)
-    setStyle({
-      left: Math.min(rect.left, maxLeft),
+    return {
+      left: Math.min(rect.left, Math.max(0, view.clientWidth - 240)),
       minWidth: Math.max(rect.width, 220),
       ...(flip ? { bottom: view.clientHeight - rect.top + 2 } : { top: rect.bottom + 2 }),
-    })
+    }
   }, [p.anchor, doc])
 
   useEffect(() => {

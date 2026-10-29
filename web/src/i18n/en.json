@@ -682,7 +682,6 @@
       "openNewGroup": "Open in a new group",
       "delete": "Delete",
       "records": "Records: {{count}}",
-      "databaseLater": "Databases will open in an upcoming update.",
       "createFailed": "Could not create the page.",
       "moveFailed": "Could not move the page.",
       "deleteFailed": "Could not delete the page.",
@@ -733,6 +732,259 @@
       },
       "backlinks": "Mentioned on pages",
       "imageFailed": "Could not upload the image."
+    },
+    "db": {
+      "loadFailed": "Could not load the database.",
+      "views": "Database views",
+      "conditions": "Conditions of the view",
+      "shown": "{{shown}} of {{total}}",
+      "empty": "No records yet",
+      "noMatch": "No record matches the conditions.",
+      "delete": "Delete",
+      "new": {
+        "title": "New database",
+        "empty": "Empty database",
+        "template": "Database \"{{name}}\""
+      },
+      "view": {
+        "table": "Table",
+        "cards": "Cards",
+        "add": "+ View",
+        "menu": "Actions for the view \"{{name}}\"",
+        "rename": "Rename view",
+        "delete": "Delete view",
+        "deleteTitle": "Delete the view \"{{name}}\"?",
+        "deleteConfirm": "The records and properties stay; only the conditions and column widths of this view go.",
+        "newTitle": "New view",
+        "name": "View name",
+        "kind": "Kind",
+        "create": "Create",
+        "save": "Save",
+        "saveFailed": "Could not save the view."
+      },
+      "filter": {
+        "title": "Filter",
+        "button": "Filter",
+        "none": "No conditions: all records are shown.",
+        "add": "+ Condition",
+        "remove": "Remove condition",
+        "field": "Field of the condition",
+        "op": "Condition for \"{{name}}\"",
+        "value": "Value for \"{{name}}\""
+      },
+      "sort": {
+        "title": "Sort",
+        "button": "Sort",
+        "none": "No sorting: records go in the order they were made.",
+        "add": "+ Key",
+        "remove": "Remove key",
+        "key": "Sort key {{n}}",
+        "dir": "Direction for \"{{name}}\"",
+        "asc": "ascending",
+        "desc": "descending"
+      },
+      "props": {
+        "title": "Properties"
+      },
+      "field": {
+        "title": "Title",
+        "createdAt": "Created",
+        "updatedAt": "Changed",
+        "tags": "Page tag"
+      },
+      "op": {
+        "contains": "contains",
+        "not_contains": "does not contain",
+        "empty": "is empty",
+        "not_empty": "is not empty",
+        "eq": "is",
+        "neq": "is not",
+        "checked": "is checked",
+        "unchecked": "is not checked",
+        "before": "is before",
+        "after": "is after"
+      },
+      "opNumber": {
+        "eq": "=",
+        "neq": "≠",
+        "lt": "<",
+        "lte": "≤",
+        "gt": ">",
+        "gte": "≥",
+        "empty": "is empty"
+      },
+      "type": {
+        "text": "Text",
+        "number": "Number",
+        "select": "Select",
+        "multi_select": "Multi-select",
+        "checkbox": "Checkbox",
+        "date": "Date",
+        "url": "Link",
+        "relation": "Relation",
+        "game_link": "Scene or token"
+      },
+      "color": {
+        "gray": "gray",
+        "brown": "brown",
+        "orange": "orange",
+        "yellow": "yellow",
+        "green": "green",
+        "blue": "blue",
+        "purple": "purple",
+        "red": "red"
+      },
+      "game": {
+        "scene": "scene",
+        "token": "token"
+      },
+      "property": {
+        "button": "Properties",
+        "none": "The database has no properties yet.",
+        "add": "+ Property",
+        "new": "New property",
+        "name": "Name",
+        "type": "Type",
+        "target": "Database whose records the property points at",
+        "targetPick": "Choose a database",
+        "taken": "A property with this name already exists.",
+        "shown": "Show \"{{name}}\" in this view",
+        "rename": "Name of the property \"{{name}}\"",
+        "up": "Move \"{{name}}\" up",
+        "down": "Move \"{{name}}\" down",
+        "delete": "Delete the property \"{{name}}\"",
+        "deleteTitle": "Delete the property \"{{name}}\"?",
+        "deleteConfirm": "The values of this property are removed from all records.",
+        "refused": "The server refused the change: check the name and the values.",
+        "saveFailed": "Could not save the property."
+      },
+      "option": {
+        "title": "Options ({{count}})",
+        "add": "+ Option",
+        "new": "New option",
+        "name": "Option name",
+        "color": "Color of the option \"{{name}}\"",
+        "delete": "Delete the option \"{{name}}\"",
+        "deleteTitle": "Delete the option \"{{name}}\"?",
+        "deleteConfirm": "The value is cleared in every record where this option is chosen."
+      },
+      "pick": {
+        "search": "Find or create",
+        "create": "Create \"{{name}}\"",
+        "empty": "Nothing found",
+        "full": "No more can be chosen."
+      },
+      "value": {
+        "notNumber": "Enter a number.",
+        "notInteger": "Enter a whole number.",
+        "notUrl": "The address must start with http:// or https://."
+      },
+      "table": {
+        "label": "Records of the database",
+        "new": "+ New",
+        "resize": "Width of the column \"{{name}}\"",
+        "titleOf": "Title of the record",
+        "rowMenu": "Actions for the record \"{{name}}\"",
+        "open": "Open",
+        "delete": "Delete",
+        "createFailed": "Could not create the record."
+      },
+      "cards": {
+        "label": "Records of the database as cards"
+      },
+      "record": {
+        "props": "Properties of the record"
+      },
+      "templates": {
+        "npc": {
+          "title": "NPC",
+          "props": {
+            "status": "Status",
+            "attitude": "Attitude",
+            "where": "Where met",
+            "token": "Token"
+          },
+          "opts": {
+            "status": {
+              "alive": "alive",
+              "dead": "dead",
+              "unknown": "unknown"
+            },
+            "attitude": {
+              "ally": "ally",
+              "neutral": "neutral",
+              "enemy": "enemy"
+            }
+          }
+        },
+        "locations": {
+          "title": "Locations",
+          "props": {
+            "kind": "Type",
+            "region": "Region",
+            "scene": "Scene",
+            "visited": "Visited"
+          },
+          "opts": {
+            "kind": {
+              "city": "city",
+              "dungeon": "dungeon",
+              "wilds": "wilderness",
+              "building": "building"
+            }
+          }
+        },
+        "quests": {
+          "title": "Quests",
+          "props": {
+            "status": "Status",
+            "giver": "Quest giver",
+            "reward": "Reward"
+          },
+          "opts": {
+            "status": {
+              "new": "not started",
+              "active": "active",
+              "done": "done",
+              "failed": "failed"
+            }
+          }
+        },
+        "sessions": {
+          "title": "Sessions",
+          "props": {
+            "number": "Number",
+            "date": "Date",
+            "summary": "Summary"
+          }
+        },
+        "items": {
+          "title": "Items",
+          "props": {
+            "kind": "Type",
+            "rarity": "Rarity",
+            "owner": "Owner",
+            "price": "Price, gp"
+          },
+          "opts": {
+            "kind": {
+              "weapon": "weapon",
+              "armor": "armor",
+              "potion": "potion",
+              "wondrous": "wondrous item",
+              "other": "other"
+            },
+            "rarity": {
+              "common": "common",
+              "uncommon": "uncommon",
+              "rare": "rare",
+              "veryRare": "very rare",
+              "legendary": "legendary",
+              "artifact": "artifact"
+            }
+          }
+        }
+      }
     }
   },
   "handout": {

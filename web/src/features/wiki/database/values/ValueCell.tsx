@@ -39,6 +39,8 @@ export interface ValueCellProps {
   onChange: (next: unknown) => void
   /** error is the text of what the server refused, shown under the value. */
   error?: string
+  /** readOnly shows the value only: no editing, a checkbox that cannot be changed. */
+  readOnly?: boolean
   /** onClear forgets the error of the value. */
   onClear?: () => void
 }
@@ -73,7 +75,8 @@ export function ValueCell(p: ValueCellProps) {
         step={type === 'number' ? (integer ? '1' : 'any') : undefined}
         validate={(text) => {
           if (type === 'number') {
-            return parseNumber(text, integer) === undefined ? 'wiki.db.value.notNumber' : null
+            if (parseNumber(text, integer) !== undefined) return null
+            return integer ? 'wiki.db.value.notInteger' : 'wiki.db.value.notNumber'
           }
           if (type === 'url' && text.trim() !== '' && !isHttpUrl(text.trim())) {
             return 'wiki.db.value.notUrl'
@@ -149,6 +152,7 @@ export function ValueCell(p: ValueCellProps) {
         className="dbv__check"
         aria-label={label}
         checked={value === true}
+        disabled={p.readOnly}
         onChange={(e) => {
           change(e.target.checked ? true : null)
         }}
@@ -165,7 +169,7 @@ export function ValueCell(p: ValueCellProps) {
       ref={setAnchor}
       className="dbv"
       onClick={() => {
-        if (!p.editing && prop.type !== 'checkbox') {
+        if (p.readOnly !== true && !p.editing && prop.type !== 'checkbox') {
           setRefused(null)
           p.onEdit()
         }

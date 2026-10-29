@@ -40,7 +40,7 @@ export function idsOf(v: unknown): string[] {
 export function gameLinksOf(v: unknown): GameLinkValue[] {
   if (!Array.isArray(v)) return []
   const out: GameLinkValue[] = []
-  for (const x of v) {
+  for (const x of v as unknown[]) {
     if (
       typeof x === 'object' &&
       x !== null &&
@@ -102,4 +102,14 @@ export function gameLabel(kind: string, id: string): string | undefined {
 /** sameValue compares two property values as the server would store them. */
 export function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
+/** withKey returns obj with key set to value, or without the key when value is null or undefined. */
+export function withKey<T>(
+  obj: Readonly<Record<string, T>>,
+  key: string,
+  value: T | null | undefined,
+): Record<string, T> {
+  const rest = Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key))
+  return value === null || value === undefined ? rest : { ...rest, [key]: value }
 }

@@ -3,6 +3,12 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { PageNode } from '../../shared/api/wiki'
 import { descendantIds } from './tree/tree'
 
+/** RecordTitle is what the tab of a database record shows; records are not in the tree. */
+export interface RecordTitle {
+  title: string
+  icon: string
+}
+
 export interface WikiState {
   /** tree is the page tree of the campaign; null until it is loaded. */
   tree: PageNode[] | null
@@ -10,6 +16,8 @@ export interface WikiState {
   open: string[]
   /** active is the page whose panel the user worked in last; the narrow screen shows it. */
   active: string | null
+  /** recordTitles holds the names of the records that were opened, for their tabs. */
+  recordTitles: Record<string, RecordTitle>
   /** toolsVersion grows when tags, templates or the trash may have changed; their sections read again. */
   toolsVersion: number
   setTree: (nodes: PageNode[]) => void
@@ -22,6 +30,8 @@ export interface WikiState {
   removePage: (id: string) => void
   /** retitle changes the name in the tree before the server has it. */
   retitle: (id: string, title: string, icon?: string) => void
+  /** rememberRecord keeps the name of a database record for its tab. */
+  rememberRecord: (id: string, title: string, icon: string) => void
   bumpTools: () => void
   reset: () => void
 }
@@ -31,6 +41,7 @@ export function createWikiStore(): StoreApi<WikiState> {
     tree: null,
     open: [],
     active: null,
+    recordTitles: {},
     toolsVersion: 0,
     setTree: (nodes) => {
       set({ tree: nodes })
@@ -72,13 +83,20 @@ export function createWikiStore(): StoreApi<WikiState> {
           s.tree === null
             ? null
             : s.tree.map((n) => (n.id === id ? { ...n, title, icon: icon ?? n.icon } : n)),
+        recordTitles:
+          id in s.recordTitles
+            ? { ...s.recordTitles, [id]: { title, icon: icon ?? s.recordTitles[id]?.icon ?? '' } }
+            : s.recordTitles,
       }))
+    },
+    rememberRecord: (id, title, icon) => {
+      set((s) => ({ recordTitles: { ...s.recordTitles, [id]: { title, icon } } }))
     },
     bumpTools: () => {
       set((s) => ({ toolsVersion: s.toolsVersion + 1 }))
     },
     reset: () => {
-      set({ tree: null, open: [], active: null })
+      set({ tree: null, open: [], active: null, recordTitles: {} })
     },
   }))
 }

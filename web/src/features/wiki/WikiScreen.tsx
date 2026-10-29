@@ -34,6 +34,7 @@ export default function WikiScreen({ campaignId }: { campaignId: string }) {
   const narrow = useNarrow()
   const resetLayout = useWorkspaceReset()
   const tree = useWiki((s) => s.tree)
+  const recordTitles = useWiki((s) => s.recordTitles)
   const active = useWiki((s) => s.active)
   const [campaign, setCampaign] = useState<Campaign | 'missing' | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -95,7 +96,10 @@ export default function WikiScreen({ campaignId }: { campaignId: string }) {
     onNarrowTree: showTree,
   })
 
-  const panels = useMemo<PanelDef[]>(() => wikiPanels(t, tree), [t, tree])
+  const panels = useMemo<PanelDef[]>(
+    () => wikiPanels(t, tree, recordTitles),
+    [t, tree, recordTitles],
+  )
   const isPanelValid = useCallback(
     (id: string) => {
       const pageId = pageIdOfPanel(id)
