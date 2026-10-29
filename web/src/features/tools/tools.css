@@ -1,4 +1,4 @@
-/* The options of a table tool: a plate over the map, level with the button of the tool. Verdigris: it is everyone's. */
+﻿/* The options of a table tool: a plate over the map, level with the button of the tool. Verdigris: it is everyone's. */
 .toolbar {
   position: absolute;
   top: min(var(--anchor-top, 12px), 50%);
@@ -6,8 +6,8 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 15rem;
+  gap: 10px;
+  width: 16rem;
   max-height: 50%;
   padding: 12px 14px;
   overflow-y: auto;
@@ -48,7 +48,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 28px;
   cursor: pointer;
 }
 
@@ -61,16 +61,16 @@
 
 .toolbar__swatches {
   display: grid;
-  grid-template-columns: repeat(4, 32px);
-  gap: 8px;
+  grid-template-columns: repeat(8, 24px);
+  gap: 4px;
 }
 
 /* A swatch is a radio drawn as a colour chip; the chosen one has a chalk ring. */
 .toolbar__swatch {
   position: relative;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--chalk);
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--fog);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -88,12 +88,12 @@
 
 .toolbar__swatch:has(input:checked) {
   outline: 2px solid var(--chalk);
-  outline-offset: 3px;
+  outline-offset: 1px;
 }
 
 .toolbar__swatch:has(input:focus-visible) {
   outline: 2px solid var(--brass);
-  outline-offset: 3px;
+  outline-offset: 1px;
 }
 
 .toolbar__row {
@@ -131,6 +131,6 @@
 @media (max-width: 899px) {
   .toolbar {
     left: 68px;
-    width: min(15rem, calc(100% - 80px));
+    width: min(16rem, calc(100% - 80px));
   }
 }
