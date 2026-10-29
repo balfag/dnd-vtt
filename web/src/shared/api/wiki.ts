@@ -186,6 +186,14 @@ export async function createWikiPage(
     content?: unknown
     /** templateId is a template of the campaign; then content and icon must be absent. */
     templateId?: string
+    kind?: 'page' | 'database'
+    /** props are the values of a record, by property id. */
+    props?: Record<string, unknown>
+    /** database is the first properties and views of a new database (kind database). */
+    database?: {
+      properties: { name: string; type: PropertyType; options?: PropertyOptions }[]
+      views: { name: string; kind: ViewKind }[]
+    }
   },
 ): Promise<WikiPage> {
   return need(
@@ -459,4 +467,287 @@ export function pageExportUrl(id: string): string {
 /** wikiExportUrl is the address of the zip of the whole wiki. */
 export function wikiExportUrl(campaignId: string): string {
   return `/api/campaigns/${enc(campaignId)}/wiki/export.zip`
+}
+
+export type PropertyType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'multi_select'
+  | 'checkbox'
+  | 'date'
+  | 'url'
+  | 'relation'
+  | 'game_link'
+
+export const propertyTypes: readonly PropertyType[] = [
+  'text',
+  'number',
+  'select',
+  'multi_select',
+  'checkbox',
+  'date',
+  'url',
+  'relation',
+  'game_link',
+]
+
+export type OptionColor = 'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'red'
+
+export const optionColors: readonly OptionColor[] = [
+  'gray',
+  'brown',
+  'orange',
+  'yellow',
+  'green',
+  'blue',
+  'purple',
+  'red',
+]
+
+/** SelectOption is a variant of select and multi_select; a new one is sent without an id. */
+export interface SelectOption {
+  id?: string
+  name: string
+  color: OptionColor
+}
+
+/** PropertyOptions: select and multi_select have options, number has format, relation has targetDatabaseId. */
+export interface PropertyOptions {
+  options?: SelectOption[]
+  format?: 'integer' | 'decimal'
+  targetDatabaseId?: string
+}
+
+export interface Property {
+  id: string
+  name: string
+  type: PropertyType
+  position: number
+  options: PropertyOptions
+}
+
+export type ViewKind = 'table' | 'cards'
+
+/** Filter compares a property (propertyId) or a built-in field (field: title, createdAt, updatedAt, tags). */
+export interface Filter {
+  propertyId?: string
+  field?: 'title' | 'createdAt' | 'updatedAt' | 'tags'
+  op: string
+  value?: string | number
+}
+
+export interface SortKey {
+  propertyId?: string
+  field?: 'title' | 'createdAt' | 'updatedAt'
+  dir: 'asc' | 'desc'
+}
+
+export interface ViewConfig {
+  filters: Filter[]
+  sorts: SortKey[]
+  visible: string[]
+  /** widths are pixels by property id or "title". */
+  widths: Record<string, number>
+}
+
+export interface View {
+  id: string
+  name: string
+  kind: ViewKind
+  position: number
+  config: ViewConfig
+}
+
+/** DbRecord is a row of a database: a child page with its values (named so to keep the global Record type). */
+export interface DbRecord {
+  id: string
+  title: string
+  icon: string
+  coverAssetId: string | null
+  props: Record<string, unknown>
+  tags: Tag[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface Database {
+  properties: Property[]
+  views: View[]
+  records: DbRecord[]
+}
+
+/** GameLinkValue is an item of a game_link value. */
+export interface GameLinkValue {
+  kind: 'scene' | 'token'
+  id: string
+}
+
+export function isPropertyType(v: unknown): v is PropertyType {
+  return typeof v === 'string' && (propertyTypes as readonly string[]).includes(v)
+}
+
+export function isProperty(v: unknown): v is Property {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    isPropertyType(v.type) &&
+    typeof v.position === 'number' &&
+    isObject(v.options)
+  )
+}
+
+function isStringList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === 'string')
+}
+
+function isFilter(v: unknown): v is Filter {
+  return (
+    isObject(v) &&
+    typeof v.op === 'string' &&
+    (v.propertyId === undefined || typeof v.propertyId === 'string') &&
+    (v.field === undefined || typeof v.field === 'string') &&
+    (v.value === undefined || typeof v.value === 'string' || typeof v.value === 'number')
+  )
+}
+
+function isSortKey(v: unknown): v is SortKey {
+  return (
+    isObject(v) &&
+    (v.dir === 'asc' || v.dir === 'desc') &&
+    (v.propertyId === undefined || typeof v.propertyId === 'string') &&
+    (v.field === undefined || typeof v.field === 'string')
+  )
+}
+
+export function isViewConfig(v: unknown): v is ViewConfig {
+  return (
+    isObject(v) &&
+    Array.isArray(v.filters) &&
+    v.filters.every(isFilter) &&
+    Array.isArray(v.sorts) &&
+    v.sorts.every(isSortKey) &&
+    isStringList(v.visible) &&
+    isObject(v.widths) &&
+    Object.values(v.widths).every((w) => typeof w === 'number')
+  )
+}
+
+export function isView(v: unknown): v is View {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    (v.kind === 'table' || v.kind === 'cards') &&
+    typeof v.position === 'number' &&
+    isViewConfig(v.config)
+  )
+}
+
+export function isDbRecord(v: unknown): v is DbRecord {
+  return (
+    isObject(v) &&
+    typeof v.id === 'string' &&
+    typeof v.title === 'string' &&
+    typeof v.icon === 'string' &&
+    (v.coverAssetId === null || typeof v.coverAssetId === 'string') &&
+    isObject(v.props) &&
+    Array.isArray(v.tags) &&
+    v.tags.every(isTag) &&
+    typeof v.createdAt === 'number' &&
+    typeof v.updatedAt === 'number'
+  )
+}
+
+export function isDatabase(v: unknown): v is Database {
+  return (
+    isObject(v) &&
+    Array.isArray(v.properties) &&
+    v.properties.every(isProperty) &&
+    Array.isArray(v.views) &&
+    v.views.every(isView) &&
+    Array.isArray(v.records) &&
+    v.records.every(isDbRecord)
+  )
+}
+
+function isPropsReply(v: unknown): v is { props: Record<string, unknown> } {
+  return isObject(v) && isObject(v.props)
+}
+
+export async function getDatabase(pageId: string): Promise<Database> {
+  return need(
+    await apiRequest('GET', `/api/wiki/databases/${enc(pageId)}`, { guard: isDatabase }),
+  )
+}
+
+/** addProperty adds a property as the last one; a name used in the database is a 400. */
+export async function addProperty(
+  pageId: string,
+  p: { name: string; type: PropertyType; options?: PropertyOptions },
+): Promise<Property> {
+  return need(
+    await apiRequest('POST', `/api/wiki/databases/${enc(pageId)}/properties`, {
+      body: { name: p.name, type: p.type, options: p.options ?? {} },
+      guard: isProperty,
+    }),
+  )
+}
+
+/** updateProperty changes the name, the options or the place (position) of a property; its type never changes. */
+export async function updateProperty(
+  id: string,
+  patch: { name?: string; options?: PropertyOptions; position?: number },
+): Promise<Property> {
+  return need(
+    await apiRequest('PATCH', `/api/wiki/properties/${enc(id)}`, {
+      body: patch,
+      guard: isProperty,
+    }),
+  )
+}
+
+export async function deleteProperty(id: string): Promise<void> {
+  await apiRequest('DELETE', `/api/wiki/properties/${enc(id)}`)
+}
+
+export async function addView(
+  pageId: string,
+  v: { name: string; kind: ViewKind; config?: ViewConfig },
+): Promise<View> {
+  return need(
+    await apiRequest('POST', `/api/wiki/databases/${enc(pageId)}/views`, {
+      body: v,
+      guard: isView,
+    }),
+  )
+}
+
+export async function updateView(
+  id: string,
+  patch: { name?: string; config?: ViewConfig; position?: number },
+): Promise<View> {
+  return need(
+    await apiRequest('PATCH', `/api/wiki/views/${enc(id)}`, { body: patch, guard: isView }),
+  )
+}
+
+/** deleteView removes a view; the last view of a database is a 409. */
+export async function deleteView(id: string): Promise<void> {
+  await apiRequest('DELETE', `/api/wiki/views/${enc(id)}`)
+}
+
+/** setRecordProps changes the given values of a record; null removes a value. A bad value is a 400. */
+export async function setRecordProps(
+  recordId: string,
+  props: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = need(
+    await apiRequest('PATCH', `/api/wiki/pages/${enc(recordId)}/props`, {
+      body: { props },
+      guard: isPropsReply,
+    }),
+  )
+  return res.props
 }
