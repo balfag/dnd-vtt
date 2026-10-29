@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { errorKey } from '../../../shared/api/errors'
-import type { PageRef } from '../../../shared/api/wiki'
+import { pageExportUrl, type PageRef, type Tag } from '../../../shared/api/wiki'
 import { Dialog } from '../../../ui/Dialog'
 import { AssetPicker } from '../../assets/AssetPicker'
+import { PopupMenu } from '../../workspace/PanelTab'
+import { download } from '../download'
+import { TagEditor } from '../tags/TagEditor'
 import type { SaveState } from './autosave'
 import { validIcon } from './icon'
 
 interface PageHeaderProps {
   campaignId: string
+  pageId: string
+  tags: Tag[]
+  onTags: (names: string[]) => void
   path: PageRef[]
   title: string
   icon: string
@@ -33,6 +39,13 @@ export function PageHeader(p: PageHeaderProps) {
   const [pickingCover, setPickingCover] = useState(false)
   const iconInput = useRef<HTMLInputElement>(null)
   const iconButton = useRef<HTMLButtonElement>(null)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    align: 'start' | 'end'
+    doc: Document
+  } | null>(null)
   const iconOk = validIcon(iconDraft)
 
   useEffect(() => {
@@ -172,7 +185,48 @@ export function PageHeader(p: PageHeaderProps) {
           }}
         />
         <SaveIndicator state={p.saveState} error={p.saveError} onRetry={p.onRetry} />
+        <button
+          ref={menuButton}
+          type="button"
+          className="phead__menu"
+          aria-label={t('wiki.tools.export.pageMenu')}
+          aria-haspopup="menu"
+          aria-expanded={menu !== null}
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            setMenu({
+              x: rect.right,
+              y: rect.bottom + 4,
+              align: 'end',
+              doc: e.currentTarget.ownerDocument,
+            })
+          }}
+        >
+          <span aria-hidden="true">⋯</span>
+        </button>
+        {menu !== null && (
+          <PopupMenu
+            doc={menu.doc}
+            at={menu}
+            label={t('wiki.tools.export.pageMenu')}
+            items={[
+              {
+                key: 'export',
+                label: t('wiki.tools.export.page'),
+                onSelect: () => {
+                  download(pageExportUrl(p.pageId))
+                },
+              },
+            ]}
+            onClose={(restoreFocus) => {
+              setMenu(null)
+              if (restoreFocus) menuButton.current?.focus()
+            }}
+          />
+        )}
       </div>
+
+      <TagEditor campaignId={p.campaignId} tags={p.tags} onChange={p.onTags} />
 
       <Dialog
         title={t('wiki.page.cover.title')}

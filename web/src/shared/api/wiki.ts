@@ -295,7 +295,9 @@ export function isTagCount(v: unknown): v is TagCount {
 
 function isSnippetPart(v: unknown): v is SnippetPart {
   return (
-    isObject(v) && typeof v.text === 'string' && (v.match === undefined || typeof v.match === 'boolean')
+    isObject(v) &&
+    typeof v.text === 'string' &&
+    (v.match === undefined || typeof v.match === 'boolean')
   )
 }
 

@@ -1,5 +1,5 @@
-﻿import { describe, expect, it } from 'vitest'
-import { findTag, parseQuery, segments } from './query'
+import { describe, expect, it } from 'vitest'
+import { findTag, hasWords, isSearchShortcut, parseQuery, segments, suggestTags } from './query'
 
 describe('parseQuery', () => {
   it('reads a tag in the first word', () => {
@@ -37,5 +37,37 @@ describe('findTag', () => {
   it('ignores case', () => {
     expect(findTag([{ name: 'Таверна' }], 'таверна')).toEqual({ name: 'Таверна' })
     expect(findTag([{ name: 'Таверна' }], 'нет')).toBeUndefined()
+  })
+})
+
+describe('isSearchShortcut', () => {
+  const key = { key: 'k', code: 'KeyK', ctrlKey: true, metaKey: false, altKey: false }
+
+  it('takes Ctrl+K, Cmd+K and the Russian layout', () => {
+    expect(isSearchShortcut(key)).toBe(true)
+    expect(isSearchShortcut({ ...key, ctrlKey: false, metaKey: true })).toBe(true)
+    expect(isSearchShortcut({ ...key, key: 'л' })).toBe(true)
+  })
+
+  it('leaves the plain key and Alt alone', () => {
+    expect(isSearchShortcut({ ...key, ctrlKey: false })).toBe(false)
+    expect(isSearchShortcut({ ...key, altKey: true })).toBe(false)
+  })
+})
+
+describe('hasWords', () => {
+  it('needs a letter or a digit', () => {
+    expect(hasWords('таверна')).toBe(true)
+    expect(hasWords('9')).toBe(true)
+    expect(hasWords('# - ?')).toBe(false)
+  })
+})
+
+describe('suggestTags', () => {
+  it('matches the prefix without case and skips the tags the page has', () => {
+    const known = ['Таверна', 'таинственный', 'NPC', 'Тракт']
+    expect(suggestTags(known, ['Таверна'], 'та')).toEqual(['таинственный'])
+    expect(suggestTags(known, [], 'ТР')).toEqual(['Тракт'])
+    expect(suggestTags(known, [], '')).toEqual(known)
   })
 })

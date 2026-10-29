@@ -22,7 +22,10 @@ export interface TreeRowProps {
   dragging: boolean
   onToggle: () => void
   onOpen: (newGroup: boolean) => void
-  onAddChild: () => void
+  /** onAddChild opens the menu of new pages at the place given (a corner of the menu or a button). */
+  onAddChild: (at: MenuAt) => void
+  onSaveTemplate: () => void
+  onExport: () => void
   onStartRename: () => void
   onRename: (title: string) => void
   onCancelRename: () => void
@@ -36,6 +39,13 @@ export interface TreeRowProps {
   registerRow: (el: HTMLDivElement | null) => void
 }
 
+export interface MenuAt {
+  x: number
+  y: number
+  align: 'start' | 'end'
+  doc: Document
+}
+
 const maxTitleLength = 200
 
 /** TreeRow is one line of the page tree: the arrow, the icon, the name, and the buttons "+" and "⋯". */
@@ -46,16 +56,17 @@ export function TreeRow(p: TreeRowProps) {
   const name = node.title === '' ? t('wiki.untitled') : node.title
   const nameId = useId()
   const menuButton = useRef<HTMLButtonElement>(null)
-  const [menu, setMenu] = useState<{
-    x: number
-    y: number
-    align: 'start' | 'end'
-    doc: Document
-  } | null>(null)
+  const [menu, setMenu] = useState<MenuAt | null>(null)
 
   const items: MenuItem[] = []
   if (!isDatabase) {
-    items.push({ key: 'child', label: t('wiki.tree.addChild'), onSelect: p.onAddChild })
+    items.push({
+      key: 'child',
+      label: t('wiki.tree.addChild'),
+      onSelect: () => {
+        if (menu !== null) p.onAddChild(menu)
+      },
+    })
   }
   items.push(
     { key: 'rename', label: t('wiki.tree.rename'), onSelect: p.onStartRename },
@@ -69,6 +80,12 @@ export function TreeRow(p: TreeRowProps) {
         p.onOpen(true)
       },
     })
+  }
+  if (!isDatabase) {
+    items.push(
+      { key: 'template', label: t('wiki.tools.templates.save'), onSelect: p.onSaveTemplate },
+      { key: 'export', label: t('wiki.tools.export.page'), onSelect: p.onExport },
+    )
   }
   items.push({ key: 'delete', label: t('wiki.tree.delete'), onSelect: p.onDelete })
 
@@ -164,7 +181,15 @@ export function TreeRow(p: TreeRowProps) {
               className="trow__button"
               tabIndex={-1}
               aria-label={t('wiki.tree.addChild')}
-              onClick={p.onAddChild}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                p.onAddChild({
+                  x: rect.left,
+                  y: rect.bottom + 4,
+                  align: 'start',
+                  doc: e.currentTarget.ownerDocument,
+                })
+              }}
             >
               <span aria-hidden="true">+</span>
             </button>
@@ -209,10 +234,17 @@ interface RenameFieldProps {
   initial: string
   onCommit: (title: string) => void
   onCancel: () => void
+  maxLength?: number
 }
 
 /** RenameField is the name of a row turned into an input: Enter and leaving keep the name, Escape drops it. */
-function RenameField({ label, initial, onCommit, onCancel }: RenameFieldProps) {
+export function RenameField({
+  label,
+  initial,
+  onCommit,
+  onCancel,
+  maxLength = maxTitleLength,
+}: RenameFieldProps) {
   const [value, setValue] = useState(initial)
   const input = useRef<HTMLInputElement>(null)
   // Enter and Escape end the edit first; the blur that follows the removal of the field must not end it again.
@@ -236,7 +268,7 @@ function RenameField({ label, initial, onCommit, onCancel }: RenameFieldProps) {
       className="trow__input"
       aria-label={label}
       value={value}
-      maxLength={maxTitleLength}
+      maxLength={maxLength}
       draggable={false}
       onChange={(e) => {
         setValue(e.target.value)

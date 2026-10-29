@@ -8,6 +8,8 @@ export interface MenuItem {
   key: string
   label: string
   onSelect: () => void
+  /** separated draws a line above the item: the start of a new group. */
+  separated?: boolean
 }
 
 interface PopupMenuProps {
@@ -75,7 +77,7 @@ export function PopupMenu({ doc, at, label, items, onClose }: PopupMenuProps) {
           key={item.key}
           type="button"
           role="menuitem"
-          className="wmenu__item"
+          className={item.separated === true ? 'wmenu__item wmenu__item--separated' : 'wmenu__item'}
           onClick={() => {
             onClose(true)
             item.onSelect()

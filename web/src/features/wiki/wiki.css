@@ -146,11 +146,12 @@
 .tree__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 2px;
   padding: 10px 8px 6px 14px;
 }
 
 .tree__title {
+  flex: 1;
   margin: 0;
   color: var(--fog);
   font: 500 14px/1.2 var(--sans);
@@ -178,11 +179,22 @@
   color: var(--chalk);
 }
 
-.tree__rows {
+/* The rows and the folds under them scroll together; the rows take the free space (a page dropped there goes to the end). */
+.tree__scroll {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
-  padding-bottom: 24px;
   overflow-y: auto;
+}
+
+.tree__scroll[hidden] {
+  display: none;
+}
+
+.tree__rows {
+  flex: 1 0 auto;
+  padding-bottom: 24px;
 }
 
 .tree__empty {
@@ -308,6 +320,364 @@
   font: 400 15px/1 var(--sans);
 }
 
+/* Search: the field at the top of the tree and its results instead of the tree. */
+.search {
+  position: relative;
+  margin: 0 8px 6px;
+}
+
+.search__input {
+  width: 100%;
+  height: 32px;
+  padding: 0 52px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  color: var(--chalk);
+  font: 400 15px/1 var(--sans);
+}
+
+.search__input::placeholder {
+  color: var(--fog);
+}
+
+.search__input:focus {
+  border-color: var(--verdigris);
+}
+
+.search__hint {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  color: var(--fog);
+  font: 400 13px/1 var(--sans);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.search__note {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.search__note--error {
+  color: var(--seal);
+}
+
+.hits {
+  margin: 0;
+  padding: 0 0 24px;
+  list-style: none;
+}
+
+.hit {
+  display: flex;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.hit--active {
+  background: var(--board);
+  box-shadow: inset 3px 0 0 var(--verdigris);
+}
+
+.hit__icon {
+  flex: none;
+  width: 22px;
+  color: var(--fog);
+  text-align: center;
+}
+
+.hit__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hit__title {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hit__path {
+  overflow: hidden;
+  color: var(--fog);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hit__snippet {
+  color: var(--fog);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* The found words get a verdigris wash; the colour of the text stays. */
+.hit__snippet mark {
+  border-radius: 2px;
+  background: rgba(79, 165, 142, 0.22);
+  color: inherit;
+}
+
+/* The folds under the tree: Tags, Templates, Trash. */
+.tsec {
+  flex: none;
+  border-top: 1px solid var(--line);
+}
+
+.tsec__heading {
+  margin: 0;
+  font: inherit;
+}
+
+.tsec__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 14px 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fog);
+  font: 500 14px/1 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tsec__toggle:hover {
+  color: var(--chalk);
+}
+
+.tsec__arrow {
+  width: 18px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.tsec__name {
+  flex: 1;
+}
+
+.tsec__count {
+  font-weight: 400;
+}
+
+.tsec__body[hidden] {
+  display: none;
+}
+
+.tsec__note {
+  margin: 0;
+  padding: 4px 14px 8px 32px;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.tsec__list {
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.tsec__foot {
+  padding: 4px 14px 12px 32px;
+}
+
+.srow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 2px 6px 2px 32px;
+}
+
+.srow:hover {
+  background: var(--board);
+}
+
+.srow__icon {
+  flex: none;
+  width: 22px;
+  color: var(--fog);
+  text-align: center;
+}
+
+.srow__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chalk);
+  font: 400 15px/1.3 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.srow__main:disabled {
+  cursor: default;
+}
+
+.srow__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.srow__meta {
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.srow__count {
+  flex: none;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.srow__action {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--fog);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chalk);
+  font: 500 14px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.srow__action:hover {
+  background: var(--slate);
+}
+
+.srow__menu {
+  visibility: hidden;
+}
+
+.srow:hover .srow__menu,
+.srow:focus-within .srow__menu {
+  visibility: visible;
+}
+
+/* Tags of a page, under the title: words, not chips. */
+.ptags {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.ptags__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--chalk);
+  font-weight: 500;
+}
+
+.ptags__remove {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fog);
+  font-size: 11px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ptags__tag:hover .ptags__remove,
+.ptags__remove:focus-visible {
+  opacity: 1;
+}
+
+.ptags__add {
+  padding: 0 8px;
+  border: 1px dashed var(--fog);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font: 400 14px/1.6 var(--sans);
+  cursor: pointer;
+}
+
+.ptags__add:hover {
+  color: var(--chalk);
+}
+
+.ptags__field {
+  position: relative;
+}
+
+.ptags__input {
+  width: 10rem;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px dashed var(--verdigris);
+  border-radius: 4px;
+  background: var(--board);
+  color: var(--chalk);
+  font: 400 15px/1 var(--sans);
+}
+
+.ptags__list {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  z-index: 5;
+  min-width: 10rem;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--board);
+  list-style: none;
+}
+
+.ptags__option {
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ptags__option:hover,
+.ptags__option--active {
+  background: var(--slate);
+}
+
+.phead__menu {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font: 400 18px/1 var(--sans);
+  cursor: pointer;
+}
+
+.phead__menu:hover {
+  background: var(--board);
+  color: var(--chalk);
+}
 /* The dialog "Move…". */
 .move {
   display: flex;

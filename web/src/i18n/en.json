@@ -609,7 +609,7 @@
         "blank": "Blank page",
         "menu": "New page",
         "save": "Save as template",
-        "saved": "Template “{{name}}” saved.",
+        "saved": "Template saved.",
         "limit": "You can keep at most 100 templates of your own.",
         "saveFailed": "Could not save the template.",
         "rowMenu": "Actions for the template “{{name}}”",

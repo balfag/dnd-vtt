@@ -15,11 +15,14 @@ import {
   getWikiPage,
   saveWikiPage,
   searchMentions,
+  setPageTags,
   type RefInfo,
+  type Tag,
   type WikiPage,
 } from '../../../shared/api/wiki'
 import { Button } from '../../../ui/Button'
 import { ErrorNote } from '../../../ui/ErrorNote'
+import { isSearchShortcut } from '../search/query'
 import { wikiStore } from '../store'
 import { pageEditors, useWikiActions } from '../wikiContext'
 import { Backlinks } from './Backlinks'
@@ -110,6 +113,7 @@ function PageView({ page, onReload }: PageViewProps) {
   const [cover, setCover] = useState(page.coverAssetId)
   const [refs, setRefs] = useState<Record<string, RefInfo>>(page.refs)
   const [savedAt, setSavedAt] = useState(page.updatedAt)
+  const [tags, setTags] = useState<Tag[]>(page.tags)
   const draft = useRef<Draft>({
     title: page.title,
     icon: page.icon,
@@ -166,6 +170,25 @@ function PageView({ page, onReload }: PageViewProps) {
     }
   }, [saver])
 
+  // Tags are saved at once and apart from the text, without a version.
+  const changeTags = useCallback(
+    (names: string[]) => {
+      const before = tags
+      setTags(names.map((name) => tags.find((x) => x.name === name) ?? { id: `new:${name}`, name }))
+      setPageTags(page.id, names).then(
+        (saved) => {
+          setTags(saved)
+          wikiStore.getState().bumpTools()
+        },
+        () => {
+          setTags(before)
+          actions.notify('wiki.tools.tags.pageFailed')
+        },
+      )
+    },
+    [actions, page.id, tags],
+  )
+
   const mentions = useMemo(
     () => debounceSearch((q: string) => searchMentions(page.campaignId, q), MENTION_DEBOUNCE_MS),
     [page.campaignId],
@@ -201,7 +224,15 @@ function PageView({ page, onReload }: PageViewProps) {
   )
 
   return (
-    <article className="page">
+    <article
+      className="page"
+      onKeyDown={(e) => {
+        if (isSearchShortcut(e.nativeEvent)) {
+          e.preventDefault()
+          actions.focusSearch()
+        }
+      }}
+    >
       {saveState === 'conflict' && (
         <div className="page__conflict" role="alert">
           <p>{t('wiki.page.conflict.text')}</p>
@@ -223,6 +254,9 @@ function PageView({ page, onReload }: PageViewProps) {
         <div className="page__column">
           <PageHeader
             campaignId={page.campaignId}
+            pageId={page.id}
+            tags={tags}
+            onTags={changeTags}
             path={page.path}
             title={title}
             icon={icon}
