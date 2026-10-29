@@ -1,0 +1,74 @@
+{
+  "type": "doc",
+  "attrs": {"foo": 1},
+  "content": [
+    {"type": "heading", "attrs": {"level": 2, "textAlign": "left", "id": null}, "content": [
+      {"type": "text", "text": "Таверна"}
+    ]},
+    {"type": "paragraph", "attrs": {"textAlign": "left", "class": null}, "content": [
+      {"type": "text", "text": "Хозяйка — "},
+      {"type": "mention", "attrs": {"kind": "page", "id": "01HZX3K9M2N4P6Q8R0S1T2V3W4", "label": "Мирта", "extra": true}},
+      {"type": "text", "text": ". "},
+      {"type": "text", "text": "жирный", "marks": [{"type": "bold"}, {"type": "italic", "attrs": {"x": 1}}, {"type": "underline"}, {"type": "strike"}, {"type": "code"}]},
+      {"type": "hardBreak", "marks": [{"type": "bold"}]},
+      {"type": "text", "text": "ссылка", "marks": [{"type": "link", "attrs": {"href": "https://example.com/a?b=1", "target": "_blank", "rel": "noopener", "class": null}}]},
+      {"type": "text", "text": " "},
+      {"type": "inlineRoll", "attrs": {"formula": "2d6+3"}},
+      {"type": "mention", "attrs": {"kind": "scene", "id": "01HZX3K9M2N4P6Q8R0S1T2V3W5", "label": null}},
+      {"type": "mention", "attrs": {"kind": "token", "id": "01HZX3K9M2N4P6Q8R0S1T2V3W6", "label": "Гоблин"}}
+    ]},
+    {"type": "bulletList", "content": [
+      {"type": "listItem", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "один"}]},
+        {"type": "orderedList", "attrs": {"start": 3.0, "type": null}, "content": [
+          {"type": "listItem", "content": [{"type": "paragraph"}]}
+        ]}
+      ]}
+    ]},
+    {"type": "orderedList", "content": [
+      {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "раз"}]}]}
+    ]},
+    {"type": "taskList", "content": [
+      {"type": "taskItem", "attrs": {"checked": true}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "сделано"}]}]},
+      {"type": "taskItem", "attrs": {"checked": null}, "content": [{"type": "paragraph"}]}
+    ]},
+    {"type": "blockquote", "content": [
+      {"type": "paragraph", "content": [{"type": "text", "text": "цитата"}]}
+    ]},
+    {"type": "callout", "attrs": {"emoji": "🍺"}, "content": [
+      {"type": "paragraph", "content": [{"type": "text", "text": "заметка"}]}
+    ]},
+    {"type": "callout", "attrs": {"emoji": null}, "content": [{"type": "paragraph"}]},
+    {"type": "horizontalRule", "attrs": {"foo": "bar"}},
+    {"type": "codeBlock", "attrs": {"language": "c++"}, "content": [
+      {"type": "text", "text": "int main() {}"}
+    ]},
+    {"type": "codeBlock", "attrs": {"language": null}},
+    {"type": "table", "content": [
+      {"type": "tableRow", "content": [
+        {"type": "tableHeader", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [120]}, "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Имя"}]}
+        ]},
+        {"type": "tableHeader", "attrs": {"colwidth": null}, "content": [{"type": "paragraph"}]}
+      ]},
+      {"type": "tableRow", "content": [
+        {"type": "tableCell", "attrs": {"colspan": 1.0, "backgroundColor": null}, "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Мирта"}]}
+        ]},
+        {"type": "tableCell", "content": [{"type": "paragraph"}]}
+      ]}
+    ]},
+    {"type": "image", "attrs": {"assetId": "01HZX3K9M2N4P6Q8R0S1T2V3A1", "alt": "карта", "src": "/x.png", "title": "t"}},
+    {"type": "image", "attrs": {"assetId": "01HZX3K9M2N4P6Q8R0S1T2V3A2", "alt": null}},
+    {"type": "details", "attrs": {"open": true}, "content": [
+      {"type": "detailsSummary", "content": [{"type": "text", "text": "Секрет"}]},
+      {"type": "detailsContent", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "внутри"}]}
+      ]}
+    ]},
+    {"type": "details", "content": [
+      {"type": "detailsSummary"},
+      {"type": "detailsContent", "content": [{"type": "paragraph"}]}
+    ]}
+  ]
+}
