@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { ChatMessage, PlayerInfo } from '../../shared/protocol'
+import { HandoutRow } from '../handout/HandoutRow'
 import { readableColor } from './playerColor'
 import { RollView } from './RollView'
 
@@ -8,7 +9,7 @@ interface MessageRowProps {
   players: PlayerInfo[]
 }
 
-/** MessageRow is one entry of the log: a text, a system note or a roll. */
+/** MessageRow is one entry of the log: a text, a system note, a roll or a handout. */
 export function MessageRow({ message, players }: MessageRowProps) {
   const { t, i18n } = useTranslation()
   const author = players.find((p) => p.id === message.authorPlayerId)
@@ -20,6 +21,10 @@ export function MessageRow({ message, players }: MessageRowProps) {
         {message.text}
       </li>
     )
+  }
+
+  if (message.kind === 'handout') {
+    return <HandoutRow message={message} players={players} time={time} />
   }
 
   const isPrivate = message.visibility === 'private'

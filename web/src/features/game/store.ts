@@ -295,7 +295,8 @@ export function createGameStore(): StoreApi<GameState> {
           if (game.chat.some((m) => m.id === e.d.id)) return { lastSeq: e.seq }
           const chat = { ...game, chat: [...game.chat, e.d] }
           // The GM sent it: the window is for the players.
-          if (e.d.kind !== 'handout' || state.me?.isGm === true) return { lastSeq: e.seq, game: chat }
+          if (e.d.kind !== 'handout' || state.me?.isGm === true)
+            return { lastSeq: e.seq, game: chat }
           return { lastSeq: e.seq, game: chat, handoutQueue: [...state.handoutQueue, e.d] }
         }
         if (!isPresence(e)) return { lastSeq: e.seq }

@@ -1,8 +1,30 @@
 import { createContext, useContext } from 'react'
 
+/** HandoutSource is what the GM shows to the players: a fragment of a page, before mentions and rolls are turned into text. */
+export interface HandoutSource {
+  /** title is the name of the page the fragment comes from. */
+  title: string
+  /** doc is the fragment as a document of the wiki schema. */
+  doc: unknown
+  /** resolveLabel is the current name of a mention target, or null when it is not known. */
+  resolveLabel: (kind: string, id: string) => string | null
+}
+
+/** TableLinks are the things a page can do to the game; only the table, with a game running, has them. */
+export interface TableLinks {
+  /** mention follows a click on a mention of a scene or a token. */
+  mention: (kind: string, id: string) => void
+  /** roll asks the server to roll a formula; label is the name of the page. */
+  roll: (formula: string, visibility: 'gm' | 'public' | 'blind', label: string) => void
+  /** showHandout opens the dialog that shows a fragment to the players. */
+  showHandout: (source: HandoutSource) => void
+}
+
 /** WikiActions are the things the panels of the wiki do through the screen around them. */
 export interface WikiActions {
   campaignId: string
+  /** table is set on the table of a running game; the wiki screen has none. */
+  table?: TableLinks
   /** reload reads the tree again. */
   reload: () => Promise<void>
   /** open shows a page: in a panel of the workspace, or on the page tab of a narrow screen. */

@@ -16,6 +16,8 @@ import { CombatPanel } from '../combat/CombatPanel'
 import { turnChange } from '../combat/turn'
 import { FogToolbar, type FogToolState } from '../fog/FogToolbar'
 import { gameStore, useGame, viewScene } from '../game/store'
+import { HandoutHost } from '../handout/HandoutModal'
+import { ShowHandoutDialog } from '../handout/ShowHandoutDialog'
 import { ScenesPanel } from '../scenes/ScenesPanel'
 import { ToolOptions } from '../tools/ToolOptions'
 import {
@@ -29,10 +31,16 @@ import { PlaceTokenPopover } from '../tokens/PlaceTokenPopover'
 import { runTokenAction, type TokenAction } from '../tokens/tokenActions'
 import { TokenContextMenu } from '../tokens/TokenContextMenu'
 import { TokenDialog } from '../tokens/TokenDialog'
+import { pageIdOfPanel } from '../wiki/panelIds'
+import { wikiStore, useWiki } from '../wiki/store'
+import { useWikiController } from '../wiki/useWikiController'
+import { WikiContext, type HandoutSource, type TableLinks } from '../wiki/wikiContext'
+import { wikiPanels } from '../wiki/wikiPanels'
 import { layoutKey } from '../workspace/layout'
 import { panelOptions, type PanelDef } from '../workspace/panels'
 import { Workspace } from '../workspace/Workspace'
 import { useWorkspaceOpen, useWorkspaceReset } from '../workspace/workspaceCommands'
+import { canvasBridge } from './canvas/canvasBridge'
 import { SceneCanvas, type CanvasTool, type PlaceToolState } from './canvas/SceneCanvas'
 import { ConnectionNote } from './ConnectionNote'
 import { PrepFrame } from './PrepFrame'
@@ -180,6 +188,67 @@ export default function TableScreen() {
   const noGame = synced && game === null
 
   useKeepSceneView(command, isGm && synced)
+
+  // The wiki panels work on the same data as the wiki screen; a page may act on the game from here.
+  const wikiCampaignId = game?.campaign.id ?? ''
+  const wikiTree = useWiki((s) => s.tree)
+  const [handout, setHandout] = useState<{
+    source: HandoutSource
+    key: number
+    open: boolean
+  } | null>(null)
+  const tableLinks = useMemo<TableLinks>(
+    () => ({
+      mention: (kind, id) => {
+        if (kind === 'scene') {
+          viewScene(command, id).catch((err: unknown) => {
+            announce(t(commandErrorKey(err)), true)
+          })
+        } else if (kind === 'token') {
+          // Only the tokens of the scene on the canvas are known: another scene is the GM's to open.
+          const here = gameStore.getState().game?.scene?.tokens.some((tk) => tk.id === id) === true
+          if (here) canvasBridge.getState().focusToken(id)
+          else announce(t('wiki.mention.tokenOtherScene'), true)
+        }
+      },
+      roll: (formula, visibility, label) => {
+        command(MessageType.RollRequest, {
+          formula,
+          visibility,
+          ...(label === '' ? {} : { label }),
+        }).catch((err: unknown) => {
+          announce(t(commandErrorKey(err)), true)
+        })
+      },
+      showHandout: (source) => {
+        setHandout((h) => ({ source, key: (h?.key ?? 0) + 1, open: true }))
+      },
+    }),
+    [announce, command, t],
+  )
+  const notifyWiki = useCallback(
+    (textKey: string) => {
+      announce(t(textKey), true)
+    },
+    [announce, t],
+  )
+  const { actions: wikiActions } = useWikiController({
+    campaignId: wikiCampaignId,
+    enabled: isGm && wikiCampaignId !== '',
+    narrow,
+    notify: notifyWiki,
+    table: tableLinks,
+  })
+  const isWikiPanelValid = useCallback(
+    (id: string) => {
+      const pageId = pageIdOfPanel(id)
+      return pageId === null || wikiTree === null || wikiTree.some((n) => n.id === pageId)
+    },
+    [wikiTree],
+  )
+  const onPanelsChange = useCallback((ids: string[]) => {
+    wikiStore.getState().setOpen(ids.map(pageIdOfPanel).filter((id): id is string => id !== null))
+  }, [])
 
   // Tool keys (V, R, P, D, T, and K, F, Shift+F for the GM); the place tool and the fog tools are the GM's.
   useEffect(() => {
@@ -490,6 +559,27 @@ export default function TableScreen() {
     />
   )
 
+  const handoutLayer = (
+    <>
+      <HandoutHost />
+      {handout !== null && (
+        <ShowHandoutDialog
+          key={handout.key}
+          open={handout.open}
+          source={handout.source}
+          players={game?.players ?? []}
+          command={command}
+          onShown={() => {
+            announce(t('handout.show.shown'), false)
+          }}
+          onClose={() => {
+            setHandout((h) => (h === null ? null : { ...h, open: false }))
+          }}
+        />
+      )}
+    </>
+  )
+
   if (!narrow) {
     // The catalogue of the panels of the table (docs/architecture/workspace.md).
     const catalogue: PanelDef[] = [
@@ -530,12 +620,15 @@ export default function TableScreen() {
         gmOnly: true,
         render: () => <ScenesPanel command={command} />,
       },
+      ...wikiPanels(t, wikiTree),
     ]
     const panels = catalogue.filter((p) => isGm || !p.gmOnly)
     /** defaultLayout is the layout of M1: the canvas, and at its right the group of chat, fight and (the GM's) scenes. */
     const defaultLayout = (api: DockviewApi) => {
-      const [sceneDef, ...side] = panels
+      const [sceneDef, ...rest] = panels
       if (sceneDef === undefined) return
+      // A page of the wiki is opened from the tree, it has no place of its own.
+      const side = rest.filter((def) => def.idPrefix === undefined)
       const sceneItem = api.addPanel(panelOptions(sceneDef))
       let anchor: IDockviewPanel | undefined
       for (const def of side) {
@@ -561,16 +654,21 @@ export default function TableScreen() {
             <ConnectionNote />
           </div>
         ) : (
-          <Workspace
-            key={layoutKey(accountId, campaignId, 'table')}
-            storageKey={layoutKey(accountId, campaignId, 'table')}
-            panels={panels}
-            defaultLayout={defaultLayout}
-            popoutTitle={(panel) =>
-              t('workspace.popoutTitle', { panel, campaign: game.campaign.name })
-            }
-          />
+          <WikiContext value={wikiActions}>
+            <Workspace
+              key={layoutKey(accountId, campaignId, 'table')}
+              storageKey={layoutKey(accountId, campaignId, 'table')}
+              panels={panels}
+              defaultLayout={defaultLayout}
+              popoutTitle={(panel) =>
+                t('workspace.popoutTitle', { panel, campaign: game.campaign.name })
+              }
+              isPanelValid={isWikiPanelValid}
+              onPanelsChange={onPanelsChange}
+            />
+          </WikiContext>
         )}
+        {handoutLayer}
       </div>
     )
   }
@@ -578,6 +676,7 @@ export default function TableScreen() {
   return (
     <div className="table" data-section={section}>
       {topBar}
+      {handoutLayer}
       {toolRail}
       <main className="table__stage" inert={section !== 'map'}>
         {stage}

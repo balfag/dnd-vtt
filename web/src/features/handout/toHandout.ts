@@ -13,6 +13,11 @@ function isNode(v: unknown): v is JsonNode {
   return typeof v === 'object' && v !== null && typeof (v as { type?: unknown }).type === 'string'
 }
 
+function attr(node: JsonNode, name: string): string {
+  const v = node.attrs?.[name]
+  return typeof v === 'string' ? v : ''
+}
+
 function textNode(text: string): JsonNode[] {
   return text === '' ? [] : [{ type: 'text', text }]
 }
@@ -22,13 +27,10 @@ function convert(
   resolveLabel: (kind: string, id: string) => string | null,
 ): JsonNode[] {
   if (node.type === 'mention') {
-    const kind = String(node.attrs?.kind ?? '')
-    const id = String(node.attrs?.id ?? '')
-    const stored = String(node.attrs?.label ?? '')
-    return textNode(resolveLabel(kind, id) ?? stored)
+    return textNode(resolveLabel(attr(node, 'kind'), attr(node, 'id')) ?? attr(node, 'label'))
   }
   if (node.type === 'inlineRoll') {
-    return textNode(String(node.attrs?.formula ?? ''))
+    return textNode(attr(node, 'formula'))
   }
   if (!Array.isArray(node.content)) return [node]
   const content = node.content.filter(isNode).flatMap((child) => convert(child, resolveLabel))
