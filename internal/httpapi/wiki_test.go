@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -229,6 +230,99 @@ func TestWikiTrashCycle(t *testing.T) {
 	}
 	if rec := f.do(http.MethodGet, "/api/campaigns/nope/wiki/trash", "", withCookie(f.gm)); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown campaign = %d, want 404", rec.Code)
+	}
+}
+
+func TestWikiSearchRequiresGM(t *testing.T) {
+	f := newWikiFixture(t)
+	page := f.createPage(`{"title":"A"}`)
+	_, link := f.startGame(f.gm, f.campaignID)
+	player, _ := f.playerSession(link, "bob")
+
+	for _, path := range []string{
+		"/api/campaigns/" + f.campaignID + "/wiki/search?q=a",
+		"/api/campaigns/" + f.campaignID + "/wiki/mention-search?q=a",
+		"/api/wiki/pages/" + page.ID + "/backlinks",
+	} {
+		if rec := f.do(http.MethodGet, path, "", withCookie(player)); rec.Code != http.StatusForbidden {
+			t.Errorf("%s: player = %d, want 403", path, rec.Code)
+		}
+		if rec := f.do(http.MethodGet, path, ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s: anonymous = %d, want 401", path, rec.Code)
+		}
+	}
+}
+
+func TestWikiSearch(t *testing.T) {
+	f := newWikiFixture(t)
+	camp := "/api/campaigns/" + f.campaignID
+	page := f.createPage(`{"title":"Таверна"}`)
+	content := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Старый маяк на скале"}]}]}`
+	if rec := f.do(http.MethodPut, "/api/wiki/pages/"+page.ID, `{"version":1,"title":"Таверна","icon":"","content":`+content+`}`, withCookie(f.gm)); rec.Code != http.StatusOK {
+		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec := f.do(http.MethodGet, camp+"/wiki/search?q=%D0%BC%D0%B0%D1%8F%D0%BA&limit=5", "", withCookie(f.gm))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("search = %d %s", rec.Code, rec.Body.String())
+	}
+	var raw []struct {
+		ID      string                       `json:"id"`
+		Path    []string                     `json:"path"`
+		Snippet []map[string]json.RawMessage `json:"snippet"`
+	}
+	decodeBody(t, rec, &raw)
+	if len(raw) != 1 || raw[0].ID != page.ID || raw[0].Path == nil || len(raw[0].Snippet) != 3 {
+		t.Fatalf("hits = %s", rec.Body.String())
+	}
+	for i, seg := range raw[0].Snippet {
+		_, hasMatch := seg["match"]
+		if hasMatch != (i == 1) || len(seg["text"]) == 0 {
+			t.Errorf("segment %d = %v", i, seg)
+		}
+	}
+
+	for _, q := range []string{"?q=a&limit=0", "?q=a&limit=51", "?q=a&limit=x", "?q=" + strings.Repeat("a", 201), "", "?tag=nope"} {
+		want := http.StatusBadRequest
+		if q == "?tag=nope" {
+			want = http.StatusNotFound
+		}
+		if rec := f.do(http.MethodGet, camp+"/wiki/search"+q, "", withCookie(f.gm)); rec.Code != want {
+			t.Errorf("search%s = %d, want %d", q, rec.Code, want)
+		}
+	}
+}
+
+func TestWikiMentionSearchAndBacklinks(t *testing.T) {
+	f := newWikiFixture(t)
+	camp := "/api/campaigns/" + f.campaignID
+	target := f.createPage(`{"title":"Гавань"}`)
+	src := f.createPage(`{"title":"Порт"}`)
+	mention := `{"type":"mention","attrs":{"kind":"page","id":"` + target.ID + `"}}`
+	content := `{"type":"doc","content":[{"type":"paragraph","content":[` + mention + `]}]}`
+	if rec := f.do(http.MethodPut, "/api/wiki/pages/"+src.ID, `{"version":1,"title":"Порт","icon":"","content":`+content+`}`, withCookie(f.gm)); rec.Code != http.StatusOK {
+		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
+	}
+
+	var hits []map[string]string
+	rec := f.do(http.MethodGet, camp+"/wiki/mention-search?q=%D0%B3%D0%B0%D0%B2", "", withCookie(f.gm))
+	decodeBody(t, rec, &hits)
+	if rec.Code != http.StatusOK || len(hits) != 1 || hits[0]["kind"] != "page" || hits[0]["id"] != target.ID ||
+		hits[0]["label"] != "Гавань" || hits[0]["detail"] != "" {
+		t.Errorf("mention-search = %d %v", rec.Code, hits)
+	}
+	if rec := f.do(http.MethodGet, camp+"/wiki/mention-search?q="+strings.Repeat("a", 101), "", withCookie(f.gm)); rec.Code != http.StatusBadRequest {
+		t.Errorf("long q = %d, want 400", rec.Code)
+	}
+
+	var refs []pageRefJSON
+	rec = f.do(http.MethodGet, "/api/wiki/pages/"+target.ID+"/backlinks", "", withCookie(f.gm))
+	decodeBody(t, rec, &refs)
+	if rec.Code != http.StatusOK || len(refs) != 1 || refs[0].ID != src.ID || refs[0].Title != "Порт" {
+		t.Errorf("backlinks = %d %+v", rec.Code, refs)
+	}
+	if rec := f.do(http.MethodGet, "/api/wiki/pages/nope/backlinks", "", withCookie(f.gm)); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown page = %d, want 404", rec.Code)
 	}
 }
 
