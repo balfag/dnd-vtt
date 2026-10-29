@@ -18,8 +18,8 @@ export interface WikiEditorProps {
   onChange?: (doc: unknown) => void
   /** mentions returns the items for the "@" menu; the next task wires it to the server. */
   mentions?: (query: string) => Promise<MentionItem[]>
-  /** resolveLabel returns the current name of a mention target, or null when it is gone. */
-  resolveLabel?: (kind: string, id: string) => string | null
+  /** resolveLabel returns the current name of a mention target, null when it is gone, undefined when it is not known (the label stored in the mention stays). */
+  resolveLabel?: (kind: string, id: string) => string | null | undefined
   /** onMentionClick and onRoll are called on a click of a mention or an inline roll (read and edit mode). */
   onMentionClick?: (kind: string, id: string) => void
   onRoll?: (formula: string, visibility: 'gm' | 'public' | 'blind') => void

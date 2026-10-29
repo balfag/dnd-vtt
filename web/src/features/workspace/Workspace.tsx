@@ -1,4 +1,4 @@
-﻿import {
+import {
   DockviewReact,
   type DockviewApi,
   type DockviewReadyEvent,
@@ -20,6 +20,7 @@ import {
 import {
   findPanel,
   panelId,
+  paramsOf,
   panelOptions,
   WorkspaceContext,
   useWorkspace,
@@ -63,7 +64,7 @@ const kinds: PanelKind[] = ['scene', 'chat', 'combat', 'scenes', 'wiki.tree', 'w
 
 function PanelContent({ api, params }: IDockviewPanelProps) {
   const { panels } = useWorkspace()
-  return <>{findPanel(panels, api.id)?.render(params)}</>
+  return <>{findPanel(panels, api.id)?.render(paramsOf(params))}</>
 }
 
 // One component per kind of the catalogue.
@@ -112,7 +113,7 @@ export function Workspace({
     const valid = latest.current.isPanelValid
     if (valid !== undefined) {
       for (const panel of [...dock.panels]) {
-        if (!valid(panel.id, panel.params ?? {})) panel.api.close()
+        if (!valid(panel.id, paramsOf(panel.params))) panel.api.close()
       }
     }
     latest.current.onPanelsChange?.(
@@ -154,8 +155,12 @@ export function Workspace({
     if (api === null) return
     closeInvalid(api)
     const subs = [
-      api.onDidAddPanel(() => closeInvalid(api)),
-      api.onDidRemovePanel(() => closeInvalid(api)),
+      api.onDidAddPanel(() => {
+        closeInvalid(api)
+      }),
+      api.onDidRemovePanel(() => {
+        closeInvalid(api)
+      }),
     ]
     return () => {
       for (const sub of subs) sub.dispose()
@@ -203,7 +208,7 @@ export function Workspace({
     for (const panel of api.panels) {
       const def = findPanel(latest.current.panels, panel.id)
       if (def === undefined) continue
-      const title = def.titleFor?.(panel.params ?? {}) ?? def.title
+      const title = def.titleFor?.(paramsOf(panel.params)) ?? def.title
       if (panel.title !== title) panel.api.setTitle(title)
     }
   }, [api, titles, panels])
@@ -213,7 +218,7 @@ export function Workspace({
   useEffect(() => {
     if (api === null) return
     const sub = api.onDidActivePanelChange((e) => {
-      const panel = e?.panel
+      const panel = e.panel
       const def = panel === undefined ? undefined : findPanel(latest.current.panels, panel.id)
       if (panel !== undefined && def?.idPrefix !== undefined) {
         lastGroup.current = { prefix: def.idPrefix, groupId: panel.group.id }

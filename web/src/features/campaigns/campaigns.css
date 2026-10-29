@@ -161,7 +161,7 @@
 
 .registry__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 12rem 12rem;
+  grid-template-columns: minmax(0, 1fr) 12rem 16rem;
   align-items: center;
   gap: 4px 16px;
   padding: 8px 0;
@@ -184,6 +184,7 @@
 
 .registry__action {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
 }
 

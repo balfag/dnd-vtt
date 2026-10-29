@@ -81,7 +81,7 @@ function failureCode(status: number, body: unknown): string {
 export function uploadAsset(
   campaignId: string,
   file: File,
-  kind: 'map' | 'token',
+  kind: 'map' | 'token' | 'other',
   onProgress?: (p: number) => void,
 ): Promise<Asset> {
   return new Promise<Asset>((resolve, reject) => {

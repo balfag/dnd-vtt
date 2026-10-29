@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { navigate } from '../../app/router'
 import type { PlayerInfo } from '../../shared/protocol'
 
 interface TopBarProps {
@@ -9,6 +10,8 @@ interface TopBarProps {
   isGm: boolean
   /** onOpenScenes opens the scenes panel; the GM's scene name is its button. */
   onOpenScenes: () => void
+  /** wikiCampaignId is the campaign whose wiki the GM's "Wiki" link opens; absent for a player. */
+  wikiCampaignId?: string
   /** onResetLayout puts the default layout of the workspace back; it is absent on a narrow screen, where there is no workspace. */
   onResetLayout?: () => void
   onLeave: () => void
@@ -39,6 +42,7 @@ export function TopBar({
   players,
   isGm,
   onOpenScenes,
+  wikiCampaignId,
   onResetLayout,
   onLeave,
 }: TopBarProps) {
@@ -74,6 +78,17 @@ export function TopBar({
         </ul>
       )}
 
+      {isGm && wikiCampaignId !== undefined && wikiCampaignId !== '' && (
+        <button
+          type="button"
+          className="topbar__button"
+          onClick={() => {
+            navigate(`/wiki/${wikiCampaignId}`)
+          }}
+        >
+          {t('wiki.link')}
+        </button>
+      )}
       {onResetLayout !== undefined && (
         <button type="button" className="topbar__button" onClick={onResetLayout}>
           {t('workspace.reset')}

@@ -25,6 +25,11 @@ export type PanelParams = Record<string, unknown>
 export const MIN_PANEL = { width: 240, height: 160 }
 export const MIN_SCENE = { width: 320, height: 240 }
 
+/** paramsOf narrows the parameters dockview hands over (typed `any`) to the object a panel was added with. */
+export function paramsOf(params: unknown): PanelParams {
+  return typeof params === 'object' && params !== null ? (params as PanelParams) : {}
+}
+
 /** panelId is the dockview id of a panel: its kind, or the prefix and key of a panel that exists many times. */
 export function panelId(def: PanelDef, key?: string): string {
   return def.idPrefix === undefined ? def.kind : `${def.idPrefix}${key ?? ''}`

@@ -2,7 +2,7 @@ import type { IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { findPanel, useWorkspace } from './panels'
+import { findPanel, paramsOf, useWorkspace } from './panels'
 
 export interface MenuItem {
   key: string
@@ -162,7 +162,7 @@ export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProp
         setMenu({ x: e.clientX, y: e.clientY, align: 'start', doc: e.currentTarget.ownerDocument })
       }}
     >
-      <span className="wtab__title">{def.titleFor?.(params) ?? def.title}</span>
+      <span className="wtab__title">{def.titleFor?.(paramsOf(params)) ?? def.title}</span>
       <button
         ref={menuButton}
         type="button"

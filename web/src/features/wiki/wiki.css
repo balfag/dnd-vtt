@@ -1,0 +1,580 @@
+/* The wiki screen: the GM's notebook (docs/design/wiki-screen.md). Tokens are those of the app. */
+.wiki {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 52px 1fr;
+  background: var(--slate);
+}
+
+.wiki .workspace {
+  grid-row: 2;
+}
+
+/* Top bar: campaign, "Table | Wiki", buttons. */
+.wikibar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-width: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wikibar__campaign {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font: 700 18px/1.1 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wikibar__nav {
+  display: flex;
+  align-self: stretch;
+  gap: 20px;
+}
+
+.wikibar__link {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  color: var(--fog);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.wikibar__link:hover {
+  color: var(--chalk);
+}
+
+.wikibar__link[aria-current='page'] {
+  border-bottom-color: var(--verdigris);
+  color: var(--chalk);
+}
+
+.wikibar__button {
+  padding: 6px 12px;
+  border: 1px solid var(--fog);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chalk);
+  font: 500 15px/1.4 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wikibar__button:first-of-type {
+  margin-left: auto;
+}
+
+.wikibar__button:hover {
+  background: var(--board);
+}
+
+.wiki__notice {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 30;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  background: var(--board);
+  font-size: 15px;
+  transform: translateX(-50%);
+}
+
+.wiki__notice:empty {
+  display: none;
+}
+
+.wiki-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 32px 48px;
+  color: var(--fog);
+}
+
+.wiki-empty p {
+  margin: 0;
+}
+
+/* Narrow screen: one panel at a time and the tabs below. */
+.wiki--narrow {
+  grid-template-rows: 52px 1fr 56px;
+}
+
+.wiki__narrow {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wiki-tabs {
+  display: flex;
+  border-top: 1px solid var(--line);
+}
+
+.wiki-tabs__tab {
+  flex: 1;
+  border: 0;
+  border-top: 3px solid transparent;
+  background: none;
+  color: var(--fog);
+  font: 500 17px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.wiki-tabs__tab[aria-selected='true'] {
+  border-top-color: var(--verdigris);
+  color: var(--chalk);
+}
+
+/* The tree. */
+.tree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tree__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 6px 14px;
+}
+
+.tree__title {
+  margin: 0;
+  color: var(--fog);
+  font: 500 14px/1.2 var(--sans);
+}
+
+.tree__add,
+.trow__button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fog);
+  font: 400 16px/1 var(--sans);
+  cursor: pointer;
+}
+
+.tree__add:hover,
+.trow__button:hover {
+  background: var(--slate);
+  color: var(--chalk);
+}
+
+.tree__rows {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 24px;
+  overflow-y: auto;
+}
+
+.tree__empty {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.trow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding-right: 6px;
+  font-size: 15px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.trow:hover {
+  background: var(--board);
+}
+
+.trow:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The page shown in the panel the user worked in last: a verdigris strip. */
+.trow--selected {
+  background: var(--board);
+  box-shadow: inset 3px 0 0 var(--verdigris);
+}
+
+.trow--dragging {
+  opacity: 0.5;
+}
+
+.trow--drop-before {
+  box-shadow: inset 0 2px 0 var(--verdigris);
+}
+
+.trow--drop-after {
+  box-shadow: inset 0 -2px 0 var(--verdigris);
+}
+
+.trow--drop-on {
+  background: var(--board);
+  box-shadow: inset 0 0 0 1.5px var(--verdigris);
+}
+
+.trow__arrow {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fog);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.trow__arrow[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
+.trow__icon {
+  flex: none;
+  width: 22px;
+  color: var(--fog);
+  text-align: center;
+}
+
+.trow__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trow__name--empty {
+  color: var(--fog);
+}
+
+.trow__count {
+  flex: none;
+  padding-left: 6px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.trow__actions {
+  display: none;
+  flex: none;
+}
+
+.trow:hover .trow__actions,
+.trow:focus-within .trow__actions,
+.trow--selected .trow__actions {
+  display: flex;
+}
+
+.trow:hover .trow__count,
+.trow:focus-within .trow__count {
+  display: none;
+}
+
+.trow__input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--verdigris);
+  border-radius: 4px;
+  background: var(--board);
+  color: var(--chalk);
+  font: 400 15px/1 var(--sans);
+}
+
+/* The dialog "Move…". */
+.move {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(24rem, 100%);
+}
+
+.move__list {
+  max-height: 16rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.move__item {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chalk);
+  font: 400 15px/1.3 var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.move__item:hover {
+  background: var(--slate);
+}
+
+.move__empty {
+  margin: 0;
+  color: var(--fog);
+}
+
+/* The page. */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.page__note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 24px 48px;
+  color: var(--fog);
+}
+
+.page__conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 48px 10px 45px;
+  border-left: 3px solid var(--seal);
+  background: rgba(194, 84, 104, 0.16);
+}
+
+.page__conflict p {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+
+.page__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Left-aligned with a 48 px margin, like everything in the app; a column of 44rem for the text. */
+.page__column {
+  max-width: calc(44rem + 96px);
+  padding: 0 48px 96px;
+}
+
+.phead {
+  padding-top: 24px;
+}
+
+.phead__cover {
+  position: relative;
+  height: 150px;
+  margin: -24px -48px 0;
+  background-position: center;
+  background-size: cover;
+}
+
+.phead__cover::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, var(--slate));
+  content: '';
+}
+
+.phead__top {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+}
+
+.phead__cover + .phead__top {
+  margin-top: -22px;
+}
+
+.phead__icon {
+  position: relative;
+}
+
+.phead__icon-button {
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fog);
+  font: 400 34px/1 var(--sans);
+  cursor: pointer;
+}
+
+.phead__icon-button:hover {
+  background: var(--board);
+}
+
+.phead__icon-edit {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  z-index: 5;
+  width: 15rem;
+}
+
+.phead__cover-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.phead__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fog);
+  font: 400 14px/1.4 var(--sans);
+  cursor: pointer;
+}
+
+.phead__link:hover {
+  color: var(--chalk);
+  text-decoration: underline;
+}
+
+.phead__path {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: var(--fog);
+  font-size: 14px;
+}
+
+.phead__row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.phead__title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--chalk);
+  font: 700 40px/1.2 var(--serif);
+}
+
+.phead__title:hover,
+.phead__title:focus {
+  border-bottom-color: var(--line);
+}
+
+.phead__title::placeholder {
+  color: var(--fog);
+}
+
+.phead__save {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--fog);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.phead__save--failed {
+  color: var(--seal);
+}
+
+.backlinks {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.backlinks__title {
+  margin: 0 0 8px;
+  color: var(--fog);
+  font: 500 14px/1.2 var(--sans);
+}
+
+.backlinks__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backlinks .phead__link {
+  color: var(--chalk);
+  font-size: 15px;
+}
+
+/* A narrow panel or a phone: smaller margin and title. */
+@media (max-width: 899px) {
+  .page__column {
+    padding: 0 16px 80px;
+  }
+
+  .phead__cover {
+    margin: -24px -16px 0;
+  }
+
+  .phead__title {
+    font-size: 31px;
+  }
+
+  .page__note,
+  .wiki-empty {
+    padding: 24px 16px;
+  }
+
+  .page__conflict {
+    padding: 10px 16px 10px 13px;
+  }
+
+  .wikibar {
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .phead__row {
+    flex-wrap: wrap;
+  }
+}

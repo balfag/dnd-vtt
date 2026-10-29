@@ -56,7 +56,7 @@ function stubFetch(status: number, body?: unknown) {
 
 function call(mock: ReturnType<typeof stubFetch>): { url: string; init: RequestInit } {
   const [url, init] = mock.mock.calls[0] ?? []
-  return { url: String(url), init: init ?? {} }
+  return { url: typeof url === 'string' ? url : '', init: init ?? {} }
 }
 
 afterEach(() => {
@@ -82,7 +82,8 @@ describe('shape checks', () => {
     expect(isWikiPage({ ...page, coverAssetId: 5 })).toBe(false)
     expect(isWikiPage({ ...page, path: [{ id: 'p0' }] })).toBe(false)
     expect(isWikiPage({ ...page, refs: { 'scene:s1': { label: 'x' } } })).toBe(false)
-    const { content: _content, ...noContent } = page
+    const noContent: Partial<typeof page> = { ...page }
+    delete noContent.content
     expect(isWikiPage(noContent)).toBe(false)
     expect(isSaved({ version: 4, refs: {} })).toBe(false)
   })

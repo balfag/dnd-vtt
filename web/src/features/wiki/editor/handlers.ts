@@ -13,7 +13,7 @@ export interface MentionItem {
 export interface EditorHandlers {
   onChange?: (doc: unknown) => void
   mentions?: (query: string) => Promise<MentionItem[]>
-  resolveLabel?: (kind: string, id: string) => string | null
+  resolveLabel?: (kind: string, id: string) => string | null | undefined
   onMentionClick?: (kind: string, id: string) => void
   onRoll?: (formula: string, visibility: 'gm' | 'public' | 'blind') => void
   uploadImage?: (file: File) => Promise<string>

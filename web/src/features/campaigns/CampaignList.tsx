@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { navigate } from '../../app/router'
 import type { Campaign } from '../../shared/api/campaigns'
 import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
@@ -190,6 +191,15 @@ export function CampaignList({ campaigns, onCreate, onRename, onStart, fail }: C
                 {formatDate(c.createdAt, i18n.language)}
               </span>
               <span className="registry__action" role="cell">
+                <Button
+                  variant="secondary"
+                  fullWidth={false}
+                  onClick={() => {
+                    navigate(`/wiki/${c.id}`)
+                  }}
+                >
+                  {t('wiki.link')}
+                </Button>
                 {c.activeGameSession !== null ? (
                   <span className="registry__running">{t('campaigns.running')}</span>
                 ) : (
