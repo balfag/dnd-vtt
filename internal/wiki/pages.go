@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -148,6 +149,21 @@ func nextPosition(ctx context.Context, q querier, campaignID, parentID string) (
 	return pos, nil
 }
 
+// isDatabase reports whether pageID is a live database of the campaign.
+func isDatabase(ctx context.Context, q querier, campaignID, pageID string) (bool, error) {
+	var kind string
+	err := q.QueryRowContext(ctx, `
+		SELECT kind FROM wiki_page WHERE id = ? AND campaign_id = ? AND deleted_at IS NULL`, pageID, campaignID).Scan(&kind)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("find parent: %w", err)
+	}
+	return kind == KindDatabase, nil
+}
+
+// Create adds a page, a database (Kind "database") or, under a database, a record.
 func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Page, error) {
 	tx, err := s.begin(ctx, "create wiki page")
 	if err != nil {
@@ -161,7 +177,55 @@ func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Pag
 	if err := checkTitleIcon(p.Title, p.Icon); err != nil {
 		return Page{}, err
 	}
+	kind := p.Kind
+	switch kind {
+	case "":
+		kind = KindPage
+	case KindPage, KindDatabase:
+	default:
+		return Page{}, invalid("kind: must be page or database")
+	}
+	if p.Database != nil && kind != KindDatabase {
+		return Page{}, invalid("database: only for kind database")
+	}
+	if kind == KindDatabase && !isNull(p.Content) {
+		return Page{}, invalid("content: a database has no content")
+	}
+
+	isRecord := false
 	if p.ParentID != "" {
+		if isRecord, err = isDatabase(ctx, tx, campaignID, p.ParentID); err != nil {
+			return Page{}, err
+		}
+	}
+	var props map[string]json.RawMessage
+	if !isNull(p.Props) {
+		if err := strictDecode(p.Props, &props, "props"); err != nil {
+			return Page{}, err
+		}
+	}
+	switch {
+	case isRecord:
+		if kind == KindDatabase {
+			return Page{}, invalid("kind: a database cannot be inside a database")
+		}
+		depth, err := pageDepth(ctx, tx, p.ParentID)
+		if err != nil {
+			return Page{}, err
+		}
+		if depth+1 > MaxDepth {
+			return Page{}, invalid("parentId: deeper than %d levels", MaxDepth)
+		}
+		n, err := countRows(ctx, tx, `SELECT COUNT(*) FROM wiki_page WHERE parent_id = ? AND deleted_at IS NULL`, p.ParentID)
+		if err != nil {
+			return Page{}, err
+		}
+		if n >= MaxRecords {
+			return Page{}, fmt.Errorf("%w: the database has %d records", ErrConflict, MaxRecords)
+		}
+	case len(props) > 0:
+		return Page{}, invalid("props: only for a database record")
+	case p.ParentID != "":
 		depth, err := parentDepth(ctx, tx, campaignID, p.ParentID)
 		if err != nil {
 			return Page{}, err
@@ -171,7 +235,7 @@ func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Pag
 		}
 	}
 	content := p.Content
-	if len(content) == 0 {
+	if len(content) == 0 || kind == KindDatabase {
 		content = doc.Empty()
 	}
 	res, err := validateContent(ctx, tx, campaignID, content)
@@ -195,12 +259,26 @@ func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Pag
 	pageID := id.New()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO wiki_page (id, campaign_id, parent_id, kind, title, icon, position, content, content_text, version, created_at, updated_at)
-		VALUES (?, ?, ?, 'page', ?, ?, ?, ?, '', 1, ?, ?)`,
-		pageID, campaignID, nullable(p.ParentID), p.Title, p.Icon, pos, string(res.JSON), now, now); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', 1, ?, ?)`,
+		pageID, campaignID, nullable(p.ParentID), kind, p.Title, p.Icon, pos, string(res.JSON), now, now); err != nil {
 		return Page{}, fmt.Errorf("insert wiki page: %w", err)
 	}
 	if err := indexPage(ctx, tx, pageID, p.Title, res); err != nil {
 		return Page{}, err
+	}
+	if kind == KindDatabase {
+		nd := NewDatabase{}
+		if p.Database != nil {
+			nd = *p.Database
+		}
+		if err := createDatabaseParts(ctx, tx, campaignID, pageID, nd); err != nil {
+			return Page{}, err
+		}
+	}
+	if isRecord && len(props) > 0 {
+		if _, err := s.applyProps(ctx, tx, campaignID, p.ParentID, pageID, props); err != nil {
+			return Page{}, err
+		}
 	}
 	page, err := getPage(ctx, tx, pageID)
 	if err != nil {
@@ -211,7 +289,6 @@ func (s *Service) Create(ctx context.Context, campaignID string, p NewPage) (Pag
 	}
 	return page, nil
 }
-
 func (s *Service) Get(ctx context.Context, id string) (Page, error) {
 	return getPage(ctx, s.db, id)
 }
