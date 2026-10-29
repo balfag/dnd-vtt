@@ -71,9 +71,15 @@ export function PickerPopup(p: PickerPopupProps) {
       if (ref.current?.contains(e.target) === true || p.anchor.contains(e.target)) return
       close.current()
     }
+    // A second click on the cell (a double click) would move the focus from the search field to the cell.
+    const keepFocus = (e: Event) => {
+      if (e.target instanceof Node && p.anchor.contains(e.target)) e.preventDefault()
+    }
     doc.addEventListener('pointerdown', onDown, true)
+    doc.addEventListener('mousedown', keepFocus, true)
     return () => {
       doc.removeEventListener('pointerdown', onDown, true)
+      doc.removeEventListener('mousedown', keepFocus, true)
     }
   }, [doc, p.anchor])
 
@@ -114,7 +120,9 @@ export function PickerPopup(p: PickerPopupProps) {
         aria-controls={listId}
         aria-activedescendant={rows > 0 ? optionId(at) : undefined}
         aria-label={p.label}
-        placeholder={t('wiki.db.pick.search')}
+        placeholder={t(
+          p.onCreate === undefined ? 'wiki.db.pick.searchOnly' : 'wiki.db.pick.search',
+        )}
         value={p.query}
         onChange={(e) => {
           p.onQuery(e.target.value)

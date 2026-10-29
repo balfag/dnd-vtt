@@ -870,6 +870,7 @@
       },
       "pick": {
         "search": "Find or create",
+        "searchOnly": "Find",
         "create": "Create \"{{name}}\"",
         "empty": "Nothing found",
         "full": "No more can be chosen."
