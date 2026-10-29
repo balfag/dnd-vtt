@@ -492,7 +492,8 @@ export const propertyTypes: readonly PropertyType[] = [
   'game_link',
 ]
 
-export type OptionColor = 'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'red'
+export type OptionColor =
+  'gray' | 'brown' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'red'
 
 export const optionColors: readonly OptionColor[] = [
   'gray',
@@ -677,9 +678,7 @@ function isPropsReply(v: unknown): v is { props: Record<string, unknown> } {
 }
 
 export async function getDatabase(pageId: string): Promise<Database> {
-  return need(
-    await apiRequest('GET', `/api/wiki/databases/${enc(pageId)}`, { guard: isDatabase }),
-  )
+  return need(await apiRequest('GET', `/api/wiki/databases/${enc(pageId)}`, { guard: isDatabase }))
 }
 
 /** addProperty adds a property as the last one; a name used in the database is a 400. */
