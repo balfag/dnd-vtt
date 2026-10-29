@@ -243,7 +243,12 @@ export default function TableScreen() {
   const isWikiPanelValid = useCallback(
     (id: string) => {
       const pageId = pageIdOfPanel(id)
-      return pageId === null || wikiTree === null || wikiTree.some((n) => n.id === pageId)
+      return (
+        pageId === null ||
+        wikiTree === null ||
+        wikiTree.some((n) => n.id === pageId) ||
+        pageId in wikiStore.getState().recordTitles
+      )
     },
     [wikiTree],
   )

@@ -111,12 +111,16 @@ function DatabaseView({ page, db, update, reload, version, notify }: DatabaseVie
   const pageVersion = useRef(page.version)
   const savedTitle = useRef(page.title)
   const viewsRef = useRef(views)
+  const recordsRef = useRef(records)
+  const relationsRef = useRef<ReadonlyMap<string, ReadonlyMap<string, DbRecord>>>(new Map())
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const relations = useRelations(properties, version)
 
   useEffect(() => {
     viewsRef.current = views
-  }, [views])
+    recordsRef.current = records
+    relationsRef.current = relations
+  })
 
   const view = views.find((v) => v.id === selected) ?? views[0]
   const config = view?.config ?? emptyConfig
@@ -301,8 +305,13 @@ function DatabaseView({ page, db, update, reload, version, notify }: DatabaseVie
     [update, actions, reload],
   )
 
+  // A record is not in the tree: the workspace keeps its panel only once the record is known.
   const openRecord = useCallback(
     (id: string) => {
+      const known =
+        recordsRef.current.find((r) => r.id === id) ??
+        [...relationsRef.current.values()].flatMap((m) => m.get(id) ?? [])[0]
+      wikiStore.getState().rememberRecord(id, known?.title ?? '', known?.icon ?? '')
       actions.open(id)
     },
     [actions],
@@ -481,22 +490,24 @@ function DatabaseView({ page, db, update, reload, version, notify }: DatabaseVie
           <span className="db__icon" aria-hidden="true">
             {page.icon !== '' ? page.icon : '▦'}
           </span>
-          <input
-            className="db__title"
-            aria-label={t('wiki.page.title')}
-            placeholder={t('wiki.page.titlePlaceholder')}
-            value={title}
-            maxLength={MAX_TITLE}
-            onChange={(e) => {
-              setTitle(e.target.value)
-            }}
-            onBlur={() => {
-              void saveTitle(title)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur()
-            }}
-          />
+          <span className="db__titlebox" data-value={title}>
+            <input
+              className="db__title"
+              aria-label={t('wiki.page.title')}
+              placeholder={t('wiki.page.titlePlaceholder')}
+              value={title}
+              maxLength={MAX_TITLE}
+              onChange={(e) => {
+                setTitle(e.target.value)
+              }}
+              onBlur={() => {
+                void saveTitle(title)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+              }}
+            />
+          </span>
           <span className="db__count">{t('wiki.tree.records', { count: records.length })}</span>
         </header>
 

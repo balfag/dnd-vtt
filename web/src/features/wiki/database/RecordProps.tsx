@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Property, WikiPage } from '../../../shared/api/wiki'
+import { wikiStore } from '../store'
 import { useWikiActions } from '../wikiContext'
 import { addOption } from './options'
 import { rememberGameLabel, withKey } from './model'
@@ -50,6 +51,8 @@ export function RecordProps({ page }: { page: WikiPage }) {
       createOption,
       relations,
       openRecord: (id) => {
+        const known = [...relations.values()].flatMap((m) => m.get(id) ?? [])[0]
+        wikiStore.getState().rememberRecord(id, known?.title ?? '', known?.icon ?? '')
         actions.open(id)
       },
     }),

@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next'
 import type { View, ViewKind } from '../../../shared/api/wiki'
 import { Button } from '../../../ui/Button'
 import { Dialog } from '../../../ui/Dialog'
+import { AskDelete } from './AskDelete'
 import { PopupMenu } from '../../workspace/PanelTab'
+import { useRestoreFocus } from './useRestoreFocus'
 
 const MAX_VIEWS = 10
 const MAX_NAME = 100
@@ -134,28 +136,16 @@ export function ViewTabs({ views, selected, onSelect, onAdd, onRename, onDelete 
       )}
 
       {ask?.kind === 'delete' && (
-        <Dialog
+        <AskDelete
           title={t('wiki.db.view.deleteTitle', { name: ask.view.name })}
-          open
-          closeLabel={t('ui.dialog.cancel')}
+          text={t('wiki.db.view.deleteConfirm')}
+          onConfirm={() => {
+            onDelete(ask.view)
+          }}
           onClose={() => {
             setAsk(null)
           }}
-          actions={
-            <Button
-              variant="danger"
-              fullWidth={false}
-              onClick={() => {
-                onDelete(ask.view)
-                setAsk(null)
-              }}
-            >
-              {t('wiki.db.delete')}
-            </Button>
-          }
-        >
-          <p>{t('wiki.db.view.deleteConfirm')}</p>
-        </Dialog>
+        />
       )}
       {(ask?.kind === 'new' || ask?.kind === 'rename') && (
         <ViewDialog
@@ -183,6 +173,7 @@ interface ViewDialogProps {
 /** ViewDialog asks the name of a view and, for a new one, whether it is a table or cards. */
 function ViewDialog({ ask, onClose, onSubmit }: ViewDialogProps) {
   const { t } = useTranslation()
+  useRestoreFocus()
   const [name, setName] = useState(ask.kind === 'rename' ? ask.view.name : '')
   const [kind, setKind] = useState<ViewKind>('table')
   const nameId = useId()

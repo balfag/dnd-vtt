@@ -103,7 +103,12 @@ export default function WikiScreen({ campaignId }: { campaignId: string }) {
   const isPanelValid = useCallback(
     (id: string) => {
       const pageId = pageIdOfPanel(id)
-      return pageId === null || tree?.some((n) => n.id === pageId) === true
+      // A database record is not in the tree; it is known once it has been opened.
+      return (
+        pageId === null ||
+        tree?.some((n) => n.id === pageId) === true ||
+        pageId in wikiStore.getState().recordTitles
+      )
     },
     [tree],
   )

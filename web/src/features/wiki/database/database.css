@@ -9,7 +9,7 @@
 
 .db__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 4px 12px;
   padding-right: 48px;
@@ -21,9 +21,27 @@
   font: 400 34px/1 var(--sans);
 }
 
+/* The title is as wide as its text, so the count stands right after it: the box takes the width of a copy of the text. */
+.db__titlebox {
+  display: inline-grid;
+  min-width: 6rem;
+  max-width: 100%;
+}
+
+.db__titlebox::after {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  padding: 0 2px;
+  font: 700 31px/1.2 var(--serif);
+  white-space: pre;
+  content: attr(data-value) ' ';
+}
+
 .db__title {
-  flex: 0 1 28rem;
-  min-width: 8rem;
+  grid-area: 1 / 1;
+  /* A width of 0 stretched to 100% keeps the default size of an input out of the width of the box. */
+  width: 0;
+  min-width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -570,6 +588,11 @@
   font-size: 15px;
 }
 
+.dbedit input[type='checkbox'] {
+  flex: none;
+  accent-color: var(--verdigris);
+}
+
 .dbedit__note {
   margin: 0 0 8px;
   color: var(--fog);
@@ -680,6 +703,7 @@
 /* The properties of a record, under its title: two columns between thin lines. */
 .recprops {
   margin: 12px 0 8px;
+  font-size: 15px;
   border-top: 1px solid var(--line);
 }
 

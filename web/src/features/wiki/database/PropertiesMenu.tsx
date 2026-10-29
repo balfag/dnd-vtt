@@ -6,8 +6,7 @@ import {
   type PropertyOptions,
   type SelectOption,
 } from '../../../shared/api/wiki'
-import { Button } from '../../../ui/Button'
-import { Dialog } from '../../../ui/Dialog'
+import { AskDelete } from './AskDelete'
 import { colorValue, nextColor, optionsOf } from './model'
 
 const MAX_NAME = 100
@@ -94,7 +93,7 @@ export function PropertiesMenu(p: PropertiesMenuProps) {
                     p.onMove(prop, -1)
                   }}
                 >
-                  <span aria-hidden="true">↑</span>
+                  <span aria-hidden="true">↑︎</span>
                 </button>
                 <button
                   type="button"
@@ -105,7 +104,7 @@ export function PropertiesMenu(p: PropertiesMenuProps) {
                     p.onMove(prop, 1)
                   }}
                 >
-                  <span aria-hidden="true">↓</span>
+                  <span aria-hidden="true">↓︎</span>
                 </button>
                 <button
                   type="button"
@@ -233,7 +232,7 @@ export function PropertiesMenu(p: PropertiesMenuProps) {
       </button>
 
       {confirm !== null && (
-        <Dialog
+        <AskDelete
           title={
             confirm.kind === 'property'
               ? t('wiki.db.property.deleteTitle', { name: confirm.prop.name })
@@ -241,38 +240,26 @@ export function PropertiesMenu(p: PropertiesMenuProps) {
                   name: optionsOf(confirm.prop)[confirm.index]?.name ?? '',
                 })
           }
-          open
-          closeLabel={t('ui.dialog.cancel')}
+          text={
+            confirm.kind === 'property'
+              ? t('wiki.db.property.deleteConfirm')
+              : t('wiki.db.option.deleteConfirm')
+          }
+          onConfirm={() => {
+            if (confirm.kind === 'property') {
+              p.onDelete(confirm.prop)
+            } else {
+              setOptionList(
+                confirm.prop,
+                optionsOf(confirm.prop).filter((_, k) => k !== confirm.index),
+                true,
+              )
+            }
+          }}
           onClose={() => {
             setConfirm(null)
           }}
-          actions={
-            <Button
-              variant="danger"
-              fullWidth={false}
-              onClick={() => {
-                if (confirm.kind === 'property') {
-                  p.onDelete(confirm.prop)
-                } else {
-                  setOptionList(
-                    confirm.prop,
-                    optionsOf(confirm.prop).filter((_, k) => k !== confirm.index),
-                    true,
-                  )
-                }
-                setConfirm(null)
-              }}
-            >
-              {t('wiki.db.delete')}
-            </Button>
-          }
-        >
-          <p>
-            {confirm.kind === 'property'
-              ? t('wiki.db.property.deleteConfirm')
-              : t('wiki.db.option.deleteConfirm')}
-          </p>
-        </Dialog>
+        />
       )}
     </div>
   )

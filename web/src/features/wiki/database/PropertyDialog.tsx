@@ -11,6 +11,7 @@ import { Button } from '../../../ui/Button'
 import { Dialog } from '../../../ui/Dialog'
 import { ErrorNote } from '../../../ui/ErrorNote'
 import { useWiki } from '../store'
+import { useRestoreFocus } from './useRestoreFocus'
 
 const MAX_NAME = 100
 
@@ -29,6 +30,7 @@ interface PropertyDialogProps {
 /** PropertyDialog asks the name and the type of a new property; a relation also needs the database it points at. */
 export function PropertyDialog({ open, properties, onClose, onAdd }: PropertyDialogProps) {
   const { t } = useTranslation()
+  useRestoreFocus()
   const tree = useWiki((s) => s.tree)
   const databases = useMemo(
     () => (tree ?? []).filter((n: PageNode) => n.kind === 'database'),

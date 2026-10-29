@@ -23,9 +23,14 @@ export function Popover({ anchor, label, onClose, align = 'start', children }: P
   const style = useMemo<React.CSSProperties>(() => {
     const rect = anchor.getBoundingClientRect()
     const view = doc.documentElement
+    // The panel is 34rem wide at most (database.css) and never wider than the window.
+    const width = Math.min(544, view.clientWidth - 16)
     return align === 'end'
       ? { top: rect.bottom + 4, right: Math.max(8, view.clientWidth - rect.right) }
-      : { top: rect.bottom + 4, left: Math.min(rect.left, Math.max(8, view.clientWidth - 360)) }
+      : {
+          top: rect.bottom + 4,
+          left: Math.max(8, Math.min(rect.left, view.clientWidth - width - 8)),
+        }
   }, [anchor, doc, align])
 
   useEffect(() => {
