@@ -28,7 +28,10 @@ import (
 	"github.com/balfag/dnd-vtt/web"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout = 10 * time.Second
+	trashPurgeEvery = time.Hour
+)
 
 // App is the server application.
 type App struct {
@@ -104,6 +107,18 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// The purge goroutine stops with Run, whichever way it returns.
+	purgeCtx, stopPurge := context.WithCancel(ctx)
+	purgeDone := make(chan struct{})
+	go func() {
+		defer close(purgeDone)
+		a.purgeTrashLoop(purgeCtx, trashPurgeEvery)
+	}()
+	defer func() {
+		stopPurge()
+		<-purgeDone
+	}()
+
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
 	a.logger.Info("http server started", "addr", ln.Addr().String())
@@ -133,6 +148,29 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 	}
 	a.logger.Info("http server stopped")
 	return nil
+}
+
+// purgeTrashLoop deletes expired wiki trash at once and then every interval
+// until ctx is done. A failure is logged and the loop goes on.
+func (a *App) purgeTrashLoop(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		n, err := a.wiki.PurgeExpired(ctx)
+		switch {
+		case err != nil:
+			if ctx.Err() == nil {
+				a.logger.Error("purge wiki trash", "err", err)
+			}
+		case n > 0:
+			a.logger.Info("wiki trash purged", "roots", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // announce issues a setup token (no GM account yet) or a one-time GM token,

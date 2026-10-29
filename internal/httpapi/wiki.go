@@ -275,3 +275,147 @@ func (a *api) deleteWikiPage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+type trashItemJSON struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Icon      string `json:"icon"`
+	Kind      string `json:"kind"`
+	DeletedAt int64  `json:"deletedAt"`
+	PurgeAt   int64  `json:"purgeAt"`
+	PageCount int    `json:"pageCount"`
+}
+
+type tagCountJSON struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	PageCount int    `json:"pageCount"`
+}
+
+type setTagsRequest struct {
+	Names []string `json:"names"`
+}
+
+type renameTagRequest struct {
+	Name  string `json:"name"`
+	Merge bool   `json:"merge"`
+}
+
+func (a *api) getWikiTrash(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	items, err := a.d.Wiki.Trash(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.wikiError(w, "list wiki trash", err)
+		return
+	}
+	out := make([]trashItemJSON, len(items))
+	for i, it := range items {
+		out[i] = trashItemJSON{
+			ID: it.ID, Title: it.Title, Icon: it.Icon, Kind: it.Kind,
+			DeletedAt: it.DeletedAt.UnixMilli(), PurgeAt: it.PurgeAt.UnixMilli(), PageCount: it.PageCount,
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) restoreWikiTrash(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.Restore(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "restore wiki pages", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) purgeWikiTrash(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.Purge(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "purge wiki pages", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) emptyWikiTrash(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.EmptyTrash(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "empty wiki trash", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) setWikiPageTags(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req setTagsRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	tags, err := a.d.Wiki.SetTags(r.Context(), r.PathValue("id"), req.Names)
+	if err != nil {
+		a.wikiError(w, "set wiki tags", err)
+		return
+	}
+	out := make([]tagJSON, len(tags))
+	for i, t := range tags {
+		out[i] = tagJSON{ID: t.ID, Name: t.Name}
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Tags []tagJSON `json:"tags"`
+	}{out})
+}
+
+func (a *api) listWikiTags(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	tags, err := a.d.Wiki.Tags(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.wikiError(w, "list wiki tags", err)
+		return
+	}
+	out := make([]tagCountJSON, len(tags))
+	for i, t := range tags {
+		out[i] = tagCountJSON{ID: t.ID, Name: t.Name, PageCount: t.PageCount}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *api) renameWikiTag(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	var req renameTagRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		badWikiBody(w, err)
+		return
+	}
+	tag, err := a.d.Wiki.RenameTag(r.Context(), r.PathValue("id"), req.Name, req.Merge)
+	if err != nil {
+		a.wikiError(w, "rename wiki tag", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tagJSON{ID: tag.ID, Name: tag.Name})
+}
+
+func (a *api) deleteWikiTag(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := a.requireGM(w, r); !ok {
+		return
+	}
+	if err := a.d.Wiki.DeleteTag(r.Context(), r.PathValue("id")); err != nil {
+		a.wikiError(w, "delete wiki tag", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
