@@ -1,0 +1,8 @@
+{"type":"doc","content":[
+{"type":"paragraph","content":[{"type":"text","text":"*звёзды* and _under_score_ with `tick` [x](y) <b> a\\b > c"}]},
+{"type":"paragraph","content":[{"type":"text","text":"# not a heading"}]},
+{"type":"paragraph","content":[{"type":"text","text":"- not a list"}]},
+{"type":"paragraph","content":[{"type":"text","text":"1. not a list"}]},
+{"type":"paragraph","content":[{"type":"text","text":"mid # hash and 2024. year and a | pipe"}]},
+{"type":"paragraph","content":[{"type":"text","text":"line"},{"type":"hardBreak"},{"type":"text","text":"# after break"}]}
+]}
