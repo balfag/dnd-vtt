@@ -551,6 +551,120 @@
     "mention": {
       "tableOnly": "Opens on the table during a game"
     },
+    "tools": {
+      "search": {
+        "label": "Search the wiki",
+        "placeholder": "Search",
+        "hint": "Ctrl K",
+        "results": "Search results",
+        "clear": "Clear search",
+        "empty": "Nothing found. Check the spelling or search by tag",
+        "noTag": "No such tag",
+        "failed": "The search failed."
+      },
+      "tags": {
+        "title": "Tags",
+        "empty": "No tags yet",
+        "list": "Campaign tags",
+        "row": "Tag “{{name}}”, pages: {{count}}",
+        "rowMenu": "Actions for the tag “{{name}}”",
+        "rename": "Rename",
+        "renameLabel": "Tag name",
+        "delete": "Delete",
+        "deleteTitle": "Delete the tag “{{name}}”?",
+        "deleteText": "The tag will leave its pages ({{count}}). The pages stay.",
+        "mergeTitle": "The tag “{{name}}” already exists. Merge?",
+        "mergeText": "Pages with the old tag get the existing one, and the old tag is removed.",
+        "merge": "Merge",
+        "failed": "Could not change the tags.",
+        "loadFailed": "Could not load the tags.",
+        "page": "Page tags",
+        "add": "+ tag",
+        "addLabel": "Add a tag",
+        "suggestions": "Matching tags",
+        "remove": "Remove the tag “{{name}}”",
+        "pageFailed": "Could not save the page tags."
+      },
+      "trash": {
+        "title": "Trash",
+        "empty": "The trash is empty",
+        "deleted": "deleted {{date}}",
+        "purgeAt": "gone on {{date}}",
+        "restore": "Restore",
+        "restoreLabel": "Restore “{{name}}”",
+        "rowMenu": "Actions for “{{name}}” in the trash",
+        "purge": "Delete forever",
+        "purgeTitle": "Delete “{{name}}” forever?",
+        "purgeText": "The page cannot be restored.",
+        "purgeTextChildren": "Together with its nested pages ({{count}}). They cannot be restored.",
+        "emptyAll": "Empty the trash",
+        "emptyTitle": "Empty the trash?",
+        "emptyText": "Everything in the trash will be deleted forever.",
+        "failed": "Could not do that with the trash.",
+        "loadFailed": "Could not load the trash."
+      },
+      "templates": {
+        "title": "Templates",
+        "empty": "No templates of your own yet",
+        "blank": "Blank page",
+        "menu": "New page",
+        "save": "Save as template",
+        "saved": "Template saved.",
+        "limit": "You can keep at most 100 templates of your own.",
+        "saveFailed": "Could not save the template.",
+        "rowMenu": "Actions for the template “{{name}}”",
+        "rename": "Rename",
+        "renameLabel": "Template name",
+        "delete": "Delete",
+        "deleteTitle": "Delete the template “{{name}}”?",
+        "deleteText": "Pages already made from it stay.",
+        "failed": "Could not change the template.",
+        "loadFailed": "Could not load the templates."
+      },
+      "export": {
+        "page": "Export to Markdown",
+        "wiki": "Export the wiki",
+        "pageMenu": "Page actions",
+        "treeMenu": "Wiki actions"
+      },
+      "section": {
+        "expand": "Expand the section “{{name}}”",
+        "collapse": "Collapse the section “{{name}}”"
+      }
+    },
+    "templates": {
+      "session": {
+        "title": "Session recap",
+        "date": "Date",
+        "who": "Who was there",
+        "happened": "What happened",
+        "rewards": "Rewards",
+        "hooks": "Hooks for the next one"
+      },
+      "npc": {
+        "title": "NPC",
+        "look": "Appearance",
+        "character": "Personality",
+        "motive": "Motivation",
+        "knows": "What they know",
+        "ties": "Connections"
+      },
+      "location": {
+        "title": "Location",
+        "entry": "Description on entry",
+        "here": "What is here",
+        "dwellers": "Inhabitants",
+        "secrets": "Secrets"
+      },
+      "quest": {
+        "title": "Quest",
+        "giver": "Quest giver",
+        "goal": "Goal",
+        "reward": "Reward",
+        "steps": "Stages",
+        "complications": "Complications"
+      }
+    },
     "tree": {
       "tab": "Wiki",
       "label": "Wiki pages",

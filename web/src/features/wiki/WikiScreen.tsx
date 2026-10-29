@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
+import { ApiError } from '../../shared/api/client'
 import { listCampaigns, type Campaign } from '../../shared/api/campaigns'
 import {
   createWikiPage,
@@ -10,6 +11,7 @@ import {
   getWikiPage,
   getWikiTree,
   moveWikiPage,
+  saveTemplate,
   saveWikiPage,
 } from '../../shared/api/wiki'
 import { AuthLayout } from '../../ui/AuthLayout'
@@ -25,7 +27,8 @@ import { PagePanel } from './page/PagePanel'
 import { pageIdOfPanel, pagePanelTitle, PAGE_PANEL_PREFIX } from './panelIds'
 import { wikiStore, useWiki } from './store'
 import { TreePanel } from './tree/TreePanel'
-import { pageEditors, WikiContext, type WikiActions } from './wikiContext'
+import { builtinTemplates } from './templates/builtin'
+import { pageEditors, searchField, WikiContext, type WikiActions } from './wikiContext'
 import './wiki.css'
 
 /** TREE_WIDTH_REM is the width of the tree in the default layout. */
@@ -142,9 +145,19 @@ export default function WikiScreen({ campaignId }: { campaignId: string }) {
       campaignId,
       reload,
       open,
-      create: async (parentId) => {
+      create: async (parentId, template) => {
         try {
-          const page = await createWikiPage(campaignId, { parentId })
+          const body: Parameters<typeof createWikiPage>[1] = { parentId }
+          if (template !== undefined && 'custom' in template) {
+            body.templateId = template.custom
+          } else if (template !== undefined) {
+            const builtin = builtinTemplates.find((b) => b.id === template.builtin)
+            if (builtin !== undefined) {
+              body.icon = builtin.icon
+              body.content = builtin.content(t)
+            }
+          }
+          const page = await createWikiPage(campaignId, body)
           await reload()
           open(page.id)
         } catch {
@@ -187,11 +200,30 @@ export default function WikiScreen({ campaignId }: { campaignId: string }) {
         } catch {
           notify('wiki.tree.deleteFailed')
         }
+        wikiStore.getState().bumpTools()
         await reload().catch(() => undefined)
+      },
+      saveAsTemplate: async (id, title) => {
+        try {
+          await saveTemplate(campaignId, id, title === '' ? t('wiki.untitled') : title)
+          wikiStore.getState().bumpTools()
+          notify('wiki.tools.templates.saved')
+        } catch (err) {
+          notify(
+            err instanceof ApiError && err.status === 409
+              ? 'wiki.tools.templates.limit'
+              : 'wiki.tools.templates.saveFailed',
+          )
+        }
+      },
+      focusSearch: () => {
+        searchField.pending = true
+        setNarrowTab('tree')
+        searchField.focus?.()
       },
       notify,
     }
-  }, [campaignId, narrow, notify, openInstance, reload])
+  }, [campaignId, narrow, notify, openInstance, reload, t])
 
   const panels = useMemo<PanelDef[]>(
     () => [

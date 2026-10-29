@@ -183,6 +183,12 @@
   cursor: pointer;
 }
 
+.wmenu__item--separated {
+  margin-top: 5px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 4px 4px;
+}
+
 .wmenu__item:hover,
 .wmenu__item:focus-visible {
   background: var(--slate);

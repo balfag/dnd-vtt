@@ -7,13 +7,26 @@ export interface WikiActions {
   reload: () => Promise<void>
   /** open shows a page: in a panel of the workspace, or on the page tab of a narrow screen. */
   open: (id: string, opts?: { newGroup?: boolean }) => void
-  /** create makes an empty page under parentId (null: the root) and opens it. */
-  create: (parentId: string | null) => Promise<void>
+  /** create makes a page under parentId (null: the root) and opens it; without a template it is empty. */
+  create: (parentId: string | null, template?: NewPageTemplate) => Promise<void>
   rename: (id: string, title: string) => Promise<void>
   move: (id: string, parentId: string | null, index: number) => Promise<void>
   remove: (id: string) => Promise<void>
+  /** saveAsTemplate keeps the icon and the text of a page as a template of its own. */
+  saveAsTemplate: (id: string, title: string) => Promise<void>
+  /** focusSearch puts the cursor into the search field of the tree. */
+  focusSearch: () => void
   /** notify tells the user something in a line over the workspace; text is an i18n key. */
   notify: (textKey: string) => void
+}
+
+/** NewPageTemplate is what a new page is made from: a built-in template or one of the GM's own. */
+export type NewPageTemplate = { builtin: string } | { custom: string }
+
+/** searchField lets the rest of the screen reach the search field; the field of the tree sets it. */
+export const searchField: { focus: (() => void) | null; pending: boolean } = {
+  focus: null,
+  pending: false,
 }
 
 export const WikiContext = createContext<WikiActions | null>(null)

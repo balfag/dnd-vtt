@@ -10,6 +10,8 @@ export interface WikiState {
   open: string[]
   /** active is the page whose panel the user worked in last; the narrow screen shows it. */
   active: string | null
+  /** toolsVersion grows when tags, templates or the trash may have changed; their sections read again. */
+  toolsVersion: number
   setTree: (nodes: PageNode[]) => void
   /** setOpen mirrors the panels the workspace holds. */
   setOpen: (ids: string[]) => void
@@ -20,6 +22,7 @@ export interface WikiState {
   removePage: (id: string) => void
   /** retitle changes the name in the tree before the server has it. */
   retitle: (id: string, title: string, icon?: string) => void
+  bumpTools: () => void
   reset: () => void
 }
 
@@ -28,6 +31,7 @@ export function createWikiStore(): StoreApi<WikiState> {
     tree: null,
     open: [],
     active: null,
+    toolsVersion: 0,
     setTree: (nodes) => {
       set({ tree: nodes })
     },
@@ -69,6 +73,9 @@ export function createWikiStore(): StoreApi<WikiState> {
             ? null
             : s.tree.map((n) => (n.id === id ? { ...n, title, icon: icon ?? n.icon } : n)),
       }))
+    },
+    bumpTools: () => {
+      set((s) => ({ toolsVersion: s.toolsVersion + 1 }))
     },
     reset: () => {
       set({ tree: null, open: [], active: null })

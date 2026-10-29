@@ -1,12 +1,27 @@
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { PageNode } from '../../../shared/api/wiki'
+import {
+  pageExportUrl,
+  wikiExportUrl,
+  type PageNode,
+  type SearchHit,
+} from '../../../shared/api/wiki'
 import { Button } from '../../../ui/Button'
 import { Dialog } from '../../../ui/Dialog'
+import { PopupMenu } from '../../workspace/PanelTab'
+import { download } from '../download'
+import { hitId, isSearchShortcut } from '../search/query'
+import { SearchBox } from '../search/SearchBox'
+import { SearchResults } from '../search/SearchResults'
+import { useWikiSearch } from '../search/useWikiSearch'
 import { useWiki } from '../store'
-import { useWikiActions } from '../wikiContext'
+import { TagsSection } from '../tags/TagsSection'
+import { NewPageMenu } from '../templates/NewPageMenu'
+import { TemplatesSection } from '../templates/TemplatesSection'
+import { TrashSection } from '../trash/TrashSection'
+import { useWikiActions, type NewPageTemplate } from '../wikiContext'
 import { MoveDialog } from './MoveDialog'
-import { TreeRow } from './TreeRow'
+import { TreeRow, type MenuAt } from './TreeRow'
 import {
   buildTree,
   childrenOf,
@@ -47,6 +62,17 @@ export function TreePanel() {
   const [deleting, setDeleting] = useState<{ page: PageNode; open: boolean } | null>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const rows = useRef(new Map<string, HTMLDivElement>())
+  const [query, setQuery] = useState('')
+  const [activeHit, setActiveHit] = useState(0)
+  const [newPage, setNewPage] = useState<{ parentId: string | null; at: MenuAt } | null>(null)
+  const [panelMenu, setPanelMenu] = useState<MenuAt | null>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
+  const panelMenuButton = useRef<HTMLButtonElement>(null)
+  const listId = useId()
+  const search = useWikiSearch(actions.campaignId, query)
+  const searching = search.status !== 'idle'
+  const hits = search.status === 'ready' || search.status === 'loading' ? search.hits : []
+  const hitIndex = Math.min(activeHit, Math.max(hits.length - 1, 0))
 
   const items = useMemo(() => buildTree(nodes), [nodes])
   const visible = useMemo(() => visibleRows(items, expanded), [items, expanded])
@@ -80,9 +106,20 @@ export function TreePanel() {
     actions.open(node.id, { newGroup })
   }
 
-  function addChild(node: PageNode) {
+  function addChild(node: PageNode, at: MenuAt) {
     expand(node.id)
-    void actions.create(node.id)
+    setNewPage({ parentId: node.id, at })
+  }
+
+  function openHit(hit: SearchHit) {
+    if (hit.kind === 'database') actions.notify('wiki.tree.databaseLater')
+    else actions.open(hit.id)
+  }
+
+  function searchFor(text: string) {
+    setQuery(text)
+    setActiveHit(0)
+    searchInput.current?.focus()
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -182,8 +219,14 @@ export function TreePanel() {
           onOpen={(newGroup) => {
             openRow(node, newGroup)
           }}
-          onAddChild={() => {
-            addChild(node)
+          onAddChild={(at) => {
+            addChild(node, at)
+          }}
+          onSaveTemplate={() => {
+            void actions.saveAsTemplate(node.id, node.title)
+          }}
+          onExport={() => {
+            download(pageExportUrl(node.id))
           }}
           onStartRename={() => {
             setRenaming(node.id)
@@ -242,44 +285,153 @@ export function TreePanel() {
   const movingNode = moving?.page ?? null
   const deleteCount = deleting === null ? 0 : descendantIds(nodes, deleting.page.id).length
 
+  function pickTemplate(parentId: string | null, template?: NewPageTemplate) {
+    setNewPage(null)
+    void actions.create(parentId, template)
+  }
+
   return (
-    <div className="tree">
+    <div
+      className="tree"
+      onKeyDown={(e) => {
+        if (isSearchShortcut(e.nativeEvent)) {
+          e.preventDefault()
+          actions.focusSearch()
+        }
+      }}
+    >
       <div className="tree__head">
         <h2 className="tree__title">{t('wiki.tree.tab')}</h2>
+        <button
+          ref={panelMenuButton}
+          type="button"
+          className="tree__add"
+          aria-label={t('wiki.tools.export.treeMenu')}
+          aria-haspopup="menu"
+          aria-expanded={panelMenu !== null}
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            setPanelMenu({
+              x: rect.right,
+              y: rect.bottom + 4,
+              align: 'end',
+              doc: e.currentTarget.ownerDocument,
+            })
+          }}
+        >
+          <span aria-hidden="true">⋯</span>
+        </button>
         <button
           type="button"
           className="tree__add"
           aria-label={t('wiki.tree.add')}
           title={t('wiki.tree.add')}
-          onClick={() => {
-            void actions.create(null)
+          aria-haspopup="menu"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            setNewPage({
+              parentId: null,
+              at: {
+                x: rect.right,
+                y: rect.bottom + 4,
+                align: 'end',
+                doc: e.currentTarget.ownerDocument,
+              },
+            })
           }}
         >
           <span aria-hidden="true">+</span>
         </button>
       </div>
-      <div
-        className="tree__rows"
-        role="tree"
-        aria-label={t('wiki.tree.label')}
-        onKeyDown={onKeyDown}
-        onDragOver={(e) => {
-          // The free space under the rows: the page goes to the end of the root.
-          if (drag === null || (e.target as HTMLElement).closest('[role="treeitem"]') !== null)
-            return
-          if (dropAtRootEnd(drag.id) === null) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
+      <SearchBox
+        value={query}
+        onChange={(value) => {
+          setQuery(value)
+          setActiveHit(0)
         }}
-        onDrop={(e) => {
-          if (drag === null || (e.target as HTMLElement).closest('[role="treeitem"]') !== null)
-            return
-          finishDrop(e, dropAtRootEnd(drag.id))
+        listId={listId}
+        activeId={searching && hits.length > 0 ? hitId(listId, hitIndex) : undefined}
+        expanded={searching && hits.length > 0}
+        inputRef={searchInput}
+        onMove={(step) => {
+          if (hits.length > 0) setActiveHit((hitIndex + step + hits.length) % hits.length)
         }}
-      >
-        {renderRows()}
-        {nodes.length === 0 && <p className="tree__empty">{t('wiki.tree.empty')}</p>}
+        onChoose={() => {
+          const hit = hits[hitIndex]
+          if (hit !== undefined) openHit(hit)
+        }}
+      />
+      {searching && (
+        <div className="tree__scroll">
+          <SearchResults
+            id={listId}
+            state={search}
+            active={hitIndex}
+            onOpen={openHit}
+            onHover={setActiveHit}
+          />
+        </div>
+      )}
+      <div className="tree__scroll" hidden={searching}>
+        <div
+          className="tree__rows"
+          role="tree"
+          aria-label={t('wiki.tree.label')}
+          onKeyDown={onKeyDown}
+          onDragOver={(e) => {
+            // The free space under the rows: the page goes to the end of the root.
+            if (drag === null || (e.target as HTMLElement).closest('[role="treeitem"]') !== null)
+              return
+            if (dropAtRootEnd(drag.id) === null) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+          }}
+          onDrop={(e) => {
+            if (drag === null || (e.target as HTMLElement).closest('[role="treeitem"]') !== null)
+              return
+            finishDrop(e, dropAtRootEnd(drag.id))
+          }}
+        >
+          {renderRows()}
+          {nodes.length === 0 && <p className="tree__empty">{t('wiki.tree.empty')}</p>}
+        </div>
+        <TagsSection onSearch={searchFor} />
+        <TemplatesSection />
+        <TrashSection />
       </div>
+
+      {newPage !== null && (
+        <NewPageMenu
+          doc={newPage.at.doc}
+          at={newPage.at}
+          onPick={(template) => {
+            pickTemplate(newPage.parentId, template)
+          }}
+          onClose={() => {
+            setNewPage(null)
+          }}
+        />
+      )}
+      {panelMenu !== null && (
+        <PopupMenu
+          doc={panelMenu.doc}
+          at={panelMenu}
+          label={t('wiki.tools.export.treeMenu')}
+          items={[
+            {
+              key: 'export',
+              label: t('wiki.tools.export.wiki'),
+              onSelect: () => {
+                download(wikiExportUrl(actions.campaignId))
+              },
+            },
+          ]}
+          onClose={(restoreFocus) => {
+            setPanelMenu(null)
+            if (restoreFocus) panelMenuButton.current?.focus()
+          }}
+        />
+      )}
 
       {moving !== null && (
         <MoveDialog
