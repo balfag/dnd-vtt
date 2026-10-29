@@ -11,6 +11,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/asset"
 	"github.com/balfag/dnd-vtt/internal/auth"
+	"github.com/balfag/dnd-vtt/internal/chat"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/vtt"
 	"github.com/balfag/dnd-vtt/internal/wiki"
@@ -33,6 +34,7 @@ type Deps struct {
 	Assets  *asset.Service
 	VTT     *vtt.Service
 	Wiki    *wiki.Service
+	Chat    *chat.Service
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
 }
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/balfag/dnd-vtt/internal/dice"
 	"github.com/balfag/dnd-vtt/internal/id"
+	"github.com/balfag/dnd-vtt/internal/wiki/doc"
 	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
@@ -25,17 +26,19 @@ var (
 
 // Limits of a message (protocol.md, "Chat and rolls").
 const (
-	maxTextRunes  = 2000
-	maxLabelRunes = 100
-	maxRecipients = 20
-	snapshotLimit = 50
-	maxHistory    = 100
+	maxTextRunes    = 2000
+	maxLabelRunes   = 100
+	maxHandoutTitle = 200
+	maxRecipients   = 20
+	snapshotLimit   = 50
+	maxHistory      = 100
 )
 
 // Kinds and visibilities of a message.
 const (
-	kindText = "text"
-	kindRoll = "roll"
+	kindText    = "text"
+	kindRoll    = "roll"
+	kindHandout = "handout"
 
 	visPublic  = "public"
 	visPrivate = "private"
@@ -72,7 +75,8 @@ func Render(m protocol.ChatMessage, v ws.Viewer) (out protocol.ChatMessage, ok b
 	case visPublic:
 		return m, true
 	case visPrivate:
-		if author || (v.PlayerID != "" && slices.Contains(m.To, v.PlayerID)) {
+		// The GM is the only sender of a handout, with or without a participant row.
+		if author || (v.PlayerID != "" && slices.Contains(m.To, v.PlayerID)) || (m.Kind == kindHandout && v.IsGM) {
 			return m, true
 		}
 	case visGM:
@@ -105,19 +109,11 @@ func (s *Service) SendText(ctx context.Context, campaignID, gameSessionID, autho
 	if n := utf8.RuneCountInString(text); n < 1 || n > maxTextRunes {
 		return protocol.ChatMessage{}, invalid("text must be 1..%d characters", maxTextRunes)
 	}
-	if len(to) > maxRecipients {
-		return protocol.ChatMessage{}, invalid("at most %d recipients", maxRecipients)
-	}
-	for i, p := range to {
-		if p == authorID {
-			return protocol.ChatMessage{}, invalid("the author cannot be a recipient")
-		}
-		if slices.Contains(to[:i], p) {
-			return protocol.ChatMessage{}, invalid("duplicate recipient")
-		}
+	if err := checkDistinct(authorID, to); err != nil {
+		return protocol.ChatMessage{}, err
 	}
 	if len(to) > 0 {
-		if err := s.checkRecipients(ctx, campaignID, to); err != nil {
+		if err := s.checkRecipients(ctx, campaignID, to, false); err != nil {
 			return protocol.ChatMessage{}, err
 		}
 	}
@@ -133,25 +129,97 @@ func (s *Service) SendText(ctx context.Context, campaignID, gameSessionID, autho
 	if err != nil {
 		return protocol.ChatMessage{}, err
 	}
-	return s.insert(ctx, m, campaignID, gameSessionID, payload)
+	return s.insert(ctx, m, campaignID, gameSessionID, payload, nil)
 }
 
-// checkRecipients requires every id to be a present participant of the campaign.
-func (s *Service) checkRecipients(ctx context.Context, campaignID string, to []string) error {
+// SendHandout stores a handout of the GM. authorID is the GM's player id in
+// the campaign ("" - no participant row: author_player_id is NULL).
+// content is checked by doc.Validate with Handout: true and AssetOK = asset of
+// the campaign; to (0..20, distinct) makes it private, like SendText.
+func (s *Service) SendHandout(ctx context.Context, campaignID, gameSessionID, authorID, title string, content json.RawMessage, to []string) (protocol.ChatMessage, error) {
+	title = strings.TrimSpace(title)
+	if utf8.RuneCountInString(title) > maxHandoutTitle {
+		return protocol.ChatMessage{}, invalid("title must be at most %d characters", maxHandoutTitle)
+	}
+	if err := checkDistinct(authorID, to); err != nil {
+		return protocol.ChatMessage{}, err
+	}
+	res, err := doc.Validate(content, doc.Options{
+		Handout: true,
+		AssetOK: func(assetID string) (bool, error) {
+			var one int
+			err := s.db.QueryRowContext(ctx, `SELECT 1 FROM asset WHERE id = ? AND campaign_id = ?`, assetID, campaignID).Scan(&one)
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return err == nil, err
+		},
+	})
+	if errors.Is(err, doc.ErrInvalid) {
+		return protocol.ChatMessage{}, invalid("%v", err)
+	}
+	if err != nil {
+		return protocol.ChatMessage{}, fmt.Errorf("check handout assets: %w", err)
+	}
+	if len(to) > 0 {
+		if err := s.checkRecipients(ctx, campaignID, to, true); err != nil {
+			return protocol.ChatMessage{}, err
+		}
+	}
+
+	var authorPtr *string
+	if authorID != "" {
+		authorPtr = &authorID
+	}
+	h := protocol.ChatHandout{Title: title, Content: res.JSON}
+	m := protocol.ChatMessage{AuthorPlayerID: authorPtr, Kind: kindHandout, Visibility: visPublic, Handout: &h}
+	if len(to) > 0 {
+		m.Visibility = visPrivate
+		m.To = slices.Clone(to)
+	}
+	payload, err := json.Marshal(h)
+	if err != nil {
+		return protocol.ChatMessage{}, err
+	}
+	return s.insert(ctx, m, campaignID, gameSessionID, payload, res.Assets)
+}
+
+// checkDistinct requires 0..maxRecipients distinct recipients other than the author.
+func checkDistinct(authorID string, to []string) error {
+	if len(to) > maxRecipients {
+		return invalid("at most %d recipients", maxRecipients)
+	}
+	for i, p := range to {
+		if p == authorID {
+			return invalid("the author cannot be a recipient")
+		}
+		if slices.Contains(to[:i], p) {
+			return invalid("duplicate recipient")
+		}
+	}
+	return nil
+}
+
+// checkRecipients requires every id to be a present participant of the campaign;
+// with noGM a participant with the GM role is ErrInvalid.
+func (s *Service) checkRecipients(ctx context.Context, campaignID string, to []string, noGM bool) error {
 	args := make([]any, 0, len(to)+1)
 	args = append(args, campaignID)
 	for _, p := range to {
 		args = append(args, p)
 	}
-	var n int
+	var n, gms int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM player WHERE campaign_id = ? AND removed = 0 AND id IN (`+
-			strings.TrimSuffix(strings.Repeat("?,", len(to)), ",")+`)`, args...).Scan(&n)
+		`SELECT count(*), coalesce(sum(role = 'gm'), 0) FROM player WHERE campaign_id = ? AND removed = 0 AND id IN (`+
+			strings.TrimSuffix(strings.Repeat("?,", len(to)), ",")+`)`, args...).Scan(&n, &gms)
 	if err != nil {
 		return fmt.Errorf("check recipients: %w", err)
 	}
 	if n != len(to) {
 		return ErrNotFound
+	}
+	if noGM && gms > 0 {
+		return invalid("the GM cannot be a recipient")
 	}
 	return nil
 }
@@ -179,11 +247,11 @@ func (s *Service) SendRoll(ctx context.Context, campaignID, gameSessionID, autho
 		return protocol.ChatMessage{}, err
 	}
 	m := protocol.ChatMessage{AuthorPlayerID: &authorID, Kind: kindRoll, Visibility: visibility, Roll: &roll}
-	return s.insert(ctx, m, campaignID, gameSessionID, payload)
+	return s.insert(ctx, m, campaignID, gameSessionID, payload, nil)
 }
 
 // insert completes m with an id and a time and stores it. The message it returns is complete.
-func (s *Service) insert(ctx context.Context, m protocol.ChatMessage, campaignID, gameSessionID string, payload []byte) (protocol.ChatMessage, error) {
+func (s *Service) insert(ctx context.Context, m protocol.ChatMessage, campaignID, gameSessionID string, payload []byte, assets []string) (protocol.ChatMessage, error) {
 	m.ID = id.New()
 	m.CreatedAt = s.now().UnixMilli()
 	recipients := m.To
@@ -198,12 +266,25 @@ func (s *Service) insert(ctx context.Context, m protocol.ChatMessage, campaignID
 	if gameSessionID != "" {
 		gs = gameSessionID
 	}
-	_, err = s.db.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return protocol.ChatMessage{}, fmt.Errorf("insert chat message: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO chat_message (id, campaign_id, game_session_id, author_player_id, kind, visibility, recipients, payload, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.ID, campaignID, gs, m.AuthorPlayerID, m.Kind, m.Visibility, string(rec), string(payload), m.CreatedAt)
 	if err != nil {
 		return protocol.ChatMessage{}, fmt.Errorf("insert chat message: %w", err)
+	}
+	for _, a := range assets {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO chat_message_asset (message_id, asset_id) VALUES (?, ?)`, m.ID, a); err != nil {
+			return protocol.ChatMessage{}, fmt.Errorf("insert chat message asset: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return protocol.ChatMessage{}, fmt.Errorf("insert chat message: commit: %w", err)
 	}
 	return m, nil
 }
@@ -237,7 +318,7 @@ const visibleQuery = `SELECT id, created_at, author_player_id, kind, visibility,
    AND ( visibility = 'public'
       OR author_player_id = ?3
       OR (visibility = 'private' AND EXISTS (SELECT 1 FROM json_each(recipients) WHERE value = ?3))
-      OR (?4 = 1 AND visibility IN ('gm', 'blind')) )
+      OR (?4 = 1 AND (visibility IN ('gm', 'blind') OR kind = 'handout')) )
  ORDER BY id DESC LIMIT ?5`
 
 // visible reads the newest limit messages visible to v, ascending; with before
@@ -288,8 +369,16 @@ func (s *Service) visible(ctx context.Context, v ws.Viewer, campaignID, before s
 	return out, nil
 }
 
-// decodePayload fills the text or the roll of m from its stored payload.
+// decodePayload fills the text, the roll or the handout of m from its stored payload.
 func decodePayload(m *protocol.ChatMessage, raw string) error {
+	if m.Kind == kindHandout {
+		var h protocol.ChatHandout
+		if err := json.Unmarshal([]byte(raw), &h); err != nil {
+			return fmt.Errorf("decode handout of %s: %w", m.ID, err)
+		}
+		m.Handout = &h
+		return nil
+	}
 	if m.Kind == kindRoll {
 		var roll protocol.ChatRoll
 		if err := json.Unmarshal([]byte(raw), &roll); err != nil {
@@ -306,4 +395,30 @@ func decodePayload(m *protocol.ChatMessage, raw string) error {
 	}
 	m.Text = p.Text
 	return nil
+}
+
+// PlayerCanSeeHandoutAsset reports whether a handout of the campaign that the
+// player may see (Render) contains the asset.
+func (s *Service) PlayerCanSeeHandoutAsset(ctx context.Context, campaignID, playerID, assetID string) (bool, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT m.visibility, m.recipients FROM chat_message_asset a JOIN chat_message m ON m.id = a.message_id
+		 WHERE a.asset_id = ? AND m.campaign_id = ? AND m.kind = 'handout'`, assetID, campaignID)
+	if err != nil {
+		return false, fmt.Errorf("list handouts of asset: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var vis, recipients string
+		if err := rows.Scan(&vis, &recipients); err != nil {
+			return false, fmt.Errorf("scan handout of asset: %w", err)
+		}
+		var to []string
+		if err := json.Unmarshal([]byte(recipients), &to); err != nil {
+			return false, fmt.Errorf("decode recipients of a handout: %w", err)
+		}
+		if _, ok := Render(protocol.ChatMessage{Kind: kindHandout, Visibility: vis, To: to}, ws.Viewer{PlayerID: playerID}); ok {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

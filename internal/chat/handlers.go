@@ -11,12 +11,13 @@ import (
 	"github.com/balfag/dnd-vtt/internal/ws/protocol"
 )
 
-// Register adds chat.send, roll.request and chat.history to hub; roller rolls the dice.
+// Register adds chat.send, roll.request, chat.history and handout.show to hub; roller rolls the dice.
 func Register(hub *ws.Hub, s *Service, roller dice.Roller) {
 	h := &handlers{s: s, roller: roller}
 	hub.Handle(protocol.TypeChatSend, h.send, ws.HandlerOptions{})
 	hub.Handle(protocol.TypeRollRequest, h.roll, ws.HandlerOptions{RatePerSec: 5})
 	hub.Handle(protocol.TypeChatHistory, h.history, ws.HandlerOptions{})
+	hub.Handle(protocol.TypeHandoutShow, h.handout, ws.HandlerOptions{RatePerSec: 2})
 }
 
 type handlers struct {
@@ -78,6 +79,22 @@ func (h *handlers) send(ctx context.Context, cmd ws.Command, em ws.Emitter) (any
 		return nil, err
 	}
 	m, err := h.s.SendText(ctx, cmd.CampaignID, cmd.GameSessionID, cmd.Viewer.PlayerID, in.Text, in.To)
+	if err != nil {
+		return nil, commandError(err)
+	}
+	em.Emit(message(m))
+	return nil, nil
+}
+
+func (h *handlers) handout(ctx context.Context, cmd ws.Command, em ws.Emitter) (any, error) {
+	if !cmd.Viewer.IsGM {
+		return nil, ws.Errorf(protocol.CodeForbidden, "only the GM can show a handout")
+	}
+	var in protocol.HandoutShow
+	if err := decode(cmd, &in); err != nil {
+		return nil, err
+	}
+	m, err := h.s.SendHandout(ctx, cmd.CampaignID, cmd.GameSessionID, cmd.Viewer.PlayerID, in.Title, in.Content, in.To)
 	if err != nil {
 		return nil, commandError(err)
 	}
