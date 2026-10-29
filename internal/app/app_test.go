@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/config"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
+	"github.com/balfag/dnd-vtt/internal/wiki"
 )
 
 func TestNewCreatesDevCampaign(t *testing.T) {
@@ -290,4 +292,70 @@ func TestRunClosesWebSocketsOnShutdown(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return within 2s after cancel")
 	}
+}
+
+func TestPurgeTrashLoop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	logs := &syncBuffer{}
+	a, err := New(config.Config{}, slog.New(slog.NewTextHandler(logs, nil)), "test", st.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-wiki.TrashTTL - time.Hour).UnixMilli()
+	for _, q := range []string{
+		`INSERT INTO campaign (id, name, created_at) VALUES ('c', 'Camp', 1)`,
+		fmt.Sprintf(`INSERT INTO wiki_page (id, campaign_id, kind, title, position, content, content_text, version, created_at, updated_at, deleted_at, trash_root_id)
+			VALUES ('p', 'c', 'page', 'Old', 0, '{}', '', 1, 1, 1, %d, 'p')`, old),
+	} {
+		if _, err := st.DB().Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		a.purgeTrashLoop(ctx, time.Hour)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logs.String(), "wiki trash purged") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no purge in the log: %s", logs.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	var n int
+	if err := st.DB().QueryRow(`SELECT COUNT(*) FROM wiki_page`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("pages = %d, %v", n, err)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the loop does not stop")
+	}
+}
+
+// syncBuffer is a log sink the test reads while the loop writes.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

@@ -3,6 +3,7 @@ package wiki
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -127,17 +128,7 @@ func TestRestore(t *testing.T) {
 	}
 }
 
-func equalSet(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
-}
+func equalSet(got, want []string) bool { return slices.Equal(got, want) }
 
 func TestPurge(t *testing.T) {
 	e := newEnv(t)
