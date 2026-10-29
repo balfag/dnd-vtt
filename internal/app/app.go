@@ -23,6 +23,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
 	"github.com/balfag/dnd-vtt/internal/vtt"
+	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/ws"
 	"github.com/balfag/dnd-vtt/web"
 )
@@ -39,6 +40,7 @@ type App struct {
 	hub     *ws.Hub
 	assets  *asset.Service
 	vtt     *vtt.Service
+	wiki    *wiki.Service
 
 	out         io.Writer              // where the sign-in link is printed; os.Stdout in New
 	openBrowser func(url string) error // openURL in New
@@ -77,6 +79,7 @@ func New(cfg config.Config, logger *slog.Logger, version string, db *sql.DB) (*A
 		hub:         hub,
 		assets:      asset.NewService(db, cfg.DataDir, asset.Options{}),
 		vtt:         vttSvc,
+		wiki:        wiki.NewService(db, wiki.Options{}),
 		out:         os.Stdout,
 		openBrowser: openURL,
 	}, nil
@@ -96,6 +99,7 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 			Hub:     a.hub,
 			Assets:  a.assets,
 			VTT:     a.vtt,
+			Wiki:    a.wiki,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

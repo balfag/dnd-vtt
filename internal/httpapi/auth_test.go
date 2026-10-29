@@ -22,6 +22,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/store"
 	"github.com/balfag/dnd-vtt/internal/vtt"
+	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/ws"
 )
 
@@ -78,6 +79,7 @@ func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 		Hub:     ws.NewHub(f.game, logger, ws.Options{}),
 		Assets:  asset.NewService(f.db, t.TempDir(), opts),
 		VTT:     f.vtt,
+		Wiki:    wiki.NewService(f.db, wiki.Options{Now: now}),
 		Now:     now,
 	})
 	return f

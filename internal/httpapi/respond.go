@@ -39,12 +39,17 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 // application/json (parameters like charset allowed), limits the body to
 // 64 KiB, rejects unknown fields and trailing data.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	return decodeJSONMax(w, r, dst, maxBodyBytes)
+}
+
+// decodeJSONMax is decodeJSON with a body limit of max bytes.
+func decodeJSONMax(w http.ResponseWriter, r *http.Request, dst any, max int64) error {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
 		return errors.New("content type must be application/json")
 	}
 
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, max))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		return fmt.Errorf("decode body: %w", err)

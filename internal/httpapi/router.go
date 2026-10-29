@@ -13,6 +13,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/auth"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/vtt"
+	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/ws"
 )
 
@@ -31,6 +32,7 @@ type Deps struct {
 	Hub     *ws.Hub
 	Assets  *asset.Service
 	VTT     *vtt.Service
+	Wiki    *wiki.Service
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
 }
 
@@ -68,6 +70,12 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("DELETE /api/assets/{id}", a.deleteAsset)
 	mux.HandleFunc("GET /assets/{id}", a.serveAsset)
 	mux.HandleFunc("GET /ws", a.getWS)
+	mux.HandleFunc("GET /api/campaigns/{id}/wiki/tree", a.getWikiTree)
+	mux.HandleFunc("POST /api/campaigns/{id}/wiki/pages", a.createWikiPage)
+	mux.HandleFunc("GET /api/wiki/pages/{id}", a.getWikiPage)
+	mux.HandleFunc("PUT /api/wiki/pages/{id}", a.saveWikiPage)
+	mux.HandleFunc("POST /api/wiki/pages/{id}/move", a.moveWikiPage)
+	mux.HandleFunc("DELETE /api/wiki/pages/{id}", a.deleteWikiPage)
 
 	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
 	mux.HandleFunc("POST /api/campaigns", a.createCampaign)
