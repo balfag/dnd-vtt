@@ -1,4 +1,4 @@
-import {
+﻿import {
   DockviewReact,
   type DockviewApi,
   type DockviewReadyEvent,
@@ -192,21 +192,32 @@ export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: Wo
       const panel = api?.getPanel(kind)
       const def = findPanel(latest.current.panels, kind)
       if (api === null || panel === undefined || def === undefined || !def.popout) return
-      const title = latest.current.popoutTitle(def.title)
+      const opened: { popup?: Window } = {}
       api
         .addPopoutGroup(panel, {
           popoutUrl: POPOUT_URL,
           onDidOpen: ({ window: popup }) => {
-            popup.document.title = title
-            // The blank page may not be loaded yet, and loading sets its own title.
-            popup.addEventListener('load', () => {
-              popup.document.title = title
-            })
+            opened.popup = popup
           },
         })
         .then(
-          (opened) => {
-            if (!opened) setBlocked(true)
+          (ok) => {
+            if (!ok) {
+              setBlocked(true)
+              return
+            }
+            // dockview copies the title of the main page on load; the promise settles after that.
+            const win = opened.popup
+            const group = panel.group
+            if (win === undefined) return
+            const setTitle = (kind: string) => {
+              const shown = findPanel(latest.current.panels, kind)
+              if (shown !== undefined) win.document.title = latest.current.popoutTitle(shown.title)
+            }
+            setTitle(kind)
+            group.api.onDidActivePanelChange((e) => {
+              setTitle(e.panel.id)
+            })
           },
           () => {
             setBlocked(true)
