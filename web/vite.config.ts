@@ -24,6 +24,13 @@ export default defineConfig({
   build: {
     // "/assets/" is reserved for campaign files served by the Go server.
     assetsDir: 'static',
+    // popout.html is the blank page of a detached panel window (dockview fills it from the main window).
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, 'index.html'),
+        popout: resolve(import.meta.dirname, 'popout.html'),
+      },
+    },
   },
   server: {
     port: 5173,

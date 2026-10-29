@@ -462,5 +462,16 @@
       "cylinder": "Cylinder",
       "size": "Size, feet"
     }
+  },
+  "workspace": {
+    "menu": "Panel actions",
+    "popout": "Open in a window",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close",
+    "add": "Open a panel",
+    "reset": "Reset layout",
+    "popupBlocked": "The browser blocked the window. Allow pop-ups for this site and try again.",
+    "popoutTitle": "{{panel}} — {{campaign}}"
   }
 }
