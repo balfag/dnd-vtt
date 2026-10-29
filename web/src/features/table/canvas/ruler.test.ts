@@ -12,7 +12,12 @@ const at = (col: number, row: number) => cellCenter(square, { col, row })
 
 describe('rulerPath', () => {
   it('snaps every waypoint to a cell centre', () => {
-    expect(rulerPath(square, [{ x: 10, y: 10 }, { x: 150, y: 80 }])).toEqual([at(0, 0), at(2, 1)])
+    expect(
+      rulerPath(square, [
+        { x: 10, y: 10 },
+        { x: 150, y: 80 },
+      ]),
+    ).toEqual([at(0, 0), at(2, 1)])
   })
 
   it('keeps an empty path empty', () => {

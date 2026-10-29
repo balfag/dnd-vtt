@@ -43,7 +43,10 @@ describe('simplify', () => {
 
 describe('thin', () => {
   it('keeps short lines as they are', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 1, y: 1 }]
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ]
     expect(thin(pts, 5)).toEqual(pts)
   })
 

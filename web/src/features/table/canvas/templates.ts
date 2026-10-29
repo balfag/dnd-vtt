@@ -1,6 +1,7 @@
-import type { Grid, TemplateShape } from '../../../shared/protocol'
+﻿import type { Grid, TemplateShape } from '../../../shared/protocol'
 import type { Point } from './camera'
-import { cellCenter, cellsInRect, type Cell } from './grid'
+import { cellCenter, cellsInRect, intersect, type Cell, type Rect } from './grid'
+import { distanceToSegment } from './simplify'
 
 export type { TemplateShape }
 
@@ -71,16 +72,8 @@ export function templateOutline(t: TemplateSpec, g: Grid): Point[] {
   }
 }
 
-function distanceToSegment(p: Point, a: Point, b: Point): number {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const len2 = dx * dx + dy * dy
-  const s = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
-  return Math.hypot(p.x - (a.x + s * dx), p.y - (a.y + s * dy))
-}
-
 /** insideOrOn: even-odd containment, the boundary counts. */
-function insideOrOn(p: Point, poly: Point[]): boolean {
+export function insideOrOn(p: Point, poly: Point[]): boolean {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const a = poly[i]
@@ -94,14 +87,19 @@ function insideOrOn(p: Point, poly: Point[]): boolean {
   return inside
 }
 
-/** affectedCells: a cell is affected when its centre lies inside the outline (boundary counts). */
-export function affectedCells(t: TemplateSpec, g: Grid): Cell[] {
+/**
+ * affectedCells: a cell is affected when its centre lies inside the outline (boundary counts).
+ * within cuts the search to a part of the world, such as the scene: a huge template stays cheap.
+ */
+export function affectedCells(t: TemplateSpec, g: Grid, within?: Rect): Cell[] {
   const outline = templateOutline(t, g)
   const xs = outline.map((p) => p.x)
   const ys = outline.map((p) => p.y)
   const minX = Math.min(...xs)
   const minY = Math.min(...ys)
-  const bounds = { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY }
+  const box = { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY }
+  const bounds = within === undefined ? box : intersect(box, within)
+  if (bounds === null) return []
   const radius = (t.size / g.unitFt) * g.sizePx
   return cellsInRect(g, bounds).filter((c) => {
     const m = cellCenter(g, c)

@@ -1,6 +1,7 @@
-import type { Point } from './camera'
+﻿import type { Point } from './camera'
 
-function distanceToSegment(p: Point, a: Point, b: Point): number {
+/** distanceToSegment is the distance from p to the segment ab. */
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
   const dx = b.x - a.x
   const dy = b.y - a.y
   const len2 = dx * dx + dy * dy

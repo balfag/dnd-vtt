@@ -1,8 +1,10 @@
-import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
+﻿import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
 import type { AssetRef, Grid, SceneView } from '../../../shared/protocol'
 import { worldToScreen, screenToWorld, type Camera } from './camera'
 import { clipSegment, hexEdges, intersect, squareLines } from './grid'
+import { DrawingLayer, type DrawingModel } from './DrawingLayer'
 import { FogLayer, FogPreviewLayer, type FogPreviewModel } from './FogLayer'
+import { OverlayLayer, type OverlayModel } from './OverlayLayer'
 import { tileRects } from './tiles'
 import { TokenLayer, type TokenModel } from './TokenLayer'
 
@@ -16,11 +18,14 @@ export interface SceneLayers {
   background: Container
   mapTokens: Container
   grid: Container
+  drawings: Container
   tokens: Container
   gmTokens: Container
   fog: Container
   edge: Container
   overlay: Container
+  /** Rulers, pings and the preview of a shape: over everything. */
+  tools: Container
 }
 
 function cssColor(host: HTMLElement, name: string, fallback: string): string {
@@ -41,6 +46,8 @@ export class SceneRenderer {
   private readonly edgeShape = new Graphics()
   private readonly tokenLayer: TokenLayer
   private readonly fogLayer: FogLayer
+  private readonly drawingLayer: DrawingLayer
+  private readonly overlayLayer: OverlayLayer
   private readonly fogPreview: FogPreviewLayer
   private previewModel: FogPreviewModel | null = null
   private readonly resizeObserver: ResizeObserver
@@ -66,16 +73,28 @@ export class SceneRenderer {
       seal: cssColor(host, '--seal', '#c25468'),
     })
     this.fogLayer = new FogLayer(app, this.slateColor)
+    const palette = {
+      chalk: cssColor(host, '--chalk', '#ece7db'),
+      slate: this.slateColor,
+      fog: this.fogColor,
+      line: cssColor(host, '--line', '#3a4a57'),
+      verdigris: cssColor(host, '--verdigris', '#4fa58e'),
+      seal: cssColor(host, '--seal', '#c25468'),
+    }
+    this.drawingLayer = new DrawingLayer(palette)
+    this.overlayLayer = new OverlayLayer(palette)
     this.fogPreview = new FogPreviewLayer(cssColor(host, '--brass', '#c9a34e'))
     this.layers = {
       background: new Container(),
       mapTokens: this.tokenLayer.layers.map,
       grid: new Container(),
+      drawings: this.drawingLayer.container,
       tokens: this.tokenLayer.layers.tokens,
       gmTokens: this.tokenLayer.layers.gm,
       fog: this.fogLayer.container,
       edge: new Container(),
       overlay: this.tokenLayer.layers.overlay,
+      tools: this.overlayLayer.container,
     }
     this.layers.background.addChild(this.board)
     this.layers.grid.addChild(this.gridShape)
@@ -84,11 +103,13 @@ export class SceneRenderer {
       this.layers.background,
       this.layers.mapTokens,
       this.layers.grid,
+      this.layers.drawings,
       this.layers.tokens,
       this.layers.gmTokens,
       this.layers.fog,
       this.layers.edge,
       this.layers.overlay,
+      this.layers.tools,
     )
 
     const renderer = app.renderer
@@ -101,7 +122,10 @@ export class SceneRenderer {
 
     app.ticker.add((ticker) => {
       this.flush()
-      if (!this.destroyed) this.tokenLayer.tick(ticker.deltaMS)
+      if (this.destroyed) return
+      this.tokenLayer.tick(ticker.deltaMS)
+      this.drawingLayer.tick(this.app.screen)
+      this.overlayLayer.tick(this.app.screen)
     })
     renderer.on('resize', () => {
       this.gridDirty = true
@@ -136,6 +160,8 @@ export class SceneRenderer {
     this.applyCamera()
     this.fogPreview.draw(this.previewModel, c)
     this.tokenLayer.setCamera(c)
+    this.drawingLayer.setCamera(c)
+    this.overlayLayer.setCamera(c)
     this.gridDirty = true
     this.edgeDirty = true
   }
@@ -143,6 +169,16 @@ export class SceneRenderer {
   /** setTokens gives the token layer what to draw; call it whenever the tokens, selection or drag change. */
   setTokens(model: TokenModel): void {
     if (!this.destroyed) this.tokenLayer.setModel(model)
+  }
+
+  /** setDrawings gives the drawing layer what to draw; call it whenever the drawings or the selection change. */
+  setDrawings(model: DrawingModel): void {
+    if (!this.destroyed) this.drawingLayer.setModel(model)
+  }
+
+  /** setOverlay gives the overlay what to draw: rulers, pings and the preview of a shape. */
+  setOverlay(model: OverlayModel): void {
+    if (!this.destroyed) this.overlayLayer.setModel(model)
   }
 
   /** setFog shows the fog of the scene, opaque for a player and see-through for the GM. */
@@ -192,6 +228,8 @@ export class SceneRenderer {
     this.loadId++
     this.resizeObserver.disconnect()
     this.tokenLayer.destroy()
+    this.drawingLayer.destroy()
+    this.overlayLayer.destroy()
     this.fogLayer.destroy()
     this.app.destroy(true, { children: true, texture: true })
   }

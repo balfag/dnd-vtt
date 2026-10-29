@@ -75,7 +75,10 @@ describe('affectedCells', () => {
 
 describe('templateOutline', () => {
   it('draws a circle as 64 points at the radius', () => {
-    const outline = templateOutline({ shape: 'sphere', x: 100, y: 100, size: 10, direction: 0 }, square)
+    const outline = templateOutline(
+      { shape: 'sphere', x: 100, y: 100, size: 10, direction: 0 },
+      square,
+    )
     expect(outline).toHaveLength(64)
     for (const p of outline) expect(Math.hypot(p.x - 100, p.y - 100)).toBeCloseTo(2 * s)
   })
