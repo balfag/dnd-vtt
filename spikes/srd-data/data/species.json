@@ -1,0 +1,36 @@
+[
+{"schemaVersion":1,"id":"human","name":"Human","source":"srd-5.2.1","creatureType":"humanoid","size":"medium","speed":30,"traits":[
+  {"id":"resourceful","name":"Resourceful","description":"You gain Heroic Inspiration whenever you finish a Long Rest.",
+   "effects":[{"type":"special","handler":"heroic_inspiration_on_rest","reason":"a rest-triggered resource flag; the resource itself is a boolean on the character"}]},
+  {"id":"skillful","name":"Skillful","description":"You gain proficiency in one skill of your choice.",
+   "effects":[{"type":"choice","choice":{"id":"human-skillful","count":1,"fromKind":"skill","then":[{"type":"proficiency","proficiencies":[{"kind":"skill","key":"$choice"}]}]}}]},
+  {"id":"versatile","name":"Versatile","description":"You gain an Origin feat of your choice.",
+   "effects":[{"type":"choice","choice":{"id":"human-versatile","count":1,"fromKind":"feat:origin","then":[{"type":"grant","grant":"feat:$choice"}]}}]}]},
+
+{"schemaVersion":1,"id":"elf","name":"Elf","source":"srd-5.2.1","creatureType":"humanoid","size":"medium","speed":30,"traits":[
+  {"id":"darkvision","name":"Darkvision","description":"Darkvision with a range of 60 feet.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"sense.darkvision","op":"set","value":"60"}]}]},
+  {"id":"elven-lineage","name":"Elven Lineage","description":"Choose a lineage (Drow, High Elf, Wood Elf): a level 1 benefit and a spell learned at levels 3 and 5.",
+   "effects":[{"type":"choice","choice":{"id":"elven-lineage","count":1,"from":["drow","high-elf","wood-elf"],
+    "thenBy":{
+     "drow":[{"type":"modifier","modifiers":[{"target":"sense.darkvision","op":"set","value":"120"}]},{"type":"grant","grant":"spell:dancing-lights"},{"type":"grant","grant":"spell:faerie-fire","when":"level>=3"},{"type":"grant","grant":"spell:darkness","when":"level>=5"}],
+     "high-elf":[{"type":"grant","grant":"spell:prestidigitation"},{"type":"grant","grant":"spell:detect-magic","when":"level>=3"},{"type":"grant","grant":"spell:misty-step","when":"level>=5"}],
+     "wood-elf":[{"type":"modifier","modifiers":[{"target":"speed","op":"set","value":"35"}]},{"type":"grant","grant":"spell:druidcraft"},{"type":"grant","grant":"spell:longstrider","when":"level>=3"},{"type":"grant","grant":"spell:pass-without-trace","when":"level>=5"}]}}}]},
+  {"id":"fey-ancestry","name":"Fey Ancestry","description":"Advantage on saving throws you make to avoid or end the Charmed condition.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"save.vs.charmed","op":"advantage"}]}]},
+  {"id":"keen-senses","name":"Keen Senses","description":"You have proficiency in the Insight, Perception, or Survival skill.",
+   "effects":[{"type":"choice","choice":{"id":"elf-keen-senses","count":1,"from":["insight","perception","survival"],"then":[{"type":"proficiency","proficiencies":[{"kind":"skill","key":"$choice"}]}]}}]},
+  {"id":"trance","name":"Trance","description":"You don't need to sleep and magic can't put you to sleep; you finish a Long Rest in 4 hours of trance.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"trait.trance","op":"flag"}]}]}]},
+
+{"schemaVersion":1,"id":"dwarf","name":"Dwarf","source":"srd-5.2.1","creatureType":"humanoid","size":"medium","speed":30,"traits":[
+  {"id":"darkvision","name":"Darkvision","description":"Darkvision with a range of 120 feet.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"sense.darkvision","op":"set","value":"120"}]}]},
+  {"id":"dwarven-resilience","name":"Dwarven Resilience","description":"Resistance to Poison damage and Advantage on saving throws to avoid or end the Poisoned condition.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"resist.poison","op":"flag"},{"target":"save.vs.poisoned","op":"advantage"}]}]},
+  {"id":"dwarven-toughness","name":"Dwarven Toughness","description":"Your Hit Point maximum increases by 1, and by 1 again whenever you gain a level.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"hp.max.perLevel","op":"add","value":"1"}]}]},
+  {"id":"stonecunning","name":"Stonecunning","description":"As a Bonus Action you gain Tremorsense (60 ft) for 10 minutes while on or touching a stone surface; uses equal to your proficiency bonus per Long Rest.",
+   "uses":{"max":"@prof","recharge":"long_rest"},
+   "effects":[{"type":"modifier","modifiers":[{"target":"sense.tremorsense","op":"set","value":"60"}],"duration":{"kind":"minute","amount":10}}]}]}
+]

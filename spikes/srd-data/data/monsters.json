@@ -1,0 +1,33 @@
+[
+{"schemaVersion":1,"id":"goblin-warrior","name":"Goblin Warrior","source":"srd-5.2.1","size":"small","type":"fey","alignment":"chaotic neutral",
+ "ac":15,"acSource":"leather armor, shield","hp":10,"hpDice":"3d6","speed":{"walk":30},
+ "abilities":{"str":8,"dex":15,"con":10,"int":10,"wis":8,"cha":8},"skillBonuses":{"stealth":6},
+ "senses":{"darkvision":60,"passivePerception":9},"languages":"Common, Goblin","cr":"1/4","xp":50,"profBonus":2,
+ "actions":[
+  {"name":"Scimitar","description":"Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, plus 2 (1d4) Slashing damage if the attack roll had Advantage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","bonus":"4"},"onHit":[{"type":"damage","damage":{"dice":"1d6 + 2","type":"slashing"}},{"type":"damage","when":"attack:advantage","damage":{"dice":"1d4","type":"slashing"}}]}]},
+  {"name":"Shortbow","description":"Ranged Attack Roll: +4, range 80/320 ft. Hit: 5 (1d6 + 2) Piercing damage, plus 2 (1d4) Piercing damage if the attack roll had Advantage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","ranged":true,"bonus":"4"},"onHit":[{"type":"damage","damage":{"dice":"1d6 + 2","type":"piercing"}},{"type":"damage","when":"attack:advantage","damage":{"dice":"1d4","type":"piercing"}}]}]}],
+ "bonusActions":[{"name":"Nimble Escape","description":"The goblin takes the Disengage or Hide action.","effects":[{"type":"grant","grant":"action:disengage|hide"}]}]},
+
+{"schemaVersion":1,"id":"skeleton","name":"Skeleton","source":"srd-5.2.1","size":"medium","type":"undead","alignment":"lawful evil",
+ "ac":14,"hp":13,"hpDice":"2d8 + 4","speed":{"walk":30},
+ "abilities":{"str":10,"dex":16,"con":15,"int":6,"wis":8,"cha":5},
+ "vulnerable":["bludgeoning"],"immune":["poison"],"conditionImmune":["exhaustion","poisoned"],
+ "senses":{"darkvision":60,"passivePerception":9},"languages":"Understands Common plus one other language but can't speak","cr":"1/4","xp":50,"profBonus":2,
+ "actions":[
+  {"name":"Shortsword","description":"Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","bonus":"5"},"onHit":[{"type":"damage","damage":{"dice":"1d6 + 3","type":"piercing"}}]}]},
+  {"name":"Shortbow","description":"Ranged Attack Roll: +5, range 80/320 ft. Hit: 6 (1d6 + 3) Piercing damage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","ranged":true,"bonus":"5"},"onHit":[{"type":"damage","damage":{"dice":"1d6 + 3","type":"piercing"}}]}]}]},
+
+{"schemaVersion":1,"id":"ogre","name":"Ogre","source":"srd-5.2.1","size":"large","type":"giant","alignment":"chaotic evil",
+ "ac":11,"hp":68,"hpDice":"8d10 + 24","speed":{"walk":40},
+ "abilities":{"str":19,"dex":8,"con":16,"int":5,"wis":7,"cha":7},
+ "senses":{"darkvision":60,"passivePerception":8},"languages":"Common, Giant","cr":"2","xp":450,"profBonus":2,
+ "actions":[
+  {"name":"Greatclub","description":"Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","bonus":"6"},"onHit":[{"type":"damage","damage":{"dice":"2d8 + 4","type":"bludgeoning"}}]}]},
+  {"name":"Javelin","description":"Melee or Ranged Attack Roll: +6, reach 5 ft. or range 30/120 ft. Hit: 11 (2d6 + 4) Piercing damage.",
+   "effects":[{"type":"attack","attack":{"kind":"weapon","bonus":"6"},"onHit":[{"type":"damage","damage":{"dice":"2d6 + 4","type":"piercing"}}]}]}]}
+]

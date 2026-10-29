@@ -1,0 +1,13 @@
+[
+{"schemaVersion":1,"id":"longsword","name":"Longsword","source":"srd-5.2.1","kind":"weapon","costGp":15,"weightLb":3,
+ "weapon":{"category":"martial","ranged":false,"damage":{"dice":"1d8","type":"slashing"},"versatile":"1d10","properties":["versatile"],"mastery":"sap"}},
+{"schemaVersion":1,"id":"shortbow","name":"Shortbow","source":"srd-5.2.1","kind":"weapon","costGp":25,"weightLb":2,
+ "weapon":{"category":"simple","ranged":true,"damage":{"dice":"1d6","type":"piercing"},"properties":["ammunition","two_handed"],"rangeFt":[80,320],"mastery":"vex"}},
+{"schemaVersion":1,"id":"chain-mail","name":"Chain Mail","source":"srd-5.2.1","kind":"armor","costGp":75,"weightLb":55,
+ "armor":{"category":"heavy","base":16,"dexMode":"none","strMin":13,"stealthDisadv":true}},
+{"schemaVersion":1,"id":"shield","name":"Shield","source":"srd-5.2.1","kind":"shield","costGp":10,"weightLb":6,
+ "armor":{"category":"shield","base":2}},
+{"schemaVersion":1,"id":"potion-of-healing","name":"Potion of Healing","source":"srd-5.2.1","kind":"consumable","costGp":50,"weightLb":0.5,"castTime":"bonus_action",
+ "description":"A magic item. As a Bonus Action you can drink it or administer it to a creature within 5 feet; the drinker regains 2d4 + 2 Hit Points.",
+ "effects":[{"type":"heal","heal":{"dice":"2d4 + 2"}}]}
+]

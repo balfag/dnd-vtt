@@ -1,0 +1,13 @@
+[
+{"schemaVersion":1,"id":"incapacitated","name":"Incapacitated","source":"srd-5.2.1",
+ "description":"You can't take any action, Bonus Action, or Reaction; your Concentration is broken; you can't speak; you have Disadvantage on Initiative rolls.",
+ "modifiers":[{"target":"actions","op":"set","value":"0"},{"target":"concentration","op":"flag","value":"broken"},{"target":"initiative","op":"disadvantage"}]},
+{"schemaVersion":1,"id":"paralyzed","name":"Paralyzed","source":"srd-5.2.1","includes":["incapacitated"],
+ "description":"You have the Incapacitated condition; your Speed is 0; you automatically fail Strength and Dexterity saves; attack rolls against you have Advantage; any attack that hits you is a Critical Hit if the attacker is within 5 feet.",
+ "modifiers":[{"target":"speed","op":"set","value":"0"},{"target":"save.str","op":"auto_fail"},{"target":"save.dex","op":"auto_fail"},
+  {"target":"attacks.against","op":"advantage"},{"target":"attacks.against.crit","op":"flag","when":"attacker.within:5"}]},
+{"schemaVersion":1,"id":"unconscious","name":"Unconscious","source":"srd-5.2.1","includes":["incapacitated","prone"],
+ "description":"You have the Incapacitated and Prone conditions and drop whatever you're holding; your Speed is 0; you automatically fail Strength and Dexterity saves; attack rolls against you have Advantage; any attack that hits you is a Critical Hit if the attacker is within 5 feet; you are unaware of your surroundings.",
+ "modifiers":[{"target":"speed","op":"set","value":"0"},{"target":"save.str","op":"auto_fail"},{"target":"save.dex","op":"auto_fail"},
+  {"target":"attacks.against","op":"advantage"},{"target":"attacks.against.crit","op":"flag","when":"attacker.within:5"}]}
+]

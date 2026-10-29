@@ -1,0 +1,13 @@
+[
+{"schemaVersion":1,"id":"champion","name":"Champion","source":"srd-5.2.1","class":"fighter","features":[
+  {"id":"improved-critical","name":"Improved Critical","level":3,"description":"Weapon and Unarmed Strike attack rolls score a Critical Hit on a roll of 19 or 20 on the d20.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"crit.range","op":"set","value":"19"}]}]},
+  {"id":"remarkable-athlete","name":"Remarkable Athlete","level":3,"description":"Advantage on Initiative rolls and Strength (Athletics) checks; immediately after a Critical Hit you can move up to half your Speed without provoking Opportunity Attacks.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"initiative","op":"advantage"},{"target":"skill.athletics","op":"advantage"}]},
+    {"type":"special","handler":"crit_move","reason":"movement rider on a crit event"}]}]},
+{"schemaVersion":1,"id":"evoker","name":"Evoker","source":"srd-5.2.1","class":"wizard","features":[
+  {"id":"evocation-savant","name":"Evocation Savant","level":3,"description":"Add two Wizard Evocation spells of level 2 or lower to your spellbook for free, and one more free Evocation spell whenever you gain a new level of spell slots.",
+   "effects":[{"type":"special","handler":"spellbook_grant","reason":"adds free records to a per-character spellbook, with a level-gated choice at each new slot level"}]},
+  {"id":"potent-cantrip","name":"Potent Cantrip","level":3,"description":"When you miss with a cantrip attack roll or the target succeeds on its saving throw, the target takes half the cantrip's damage (if any) but suffers no additional effect.",
+   "effects":[{"type":"modifier","modifiers":[{"target":"cantrip.onMissOrSave","op":"set","value":"half"}]}]}]}
+]
