@@ -116,7 +116,7 @@ func NewRouter(d Deps) http.Handler {
 	// pattern avoids a conflict with "GET /".
 	mux.Handle("GET /api/", http.NotFoundHandler())
 	mux.Handle("GET /", spaHandler(d.SPA))
-	return checkOrigin(mux)
+	return securityHeaders(checkOrigin(mux))
 }
 
 // checkOrigin rejects state-changing requests whose Origin header does not
