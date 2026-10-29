@@ -1,7 +1,65 @@
 import { randomBytes } from 'node:crypto'
-import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import {
+  expect,
+  test as base,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test'
 import ru from '../src/i18n/ru.json' with { type: 'json' }
 
+interface CspViolation {
+  violatedDirective: string
+  blockedURI: string
+  sourceFile: string
+  page: string
+}
+
+// Runs in every page of every context: reports each securitypolicyviolation to the test process
+// (the page may be closed before the test ends) and keeps a copy in window.__cspViolations.
+const cspListener = `
+  window.__cspViolations = []
+  document.addEventListener('securitypolicyviolation', (e) => {
+    const v = {
+      violatedDirective: e.violatedDirective,
+      blockedURI: e.blockedURI,
+      sourceFile: e.sourceFile,
+      page: location.href,
+    }
+    window.__cspViolations.push(v)
+    window.__reportCspViolation(v)
+  })
+`
+
+/**
+ * test is Playwright's test with a guard: every context created through browser.newContext collects
+ * CSP violations of all its pages, and the test fails with their text if there is any.
+ */
+export const test = base.extend<{ cspGuard: undefined }>({
+  cspGuard: [
+    async ({ browser }, provide) => {
+      const violations: CspViolation[] = []
+      const newContext = browser.newContext.bind(browser)
+      browser.newContext = async (options) => {
+        const context = await newContext(options)
+        await context.exposeBinding('__reportCspViolation', (_source, v: CspViolation) => {
+          violations.push(v)
+        })
+        await context.addInitScript(cspListener)
+        return context
+      }
+      try {
+        await provide(undefined)
+      } finally {
+        browser.newContext = newContext
+      }
+      expect(violations, 'CSP violations').toEqual([])
+    },
+    { auto: true },
+  ],
+})
+
+export { expect }
 export interface Signed {
   context: BrowserContext
   page: Page

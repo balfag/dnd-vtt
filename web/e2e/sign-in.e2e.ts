@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test'
 import ru from '../src/i18n/ru.json' with { type: 'json' }
-import { registerPlayer, setupGM } from './helpers'
+import { expect, test, registerPlayer, setupGM } from './helpers'
 
 test('gm sets up, a player registers by the game link and the link can be replaced', async ({
   browser,
