@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js'
+﻿import { Container, Graphics } from 'pixi.js'
 import type { Drawing, SceneView } from '../../../shared/protocol'
 import { worldToScreen, type Camera, type Point } from './camera'
 import { paintShape, TemplateCells, type DrawingColors } from './DrawingLayer'
@@ -88,10 +88,12 @@ export class OverlayLayer {
   private view = { width: 0, height: 0 }
   private dirty = true
 
-  constructor(
-    private readonly colors: Colors & DrawingColors,
-    private readonly now: () => number = Date.now,
-  ) {
+  private readonly colors: Colors & DrawingColors
+  private readonly now: () => number
+
+  constructor(colors: Colors & DrawingColors, now: () => number = Date.now) {
+    this.colors = colors
+    this.now = now
     for (const node of [this.container, this.preview, this.rulers, this.pings]) {
       node.eventMode = 'none'
     }

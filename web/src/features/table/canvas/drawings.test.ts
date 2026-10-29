@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { Drawing, Grid } from '../../../shared/protocol'
-import { directionDeg, drawingBounds, hitDrawing, rectOfCorners, translateData } from './drawings'
+import { directionDeg, drawingBounds, hitDrawing, rectOfCorners, moveDrawing } from './drawings'
 
 const grid: Grid = {
   type: 'square',
@@ -33,19 +33,19 @@ const cube: Drawing = {
   data: { shape: 'cube', x: 0, y: 105, size: 15, direction: 0 },
 }
 
-describe('translateData', () => {
+describe('moveDrawing', () => {
   it('moves every kind as a whole', () => {
-    expect(translateData(rect, 5, -5)).toEqual({ x: 15, y: 5, w: 100, h: 50 })
-    expect(translateData(circle, 5, -5)).toEqual({ x: 105, y: 95, r: 40 })
-    expect(translateData(text, 5, -5)).toEqual({ x: 55, y: 45, text: 'Hello', size: 20 })
-    expect(translateData(cube, 5, -5)).toEqual({
+    expect(moveDrawing(rect, 5, -5).data).toEqual({ x: 15, y: 5, w: 100, h: 50 })
+    expect(moveDrawing(circle, 5, -5).data).toEqual({ x: 105, y: 95, r: 40 })
+    expect(moveDrawing(text, 5, -5).data).toEqual({ x: 55, y: 45, text: 'Hello', size: 20 })
+    expect(moveDrawing(cube, 5, -5).data).toEqual({
       shape: 'cube',
       x: 5,
       y: 100,
       size: 15,
       direction: 0,
     })
-    expect(translateData(line, 5, -5)).toEqual({
+    expect(moveDrawing(line, 5, -5).data).toEqual({
       points: [
         [5, -5],
         [105, -5],

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import { useSession } from '../../app/session'
@@ -16,11 +16,19 @@ import { turnChange } from '../combat/turn'
 import { FogToolbar, type FogToolState } from '../fog/FogToolbar'
 import { gameStore, useGame, viewScene } from '../game/store'
 import { ScenesPanel } from '../scenes/ScenesPanel'
+import { ToolOptions } from '../tools/ToolOptions'
+import {
+  DEFAULT_DRAW,
+  GM_TOOLS,
+  DEFAULT_TEMPLATE,
+  type DrawOptions,
+  type TemplateOptions,
+} from '../tools/toolState'
 import { PlaceTokenPopover } from '../tokens/PlaceTokenPopover'
 import { runTokenAction, type TokenAction } from '../tokens/tokenActions'
 import { TokenContextMenu } from '../tokens/TokenContextMenu'
 import { TokenDialog } from '../tokens/TokenDialog'
-import { SceneCanvas, type PlaceToolState } from './canvas/SceneCanvas'
+import { SceneCanvas, type CanvasTool, type PlaceToolState } from './canvas/SceneCanvas'
 import { ConnectionNote } from './ConnectionNote'
 import { PrepFrame } from './PrepFrame'
 import { SectionTabs, type Section } from './SectionTabs'
@@ -79,6 +87,14 @@ function typesText(target: EventTarget | null): boolean {
   )
 }
 
+/** sharedToolKeys are the keys of the tools every participant has. */
+const sharedToolKeys: Partial<Record<string, TableTool>> = {
+  r: 'ruler',
+  p: 'ping',
+  d: 'draw',
+  t: 'template',
+}
+
 /** TableScreen is the table: the game connection, the top bar, the tools and the scene canvas. */
 export default function TableScreen() {
   const { t } = useTranslation()
@@ -98,6 +114,8 @@ export default function TableScreen() {
   const [editing, setEditing] = useState<{ token: Token; key: number; open: boolean } | null>(null)
   const [menu, setMenu] = useState<{ tokenId: string; at: { x: number; y: number } } | null>(null)
   const [deleting, setDeleting] = useState<{ token: Token; open: boolean } | null>(null)
+  const [drawOptions, setDrawOptions] = useState<DrawOptions>(DEFAULT_DRAW)
+  const [templateOptions, setTemplateOptions] = useState<TemplateOptions>(DEFAULT_TEMPLATE)
   const [fogOptions, setFogOptions] = useState<Pick<FogToolState, 'shape' | 'radiusCells'>>({
     shape: 'rect',
     radiusCells: 1,
@@ -153,7 +171,7 @@ export default function TableScreen() {
 
   useKeepSceneView(command, isGm && synced)
 
-  // Tool keys (V, K, F, Shift+F); the place tool and the fog tools are the GM's.
+  // Tool keys (V, R, P, D, T, and K, F, Shift+F for the GM); the place tool and the fog tools are the GM's.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || typesText(e.target)) return
@@ -165,6 +183,10 @@ export default function TableScreen() {
       const key = e.key.toLowerCase()
       if (key === 'v') {
         setTool('select')
+      } else if (key in sharedToolKeys) {
+        const next = sharedToolKeys[key]
+        if (next === undefined) return
+        setTool((now) => (now === next ? 'select' : next))
       } else if (key === 'k' && isGm) {
         setTool((now) => (now === 'place' ? 'select' : 'place'))
       } else if (key === 'f' && isGm) {
@@ -279,6 +301,18 @@ export default function TableScreen() {
     isGm && scene !== null && (tool === 'reveal' || tool === 'hide')
       ? { mode: tool, ...fogOptions }
       : null
+  // A player holds only the tools of everyone.
+  const shownTool: TableTool = isGm || !GM_TOOLS.includes(tool) ? tool : 'select'
+  const canvasTool: CanvasTool | null =
+    scene !== null &&
+    (shownTool === 'ruler' ||
+      shownTool === 'ping' ||
+      shownTool === 'draw' ||
+      shownTool === 'template')
+      ? shownTool
+      : null
+  const myColor =
+    (game?.players ?? []).find((p) => p.id === snapshotMe?.playerId)?.color ?? '#e53935'
   const placeTool: PlaceToolState | null =
     isGm && scene !== null && tool === 'place' ? { image: placeImage } : null
   const campaignId = game?.campaign.id ?? ''
@@ -301,7 +335,7 @@ export default function TableScreen() {
           else void logout()
         }}
       />
-      <ToolRail tool={isGm ? tool : 'select'} onTool={setTool} isGm={isGm} />
+      <ToolRail tool={shownTool} onTool={setTool} isGm={isGm} />
       <main className="table__stage" inert={narrow && section !== 'map'}>
         <SceneCanvas
           scene={scene}
@@ -320,7 +354,21 @@ export default function TableScreen() {
             setMenu({ tokenId: id, at })
           }}
           onTokenAction={doTokenAction}
+          tool={canvasTool}
+          drawOptions={drawOptions}
+          templateOptions={templateOptions}
         />
+        {canvasTool !== null && (
+          <ToolOptions
+            tool={canvasTool}
+            isGm={isGm}
+            draw={drawOptions}
+            onDraw={setDrawOptions}
+            template={templateOptions}
+            onTemplate={setTemplateOptions}
+            myColor={myColor}
+          />
+        )}
         <TokenList scene={scene} />
         {placeTool !== null && (
           <PlaceTokenPopover

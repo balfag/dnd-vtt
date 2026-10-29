@@ -1,4 +1,4 @@
-﻿import type { Drawing, DrawingContent, Grid } from '../../../shared/protocol'
+﻿import type { Drawing, Grid } from '../../../shared/protocol'
 import type { Point } from './camera'
 import type { Rect } from './grid'
 import { distanceToSegment } from './simplify'
@@ -8,19 +8,24 @@ import { insideOrOn, templateOutline } from './templates'
 const textCharWidth = 0.5
 const textLineHeight = 1.2
 
-/** translateData moves a drawing as a whole by (dx, dy) world units. */
-export function translateData(d: DrawingContent, dx: number, dy: number): DrawingContent['data'] {
+/** moveDrawing moves a drawing as a whole by (dx, dy) world units. */
+export function moveDrawing(d: Drawing, dx: number, dy: number): Drawing {
   switch (d.kind) {
     case 'freehand':
-      return { points: d.data.points.map(([x, y]): [number, number] => [x + dx, y + dy]) }
+      return {
+        ...d,
+        data: { points: d.data.points.map(([x, y]): [number, number] => [x + dx, y + dy]) },
+      }
     case 'rect':
+      return { ...d, data: { ...d.data, x: d.data.x + dx, y: d.data.y + dy } }
     case 'circle':
+      return { ...d, data: { ...d.data, x: d.data.x + dx, y: d.data.y + dy } }
     case 'text':
+      return { ...d, data: { ...d.data, x: d.data.x + dx, y: d.data.y + dy } }
     case 'template':
-      return { ...d.data, x: d.data.x + dx, y: d.data.y + dy }
+      return { ...d, data: { ...d.data, x: d.data.x + dx, y: d.data.y + dy } }
   }
 }
-
 /** drawingBounds is the box around a drawing in world units. */
 export function drawingBounds(d: Drawing, g: Grid): Rect {
   switch (d.kind) {

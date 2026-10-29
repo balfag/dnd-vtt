@@ -1,10 +1,11 @@
-import { useState } from 'react'
+﻿import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageType, type SceneView } from '../../shared/protocol'
 import { commandErrorKey } from '../../shared/ws/errors'
 import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import type { FogShapeKind } from '../table/canvas/fogShapes'
+import { useToolAnchor } from '../tools/useToolAnchor'
 import './fog.css'
 
 /** FogToolState is the fog tool the GM has chosen and how it draws. */
@@ -34,6 +35,8 @@ interface FogToolbarProps {
 export function FogToolbar({ scene, tool, onChange, command, announce }: FogToolbarProps) {
   const { t } = useTranslation()
   const [confirming, setConfirming] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useToolAnchor(ref, tool.mode)
   const count = scene.fog.ops.length
 
   function run(type: string, data: unknown) {
@@ -43,7 +46,7 @@ export function FogToolbar({ scene, tool, onChange, command, announce }: FogTool
   }
 
   return (
-    <div className="fogbar" role="group" aria-label={t('fog.title')}>
+    <div ref={ref} className="fogbar" role="group" aria-label={t('fog.title')}>
       <h2 className="fogbar__title">{t(`fog.tool.${tool.mode}`)}</h2>
       <fieldset className="fogbar__shapes">
         <legend className="fogbar__legend">{t('fog.shape.label')}</legend>

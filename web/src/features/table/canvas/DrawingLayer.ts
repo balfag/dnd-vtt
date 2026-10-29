@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js'
+﻿import { Container, Graphics, Text } from 'pixi.js'
 import type { Drawing, Grid, SceneView } from '../../../shared/protocol'
 import { worldToScreen, type Camera } from './camera'
 import { drawingBounds } from './drawings'
@@ -132,7 +132,10 @@ export class DrawingLayer {
   private view = { width: 0, height: 0 }
   private dirty = true
 
-  constructor(private readonly colors: DrawingColors) {
+  private readonly colors: DrawingColors
+
+  constructor(colors: DrawingColors) {
+    this.colors = colors
     for (const node of [this.container, this.shapes, this.selection]) node.eventMode = 'none'
     this.container.addChild(this.shapes, this.selection)
   }
