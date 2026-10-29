@@ -1,4 +1,4 @@
-﻿[
+[
 {"schemaVersion":1,"id":"fire-bolt","name":"Fire Bolt","source":"srd-5.2.1","level":0,"school":"evocation","classes":["sorcerer","wizard"],
  "castingTime":{"unit":"action"},"range":{"kind":"distance","feet":120},"components":{"v":true,"s":true},"duration":{"kind":"instant"},
  "targeting":{"kind":"creature","count":1},

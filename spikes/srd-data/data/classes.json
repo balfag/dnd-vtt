@@ -1,4 +1,4 @@
-﻿[
+[
 {"schemaVersion":1,"id":"fighter","name":"Fighter","source":"srd-5.2.1","hitDie":10,"primaryAbility":["str","dex"],"savingThrows":["str","con"],
  "proficiencies":[
   {"kind":"armor","key":"light"},{"kind":"armor","key":"medium"},{"kind":"armor","key":"heavy"},{"kind":"armor","key":"shield"},

@@ -515,10 +515,10 @@ func (b *builder) derive(cl schema.Class, row *schema.ClassLevel) {
 		if m.Value != "" {
 			if p, err := ParseExpr(string(m.Value), b.vars); err == nil {
 				val = p.Const
-			} else if m.Op != "flag" {
+			} else if c := m.Value[0]; c == '@' || (c >= '0' && c <= '9') {
 				b.fail("modifier %s: %v", m.Target, err)
 				continue
-			}
+			} // otherwise the value is symbolic ("half", "magic-missile") and val stays 0
 		}
 		switch {
 		case m.Target == "ac.base" && m.Op == "set":

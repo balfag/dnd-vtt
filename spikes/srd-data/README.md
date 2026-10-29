@@ -1,4 +1,4 @@
-﻿# spikes/srd-data
+# spikes/srd-data
 
 Spike #37: SRD 5.2 as structured data and a rules effects schema (ADR-0009).
 Not product code: a separate Go module (stdlib only), kept out of the root `go test ./...`.

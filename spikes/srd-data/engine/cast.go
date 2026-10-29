@@ -167,9 +167,11 @@ func (c *Compendium) Cast(caster *Caster, req CastRequest) (*CastResult, error) 
 	}
 	cx := &castCtx{c: c, sp: sp, caster: caster, req: req, slot: slot, res: res}
 	var shared *Roll // area damage is rolled once for all targets
+	for _, t := range req.Targets {
+		res.Outcomes = append(res.Outcomes, &Outcome{Target: t.Name, HPBefore: t.HP, HPAfter: t.HP})
+	}
 	for i, t := range req.Targets {
-		o := &Outcome{Target: t.Name, HPBefore: t.HP, HPAfter: t.HP}
-		res.Outcomes = append(res.Outcomes, o)
+		o := res.Outcomes[i]
 		if f := sp.Targeting.Filter; f != "" && !matchesFilter(f, t) {
 			o.Rejected = "invalid target: not " + f
 			continue

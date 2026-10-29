@@ -1,4 +1,4 @@
-﻿[
+[
 {"schemaVersion":1,"id":"acolyte","name":"Acolyte","source":"srd-5.2.1","abilityOptions":["int","wis","cha"],"feat":"magic-initiate",
  "proficiencies":[{"kind":"skill","key":"insight"},{"kind":"skill","key":"religion"},{"kind":"tool","key":"calligraphers-supplies"}],
  "featPresets":{"mi-list":["cleric"]},

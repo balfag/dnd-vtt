@@ -1,4 +1,4 @@
-﻿[
+[
 {"schemaVersion":1,"id":"human","name":"Human","source":"srd-5.2.1","creatureType":"humanoid","size":"medium","speed":30,"traits":[
   {"id":"resourceful","name":"Resourceful","description":"You gain Heroic Inspiration whenever you finish a Long Rest.",
    "effects":[{"type":"special","handler":"heroic_inspiration_on_rest","reason":"a rest-triggered resource flag; the resource itself is a boolean on the character"}]},

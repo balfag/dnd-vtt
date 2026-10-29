@@ -1,4 +1,4 @@
-﻿[
+[
 {"schemaVersion":1,"id":"champion","name":"Champion","source":"srd-5.2.1","class":"fighter","features":[
   {"id":"improved-critical","name":"Improved Critical","level":3,"description":"Weapon and Unarmed Strike attack rolls score a Critical Hit on a roll of 19 or 20 on the d20.",
    "effects":[{"type":"modifier","modifiers":[{"target":"crit.range","op":"set","value":"19"}]}]},
