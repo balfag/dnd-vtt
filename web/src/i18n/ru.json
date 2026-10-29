@@ -473,5 +473,70 @@
     "reset": "Сбросить раскладку",
     "popupBlocked": "Браузер заблокировал окно. Разрешите всплывающие окна для этого сайта и попробуйте снова.",
     "popoutTitle": "{{panel}} — {{campaign}}"
+  },
+  "wiki": {
+    "editor": {
+      "rollOffline": "Бросить можно во время игры",
+      "rollAria": "Бросить {{formula}}",
+      "rollPublic": "Бросить открыто",
+      "rollBlind": "Бросить вслепую",
+      "callout": {
+        "change": "Сменить эмодзи выноски"
+      },
+      "details": {
+        "expand": "Раскрыть блок",
+        "collapse": "Свернуть блок"
+      },
+      "mention": {
+        "label": "Упоминание",
+        "empty": "Ничего не нашлось",
+        "unnamed": "без названия",
+        "deleted": "(удалено)",
+        "kind": {
+          "scene": "сцена",
+          "token": "фишка"
+        },
+        "aria": {
+          "page": "Страница {{name}}",
+          "scene": "Сцена {{name}}",
+          "token": "Фишка {{name}}"
+        },
+        "group": {
+          "page": "Страницы",
+          "scene": "Сцены",
+          "token": "Фишки"
+        }
+      },
+      "slash": {
+        "label": "Вставить блок",
+        "empty": "Ничего не нашлось",
+        "text": "Текст",
+        "h1": "Заголовок 1",
+        "h2": "Заголовок 2",
+        "h3": "Заголовок 3",
+        "bulletList": "Маркированный список",
+        "orderedList": "Нумерованный список",
+        "taskList": "Чек-лист",
+        "blockquote": "Цитата",
+        "callout": "Выноска",
+        "horizontalRule": "Разделитель",
+        "codeBlock": "Код",
+        "table": "Таблица",
+        "details": "Сворачиваемый блок",
+        "image": "Изображение",
+        "mention": "Упоминание",
+        "roll": "Бросок"
+      },
+      "bubble": {
+        "label": "Оформление текста",
+        "bold": "Ж",
+        "italic": "К",
+        "boldTitle": "Жирный (Ctrl+B)",
+        "italicTitle": "Курсив (Ctrl+I)",
+        "link": "Ссылка",
+        "linkPlaceholder": "Адрес ссылки; пусто — убрать",
+        "linkInvalid": "Нужен адрес http, https или mailto"
+      }
+    }
   }
 }
