@@ -1,0 +1,18 @@
+[
+{"schemaVersion":1,"id":"alert","name":"Alert","source":"srd-5.2.1","category":"origin",
+ "description":"Initiative Proficiency: add your Proficiency Bonus to Initiative rolls. Initiative Swap: swap Initiative with a willing ally after rolling.",
+ "effects":[{"type":"modifier","modifiers":[{"target":"initiative","op":"add","value":"@prof"}]},
+  {"type":"special","handler":"initiative_swap","reason":"edits another actor's initiative during combat setup"}]},
+{"schemaVersion":1,"id":"savage-attacker","name":"Savage Attacker","source":"srd-5.2.1","category":"origin",
+ "description":"Once per turn when you hit with a weapon, roll the weapon's damage dice twice and use either roll.",
+ "effects":[{"type":"modifier","modifiers":[{"target":"damage.weapon.rollTwiceKeepBest","op":"flag","value":"per_turn"}]}]},
+{"schemaVersion":1,"id":"magic-initiate","name":"Magic Initiate","source":"srd-5.2.1","category":"origin","repeatable":true,
+ "description":"Choose the Cleric, Druid, or Wizard list: learn two cantrips and one level 1 spell (cast once per Long Rest without a slot); Int, Wis, or Cha is the casting ability.",
+ "effects":[{"type":"choice","choice":{"id":"mi-list","count":1,"from":["cleric","druid","wizard"]}},
+  {"type":"choice","choice":{"id":"mi-ability","count":1,"from":["int","wis","cha"]}},
+  {"type":"choice","choice":{"id":"mi-cantrips","count":2,"fromKind":"spell:cantrip:$mi-list","then":[{"type":"grant","grant":"spell:$choice"}]}},
+  {"type":"choice","choice":{"id":"mi-spell","count":1,"fromKind":"spell:level1:$mi-list","then":[{"type":"grant","grant":"spell:$choice:free_cast_per_long_rest"}]}}]},
+{"schemaVersion":1,"id":"defense","name":"Defense","source":"srd-5.2.1","category":"fighting_style",
+ "description":"While you're wearing Light, Medium, or Heavy armor, you gain a +1 bonus to Armor Class.",
+ "effects":[{"type":"modifier","modifiers":[{"target":"ac.bonus","op":"add","value":"1","when":"armor:worn"}]}]}
+]
