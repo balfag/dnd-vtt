@@ -37,9 +37,9 @@ async function readJSON(res: Response): Promise<unknown> {
  * returns undefined for 204 or when no guard is given, and throws ApiError on any failure.
  */
 export async function apiRequest<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
-  opts?: { body?: unknown; guard?: (v: unknown) => v is T },
+  opts?: { body?: unknown; guard?: (v: unknown) => v is T; keepalive?: boolean },
 ): Promise<T | undefined> {
   const hasBody = opts?.body !== undefined
   let res: Response
@@ -49,6 +49,7 @@ export async function apiRequest<T>(
       credentials: 'same-origin',
       headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
       body: hasBody ? JSON.stringify(opts.body) : undefined,
+      keepalive: opts?.keepalive,
     })
   } catch {
     throw new ApiError(0, 'network')
