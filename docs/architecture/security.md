@@ -84,7 +84,23 @@
 
 ## Заголовки
 
-CSP без внешних источников (`default-src 'self'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` (токен ссылки на игру не должен утечь через `Referer`); разрешения `camera`/`microphone` — только для self.
+Заголовки ставит сервер на **каждый** ответ (страницы, API, статика, WebSocket-рукопожатие); у ответов `GET /assets/{id}` — свой CSP `sandbox` (см. «Ассеты» в [protocol.md](protocol.md#ассеты-m1)), остальное — как ниже.
+
+| Заголовок | Значение |
+|-----------|----------|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` |
+| `Referrer-Policy` | `no-referrer` — токен ссылки на игру не должен утечь через `Referer` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Permissions-Policy` | `camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()` |
+| `Cross-Origin-Opener-Policy` | `same-origin` — выносные окна рабочей области открываются на том же источнике и продолжают работать |
+
+Почему так:
+- **Без внешних источников:** приложение работает без интернета, CDN запрещены ([CLAUDE.md](../../CLAUDE.md)); `'self'` хватает всему клиенту.
+- **`'unsafe-inline'` только для стилей:** ProseMirror и dockview ставят атрибут `style` у элементов (ширины столбцов, размеры панелей); скрипты встраивать нельзя — `script-src 'self'` без `'unsafe-inline'` и `'unsafe-eval'`.
+- **`blob:`** — изображения и воркеры, которые создают PixiJS и клиент (предпросмотр загрузки); **`data:`** — мелкие изображения в стилях.
+- **`ws:`/`wss:`** — WebSocket того же хоста; в CSP3 `'self'` уже их покрывает, явные схемы — для браузеров, где это не так.
+- **`frame-ancestors 'none'`** — приложение нельзя встроить во фрейм (защита от кликджекинга); выносные окна — это `window.open`, не фреймы.
+- Нарушение политики в клиенте — ошибка: e2e-тесты падают на любом событии `securitypolicyviolation`.
 
 ## Секреты
 
