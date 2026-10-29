@@ -537,6 +537,86 @@
         "linkPlaceholder": "Link address; empty removes it",
         "linkInvalid": "An http, https or mailto address is required"
       }
+    },
+    "link": "Wiki",
+    "nav": "Wiki sections",
+    "topbar": {
+      "table": "Table",
+      "wiki": "Wiki"
+    },
+    "loading": "Loading…",
+    "loadFailed": "Could not load the wiki.",
+    "retry": "Retry",
+    "untitled": "Untitled",
+    "mention": {
+      "tableOnly": "Opens on the table during a game"
+    },
+    "tree": {
+      "tab": "Wiki",
+      "label": "Wiki pages",
+      "add": "New page",
+      "empty": "No pages yet. Create the first one.",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "rowMenu": "Actions for the page “{{name}}”",
+      "addChild": "New child page",
+      "rename": "Rename",
+      "renameLabel": "Page title",
+      "move": "Move…",
+      "openNewGroup": "Open in a new group",
+      "delete": "Delete",
+      "records": "Records: {{count}}",
+      "databaseLater": "Databases will open in an upcoming update.",
+      "createFailed": "Could not create the page.",
+      "moveFailed": "Could not move the page.",
+      "deleteFailed": "Could not delete the page.",
+      "renameFailed": "Could not rename the page."
+    },
+    "move": {
+      "title": "Move “{{name}}”",
+      "search": "Find the parent page",
+      "root": "To the root",
+      "empty": "No matching pages.",
+      "submit": "Move"
+    },
+    "delete": {
+      "title": "Delete “{{name}}”?",
+      "confirm": "The page goes to the trash.",
+      "confirmChildren": "The page and the pages inside it ({{count}}) go to the trash."
+    },
+    "page": {
+      "tab": "Page",
+      "empty": "Pick a page in the tree or create a new one",
+      "newPage": "New page",
+      "loadFailed": "Could not open the page.",
+      "gone": "This page is gone.",
+      "icon": "Page icon",
+      "iconPlaceholder": "An emoji; empty removes it",
+      "iconInvalid": "One emoji or nothing",
+      "cover": {
+        "add": "Add a cover",
+        "change": "Change cover",
+        "remove": "Remove cover",
+        "title": "Cover",
+        "none": "No cover",
+        "done": "Done"
+      },
+      "path": "Page path",
+      "title": "Page title",
+      "titlePlaceholder": "Untitled",
+      "save": {
+        "saved": "Saved",
+        "saving": "Saving…",
+        "failed": "Not saved",
+        "retry": "Retry"
+      },
+      "conflict": {
+        "text": "The page was changed in another window. Your edits are not saved.",
+        "reload": "Load the new version",
+        "keep": "Keep mine"
+      },
+      "backlinks": "Mentioned on pages",
+      "imageFailed": "Could not upload the image."
     }
   }
 }

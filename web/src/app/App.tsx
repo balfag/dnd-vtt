@@ -15,6 +15,8 @@ import { SessionProvider, useSession } from './session'
 
 // PixiJS is heavy: the table is its own chunk, loaded only for /table.
 const TableScreen = lazy(() => import('../features/table/TableScreen'))
+// The wiki screen and its editor are chunks of their own, loaded only for /wiki.
+const WikiScreen = lazy(() => import('../features/wiki/WikiScreen'))
 
 /** App picks the page by route inside the session provider. */
 export function App() {
@@ -38,6 +40,12 @@ function Pages() {
       return (
         <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--slate)' }} />}>
           <TableScreen />
+        </Suspense>
+      )
+    case 'wiki':
+      return (
+        <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--slate)' }} />}>
+          <WikiScreen campaignId={route.campaignId} />
         </Suspense>
       )
     case 'play':

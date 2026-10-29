@@ -5,6 +5,7 @@ export type Route =
   | { name: 'setup' }
   | { name: 'login' }
   | { name: 'table' }
+  | { name: 'wiki'; campaignId: string }
   | { name: 'play'; token: string }
   | { name: 'reset'; token: string }
   | { name: 'notFound' }
@@ -25,6 +26,7 @@ export function matchRoute(pathname: string): Route {
   if (token !== undefined && rest.length === 0 && tokenPattern.test(token)) {
     if (first === 'play') return { name: 'play', token }
     if (first === 'reset') return { name: 'reset', token }
+    if (first === 'wiki') return { name: 'wiki', campaignId: token }
   }
   return { name: 'notFound' }
 }

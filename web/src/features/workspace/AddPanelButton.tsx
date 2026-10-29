@@ -26,7 +26,8 @@ export function AddPanelButton({ containerApi, group }: IDockviewHeaderActionsPr
   }, [containerApi])
 
   const open = new Set(containerApi.panels.map((p) => p.id))
-  const closed = panels.filter((p) => !open.has(p.kind))
+  // Panels that exist many times (wiki pages) are opened from the tree.
+  const closed = panels.filter((p) => p.idPrefix === undefined && !open.has(p.kind))
   if (closed.length === 0) return null
 
   const items: MenuItem[] = closed.map((def) => ({

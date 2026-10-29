@@ -471,6 +471,7 @@ export default function TableScreen() {
       sceneName={scene?.name ?? null}
       players={game?.players ?? []}
       isGm={isGm}
+      wikiCampaignId={campaignId}
       onOpenScenes={() => {
         if (narrow) setPanelTab('scenes')
         else openPanel('scenes')

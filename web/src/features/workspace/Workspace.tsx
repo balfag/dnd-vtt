@@ -1,4 +1,4 @@
-﻿import {
+import {
   DockviewReact,
   type DockviewApi,
   type DockviewReadyEvent,
@@ -11,9 +11,16 @@ import { useTranslation } from 'react-i18next'
 import { AddPanelButton } from './AddPanelButton'
 import { clearLayout, loadLayout, sanitizeLayout, saveLayout } from './layout'
 import { PanelTab } from './PanelTab'
-import { OPEN_EVENT, RESET_EVENT } from './workspaceCommands'
+import {
+  OPEN_EVENT,
+  OPEN_INSTANCE_EVENT,
+  RESET_EVENT,
+  type InstanceRequest,
+} from './workspaceCommands'
 import {
   findPanel,
+  panelId,
+  paramsOf,
   panelOptions,
   WorkspaceContext,
   useWorkspace,
@@ -31,6 +38,12 @@ export interface WorkspaceProps {
   defaultLayout: (api: DockviewApi) => void
   /** popoutTitle is the title of the window of a detached panel. */
   popoutTitle: (panelTitle: string) => string
+  /** isPanelValid tells whether a panel still has what it shows (a wiki page that is not gone); the ones that do not are closed, silently. */
+  isPanelValid?: (panelId: string, params: Record<string, unknown>) => boolean
+  /** onPanelsChange is called with the ids of the panels after the layout is ready and whenever a panel is added or closed. */
+  onPanelsChange?: (ids: string[], api: DockviewApi) => void
+  /** emptyState fills a group with no panels. */
+  emptyState?: React.ReactNode
 }
 
 const SAVE_DELAY_MS = 500
@@ -47,26 +60,67 @@ const theme: DockviewTheme = {
   dndPanelOverlay: 'group',
 }
 
-const kinds: PanelKind[] = ['scene', 'chat', 'combat', 'scenes']
+const kinds: PanelKind[] = ['scene', 'chat', 'combat', 'scenes', 'wiki.tree', 'wiki.page']
 
-function PanelContent({ api }: IDockviewPanelProps) {
+function PanelContent({ api, params }: IDockviewPanelProps) {
   const { panels } = useWorkspace()
-  return <>{findPanel(panels, api.id)?.render()}</>
+  return <>{findPanel(panels, api.id)?.render(paramsOf(params))}</>
 }
 
-// One component per kind of the catalogue; a panel's id is its kind.
+// One component per kind of the catalogue.
 const components = Object.fromEntries(kinds.map((k) => [k, PanelContent]))
 
+function Empty() {
+  const { emptyState } = useWorkspace()
+  return <>{emptyState}</>
+}
+
 /** Workspace is the area of tiled panels: tabs, splits, resizing and windows of their own. */
-export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: WorkspaceProps) {
+export function Workspace({
+  storageKey,
+  panels,
+  defaultLayout,
+  popoutTitle,
+  isPanelValid,
+  onPanelsChange,
+  emptyState,
+}: WorkspaceProps) {
   const { t } = useTranslation()
   const [api, setApi] = useState<DockviewApi | null>(null)
   const [blocked, setBlocked] = useState(false)
   // The callbacks of dockview are made once; they read the latest props from here.
-  const latest = useRef({ storageKey, panels, defaultLayout, popoutTitle })
-  useEffect(() => {
-    latest.current = { storageKey, panels, defaultLayout, popoutTitle }
+  const latest = useRef({
+    storageKey,
+    panels,
+    defaultLayout,
+    popoutTitle,
+    isPanelValid,
+    onPanelsChange,
   })
+  useEffect(() => {
+    latest.current = {
+      storageKey,
+      panels,
+      defaultLayout,
+      popoutTitle,
+      isPanelValid,
+      onPanelsChange,
+    }
+  })
+
+  // Close the panels whose content is gone (a deleted wiki page) and tell what is open.
+  const closeInvalid = useCallback((dock: DockviewApi) => {
+    const valid = latest.current.isPanelValid
+    if (valid !== undefined) {
+      for (const panel of [...dock.panels]) {
+        if (!valid(panel.id, paramsOf(panel.params))) panel.api.close()
+      }
+    }
+    latest.current.onPanelsChange?.(
+      dock.panels.map((p) => p.id),
+      dock,
+    )
+  }, [])
 
   const buildDefault = useCallback((dock: DockviewApi) => {
     dock.clear()
@@ -90,10 +144,28 @@ export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: Wo
         }
       }
       if (!restored) buildDefault(dock)
+      closeInvalid(dock)
       setApi(dock)
     },
-    [buildDefault],
+    [buildDefault, closeInvalid],
   )
+
+  // Tell which panels are open, and close the ones that lost their content when the catalogue or the validity changes.
+  useEffect(() => {
+    if (api === null) return
+    closeInvalid(api)
+    const subs = [
+      api.onDidAddPanel(() => {
+        closeInvalid(api)
+      }),
+      api.onDidRemovePanel(() => {
+        closeInvalid(api)
+      }),
+    ]
+    return () => {
+      for (const sub of subs) sub.dispose()
+    }
+  }, [api, closeInvalid, isPanelValid])
 
   // Save the layout 500 ms after the last change.
   useEffect(() => {
@@ -135,9 +207,58 @@ export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: Wo
     if (api === null) return
     for (const panel of api.panels) {
       const def = findPanel(latest.current.panels, panel.id)
-      if (def !== undefined && panel.title !== def.title) panel.api.setTitle(def.title)
+      if (def === undefined) continue
+      const title = def.titleFor?.(paramsOf(panel.params)) ?? def.title
+      if (panel.title !== title) panel.api.setTitle(title)
     }
-  }, [api, titles])
+  }, [api, titles, panels])
+
+  // A panel that exists many times (a wiki page): show the open one, or add it in the group of the last such panel.
+  const lastGroup = useRef<{ prefix: string; groupId: string } | null>(null)
+  useEffect(() => {
+    if (api === null) return
+    const sub = api.onDidActivePanelChange((e) => {
+      const panel = e.panel
+      const def = panel === undefined ? undefined : findPanel(latest.current.panels, panel.id)
+      if (panel !== undefined && def?.idPrefix !== undefined) {
+        lastGroup.current = { prefix: def.idPrefix, groupId: panel.group.id }
+      }
+    })
+    const onOpenInstance = (e: Event) => {
+      if (!(e instanceof CustomEvent)) return
+      const request = e.detail as InstanceRequest
+      const def = latest.current.panels.find((p) => p.kind === request.kind)
+      if (def?.idPrefix === undefined) return
+      const prefix = def.idPrefix
+      const id = panelId(def, request.key)
+      const open = api.getPanel(id)
+      if (open !== undefined) {
+        open.api.setActive()
+        return
+      }
+      const remembered = lastGroup.current
+      const sameKind = (g: { panels: { id: string }[] }) =>
+        g.panels.some((p) => p.id.startsWith(prefix))
+      const home =
+        request.newGroup || remembered === null || remembered.prefix !== prefix
+          ? undefined
+          : api.groups.find((g) => g.id === remembered.groupId && sameKind(g))
+      const empty = request.newGroup ? undefined : api.groups.find((g) => g.panels.length === 0)
+      const side = api.activeGroup ?? api.groups[0]
+      const position = (() => {
+        if (home !== undefined) return { referenceGroup: home }
+        if (empty !== undefined) return { referenceGroup: empty }
+        if (side !== undefined) return { referenceGroup: side, direction: 'right' as const }
+        return undefined
+      })()
+      api.addPanel({ ...panelOptions(def, { key: request.key, params: request.params }), position })
+    }
+    window.addEventListener(OPEN_INSTANCE_EVENT, onOpenInstance)
+    return () => {
+      sub.dispose()
+      window.removeEventListener(OPEN_INSTANCE_EVENT, onOpenInstance)
+    }
+  }, [api])
 
   // "Scenes" in the top bar.
   useEffect(() => {
@@ -227,13 +348,18 @@ export function Workspace({ storageKey, panels, defaultLayout, popoutTitle }: Wo
     [api],
   )
 
-  const value = useMemo<WorkspaceValue>(() => ({ panels, popout }), [panels, popout])
+  const value = useMemo<WorkspaceValue>(
+    () => ({ panels, popout, emptyState }),
+    [panels, popout, emptyState],
+  )
   return (
     <WorkspaceContext value={value}>
       <div className="workspace">
         <DockviewReact
           className="workspace__dock"
           components={components}
+          watermarkComponent={Empty}
+          noPanelsOverlay="emptyGroup"
           defaultTabComponent={PanelTab}
           rightHeaderActionsComponent={AddPanelButton}
           onReady={onReady}

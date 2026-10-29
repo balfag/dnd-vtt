@@ -9,7 +9,7 @@ import './assets.css'
 interface AssetPickerProps {
   campaignId: string
   /** kind of the images to show and of the images that are uploaded here. */
-  kind: 'map' | 'token'
+  kind: 'map' | 'token' | 'other'
   /** value is the id of the chosen asset; null: none. */
   value: string | null
   /** onChange gets the chosen image, or null for the "none" button. */

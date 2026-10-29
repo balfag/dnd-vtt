@@ -12,6 +12,8 @@ describe('matchRoute', () => {
     ['/play/abc_DEF-1', { name: 'play', token: 'abc_DEF-1' }],
     ['/play/abc_DEF-1/', { name: 'play', token: 'abc_DEF-1' }],
     ['/reset/x', { name: 'reset', token: 'x' }],
+    ['/wiki/01JABC', { name: 'wiki', campaignId: '01JABC' }],
+    ['/wiki/01JABC/', { name: 'wiki', campaignId: '01JABC' }],
   ])('%s', (pathname, want) => {
     expect(matchRoute(pathname)).toEqual(want)
   })
@@ -26,6 +28,10 @@ describe('matchRoute', () => {
     '/nope',
     '//',
     '/setup/x',
+    '/wiki',
+    '/wiki/',
+    '/wiki/a/b',
+    '/wiki/a.b',
   ])('%s is not found', (pathname) => {
     expect(matchRoute(pathname)).toEqual({ name: 'notFound' })
   })
