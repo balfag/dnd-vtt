@@ -38,7 +38,7 @@
  "description":"Until the start of your next turn: +5 bonus to AC, including against the triggering attack, and no damage from Magic Missile."},
 
 {"schemaVersion":1,"id":"bless","name":"Bless","source":"srd-5.2.1","level":1,"school":"enchantment","classes":["cleric","paladin"],
- "castingTime":{"unit":"action"},"range":{"kind":"distance","feet":30},"components":{"v":true,"s":true,"m":true,"material":"a sprinkling of Holy Water"},"duration":{"kind":"minute","amount":1,"concentration":true},
+ "castingTime":{"unit":"action"},"range":{"kind":"distance","feet":30},"components":{"v":true,"s":true,"m":true,"material":"a Holy Symbol worth 5+ GP"},"duration":{"kind":"minute","amount":1,"concentration":true},
  "targeting":{"kind":"creatures","count":3,"extra":{"perSlot":"1"}},
  "effects":[{"type":"modifier","modifiers":[{"target":"attack.roll","op":"add","value":"1d4"},{"target":"save.all","op":"add","value":"1d4"}]}],
  "description":"Up to three creatures add 1d4 to attack rolls and saving throws for the duration. One more target per slot level above 1."},
@@ -111,7 +111,7 @@
  "description":"A willing creature not wearing armor has base AC 13 plus its Dexterity modifier for 8 hours; the spell ends early if the target dons armor."},
 
 {"schemaVersion":1,"id":"sleep","name":"Sleep","source":"srd-5.2.1","level":1,"school":"enchantment","classes":["bard","sorcerer","wizard"],
- "castingTime":{"unit":"action"},"range":{"kind":"distance","feet":60},"components":{"v":true,"s":true,"m":true,"material":"a pinch of fine sand, rose petals, or a cricket"},"duration":{"kind":"minute","amount":1,"concentration":true},
+ "castingTime":{"unit":"action"},"range":{"kind":"distance","feet":60},"components":{"v":true,"s":true,"m":true,"material":"a pinch of sand or rose petals"},"duration":{"kind":"minute","amount":1,"concentration":true},
  "targeting":{"kind":"point","area":{"shape":"sphere","size":5,"origin":"point"}},
  "effects":[{"type":"save","save":{"ability":"wis","modifiers":[{"target":"save","op":"auto_success","when":"target.conditionImmune:exhaustion"},{"target":"save","op":"auto_success","when":"target.trait:trance"}]},
    "apply":[{"type":"condition","condition":{"id":"incapacitated","until":"end_of_next_turn","endsOn":["damage","shaken"],
@@ -119,7 +119,7 @@
  "description":"Creatures in a 5-foot-radius Sphere make a Wisdom save or are Incapacitated until the end of their next turn, then repeat the save; on a second failure they are Unconscious for the duration. Ends on damage or being shaken. Creatures that don't sleep (such as elves) or are immune to Exhaustion automatically succeed."},
 
 {"schemaVersion":1,"id":"spirit-guardians","name":"Spirit Guardians","source":"srd-5.2.1","level":3,"school":"conjuration","classes":["cleric"],
- "castingTime":{"unit":"action"},"range":{"kind":"self"},"components":{"v":true,"s":true,"m":true,"material":"a Holy Symbol"},"duration":{"kind":"minute","amount":10,"concentration":true},
+ "castingTime":{"unit":"action"},"range":{"kind":"self"},"components":{"v":true,"s":true,"m":true,"material":"a prayer scroll"},"duration":{"kind":"minute","amount":10,"concentration":true},
  "targeting":{"kind":"area_self","area":{"shape":"emanation","size":15,"origin":"self","chosenExempt":true}},
  "effects":[{"type":"aura","area":{"shape":"emanation","size":15,"origin":"self","chosenExempt":true},"trigger":"enter,end_turn,zone_moves_onto","once":"per_turn",
    "save":{"ability":"wis"},"damage":{"dice":"3d8","typeOptions":["radiant","necrotic"],"scale":{"perSlot":"1d8"}},"onSuccess":"half",
