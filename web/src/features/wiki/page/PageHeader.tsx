@@ -154,7 +154,7 @@ export function PageHeader(p: PageHeaderProps) {
                   .filter((s) => s !== '')
                   .join(' ')}
               </button>
-              <span aria-hidden="true"> / </span>
+              <span aria-hidden="true">/</span>
             </span>
           ))}
         </nav>

@@ -479,6 +479,12 @@
   font-size: 14px;
 }
 
+.phead__crumb {
+  display: flex;
+  gap: 6px;
+  margin-right: 6px;
+}
+
 .phead__row {
   display: flex;
   align-items: baseline;
@@ -572,6 +578,12 @@
   .wikibar {
     gap: 12px;
     padding: 0 12px;
+  }
+
+  .phead__crumb {
+    display: flex;
+    gap: 6px;
+    margin-right: 6px;
   }
 
   .phead__row {
