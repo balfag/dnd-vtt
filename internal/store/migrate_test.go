@@ -122,6 +122,88 @@ func TestLoadMigrationsEmbedded(t *testing.T) {
 	}
 }
 
+func TestMigration10KeepsChatMessages(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := fs.Sub(migrationFiles, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := loadMigrations(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ms) < 10 || ms[9].name != "0010_handouts.sql" {
+		t.Fatalf("migration 10 = %+v", ms)
+	}
+	if err := applyMigrations(ctx, db, ms[:9]); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, q := range []string{
+		`INSERT INTO campaign (id, name, created_at) VALUES ('c1', 'n', 1)`,
+		`INSERT INTO chat_message (id, campaign_id, kind, visibility, recipients, payload, created_at)
+		 VALUES ('m1', 'c1', 'text', 'public', '[]', '{"text":"a"}', 1)`,
+		`INSERT INTO chat_message (id, campaign_id, kind, visibility, recipients, payload, created_at)
+		 VALUES ('m2', 'c1', 'roll', 'blind', '[]', '{"formula":"d20"}', 2)`,
+		`INSERT INTO chat_message (id, campaign_id, kind, visibility, recipients, payload, created_at)
+		 VALUES ('m3', 'c1', 'text', 'private', '["p1"]', '{"text":"b"}', 3)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+
+	if err := applyMigrations(ctx, db, ms); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM chat_message`).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("messages = %d, %v; want 3", n, err)
+	}
+	var idx int
+	err = db.QueryRow(`SELECT count(*) FROM sqlite_schema WHERE type = 'index' AND name IN ('chat_message_campaign_id', 'chat_message_asset_asset')`).Scan(&idx)
+	if err != nil || idx != 2 {
+		t.Errorf("indexes = %d, %v; want 2", idx, err)
+	}
+	if !tableExists(t, db, "chat_message_asset") || tableExists(t, db, "chat_message_new") {
+		t.Error("chat_message_asset must exist and chat_message_new must not")
+	}
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows.Next() {
+		t.Error("foreign_key_check must be empty")
+	}
+	_ = rows.Close()
+
+	insert := `INSERT INTO chat_message (id, campaign_id, kind, visibility, recipients, payload, created_at)
+		 VALUES (?, 'c1', ?, ?, '[]', '{}', 4)`
+	for _, c := range []struct {
+		kind, vis string
+		ok        bool
+	}{
+		{"handout", "public", true},
+		{"handout", "gm", false},
+		{"handout", "blind", false},
+		{"handout", "self", false},
+		{"text", "gm", false},
+	} {
+		_, err := db.Exec(insert, "x-"+c.kind+c.vis, c.kind, c.vis)
+		if (err == nil) != c.ok {
+			t.Errorf("%s/%s: err = %v, want ok=%v", c.kind, c.vis, err, c.ok)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO chat_message (id, campaign_id, kind, visibility, recipients, payload, created_at)
+		 VALUES ('hp', 'c1', 'handout', 'private', '["p1"]', '{}', 5)`); err != nil {
+		t.Errorf("private handout: %v", err)
+	}
+}
+
 func TestApplyMigrations(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
