@@ -4,6 +4,7 @@ import { HandlersRef } from './handlers'
 import { openPopupMenu } from './popupMenu'
 import { rollFromInput, rollInputRe } from './rules'
 import { isValidFormula } from '../../../shared/dice/parse'
+import { docOf } from '../../../shared/dom'
 
 export interface InlineRollOptions {
   handlers: HandlersRef
@@ -137,7 +138,7 @@ export const InlineRoll = Node.create<InlineRollOptions>({
           return
         }
         e.preventDefault()
-        openPopupMenu(e.clientX, e.clientY, [
+        openPopupMenu(docOf(dom), e.clientX, e.clientY, [
           {
             label: i18n.t('wiki.editor.rollPublic'),
             onSelect: () => {

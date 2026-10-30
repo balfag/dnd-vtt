@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../../shared/api/wiki'
+import { isElement } from '../../../shared/dom'
 import { PopupMenu, type MenuItem } from '../../workspace/PanelTab'
 import type { DropZone } from './tree'
 
@@ -125,7 +126,7 @@ export function TreeRow(p: TreeRowProps) {
       }}
       onClick={(e) => {
         if (p.renaming) return
-        if (e.target instanceof Element && e.target.closest('button, input') !== null) return
+        if (isElement(e.target) && e.target.closest('button, input') !== null) return
         p.onOpen(e.ctrlKey || e.metaKey)
       }}
       onContextMenu={(e) => {

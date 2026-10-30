@@ -3,6 +3,7 @@ import { useEditorState } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { docOf } from '../../../shared/dom'
 import { normalizeHref } from './rules'
 
 interface BubbleBarProps {
@@ -65,7 +66,7 @@ export function BubbleBar({ editor, extraActions }: BubbleBarProps) {
         editor.isEditable &&
         !s.selection.empty &&
         !editor.isActive('codeBlock') &&
-        (view.hasFocus() || (barRef.current?.contains(document.activeElement) ?? false))
+        (view.hasFocus() || (barRef.current?.contains(docOf(view.dom).activeElement) ?? false))
       }
     >
       <div

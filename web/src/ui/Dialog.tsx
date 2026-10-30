@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { docOf, isHTMLElement } from '../shared/dom'
 import './ui.css'
 import { Button } from './Button'
 
@@ -28,7 +29,7 @@ export function Dialog({ title, open, onClose, children, actions, closeLabel }: 
     const dialog = ref.current
     if (dialog === null) return
     if (open && !dialog.open) {
-      opener.current = document.activeElement
+      opener.current = docOf(dialog).activeElement
       dialog.showModal()
     } else if (!open && dialog.open) {
       dialog.close()
@@ -37,7 +38,7 @@ export function Dialog({ title, open, onClose, children, actions, closeLabel }: 
 
   function closed() {
     onClose()
-    if (opener.current instanceof HTMLElement) {
+    if (isHTMLElement(opener.current)) {
       opener.current.focus()
     }
     opener.current = null

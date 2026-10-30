@@ -2,6 +2,7 @@ import type { IDockviewPanelHeaderProps } from 'dockview-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { isElement, isNode } from '../../shared/dom'
 import { placeMenu } from './menuPlacement'
 import { findPanel, paramsOf, useWorkspace } from './panels'
 
@@ -36,7 +37,7 @@ export function PopupMenu({ doc, at, label, items, onClose }: PopupMenuProps) {
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
     const onPointerDown = (e: Event) => {
-      if (e.target instanceof Node && ref.current?.contains(e.target) === true) return
+      if (isNode(e.target) && ref.current?.contains(e.target) === true) return
       close.current(false)
     }
     doc.addEventListener('pointerdown', onPointerDown, true)
@@ -170,7 +171,7 @@ export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProp
     <div
       className="wtab"
       onDoubleClick={(e) => {
-        if (e.target instanceof Element && e.target.closest('button') !== null) return
+        if (isElement(e.target) && e.target.closest('button') !== null) return
         toggleMaximize()
       }}
       onContextMenu={(e) => {

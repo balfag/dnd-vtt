@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { isNode } from '../../../../shared/dom'
 
 export interface PickerItem {
   id: string
@@ -67,13 +68,13 @@ export function PickerPopup(p: PickerPopupProps) {
   useEffect(() => {
     input.current?.focus()
     const onDown = (e: Event) => {
-      if (!(e.target instanceof Node)) return
+      if (!isNode(e.target)) return
       if (ref.current?.contains(e.target) === true || p.anchor.contains(e.target)) return
       close.current()
     }
     // A second click on the cell (a double click) would move the focus from the search field to the cell.
     const keepFocus = (e: Event) => {
-      if (e.target instanceof Node && p.anchor.contains(e.target)) e.preventDefault()
+      if (isNode(e.target) && p.anchor.contains(e.target)) e.preventDefault()
     }
     doc.addEventListener('pointerdown', onDown, true)
     doc.addEventListener('mousedown', keepFocus, true)
