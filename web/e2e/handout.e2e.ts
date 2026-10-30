@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test'
 import ru from '../src/i18n/ru.json' with { type: 'json' }
-import { registerPlayer, setupGM, startGame } from './helpers'
+import { expect, test, registerPlayer, setupGM, startGame } from './helpers'
 
 const campaignName = 'Записка-кампания'
 const pageTitle = 'Записка из комнаты'

@@ -1,4 +1,5 @@
-﻿import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
+﻿import 'pixi.js/unsafe-eval'
+import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
 import type { AssetRef, Grid, SceneView } from '../../../shared/protocol'
 import { worldToScreen, screenToWorld, type Camera } from './camera'
 import { clipSegment, hexEdges, intersect, squareLines } from './grid'

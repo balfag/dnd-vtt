@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import ru from '../src/i18n/ru.json' with { type: 'json' }
-import { registerPlayer, setupGM, startGame } from './helpers'
+import { expect, test, registerPlayer, setupGM, startGame } from './helpers'
 
 const campaignName = 'Склеп-кампания'
 const sceneName = 'Склеп'
