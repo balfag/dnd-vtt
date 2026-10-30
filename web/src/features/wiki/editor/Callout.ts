@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import i18n from 'i18next'
+import { isHTMLElement } from '../../../shared/dom'
 import { defaultCalloutEmoji, isValidEmoji } from './rules'
 
 /** Callout is a block with an emoji on a board-coloured background (docs/design/wiki-screen.md, "Выноска"). */
@@ -124,7 +125,7 @@ export const Callout = Node.create({
           return true
         },
         stopEvent: (e) =>
-          e.target instanceof HTMLElement &&
+          isHTMLElement(e.target) &&
           e.target.closest('.wiki-callout__emoji, .wiki-callout__input') !== null,
         ignoreMutation: (m) => !body.contains(m.target),
       }

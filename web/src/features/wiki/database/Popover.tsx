@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { isElement } from '../../../shared/dom'
 
 interface PopoverProps {
   anchor: HTMLElement
@@ -36,7 +37,7 @@ export function Popover({ anchor, label, onClose, align = 'start', children }: P
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('input, select, button')?.focus()
     const onDown = (e: Event) => {
-      if (!(e.target instanceof Element)) return
+      if (!isElement(e.target)) return
       if (ref.current?.contains(e.target) === true || anchor.contains(e.target)) return
       if (e.target.closest('dialog, .dbpick') !== null) return
       close.current()
@@ -58,7 +59,7 @@ export function Popover({ anchor, label, onClose, align = 'start', children }: P
         if (
           e.key === 'Escape' &&
           !e.defaultPrevented &&
-          !(e.target instanceof Element && e.target.closest('dialog') !== null)
+          !(isElement(e.target) && e.target.closest('dialog') !== null)
         ) {
           e.preventDefault()
           e.stopPropagation()

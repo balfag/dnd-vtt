@@ -8,6 +8,7 @@ import {
 } from '../../../shared/api/wiki'
 import { Button } from '../../../ui/Button'
 import { Dialog } from '../../../ui/Dialog'
+import { isHTMLElement } from '../../../shared/dom'
 import { PopupMenu } from '../../workspace/PanelTab'
 import { download } from '../download'
 import { hitId, isSearchShortcut } from '../search/query'
@@ -119,7 +120,7 @@ export function TreePanel() {
 
   function onKeyDown(e: React.KeyboardEvent) {
     const target = e.target
-    if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'treeitem') return
+    if (!isHTMLElement(target) || target.getAttribute('role') !== 'treeitem') return
     const at = visible.findIndex((r) => rows.current.get(r.node.id) === target)
     const row = visible[at]
     if (row === undefined) return

@@ -1,11 +1,16 @@
+import { isNode } from '../../../shared/dom'
+
 export interface PopupMenuItem {
   label: string
   onSelect: () => void
 }
 
-/** openPopupMenu shows a small context menu at the point and closes it on a choice, Esc or a click outside. */
-export function openPopupMenu(x: number, y: number, items: PopupMenuItem[]): void {
-  const menu = document.createElement('div')
+/**
+ * openPopupMenu shows a small context menu at the point and closes it on a choice, Esc or a click outside.
+ * doc is the document the menu opens in: a detached panel lives in a window of its own.
+ */
+export function openPopupMenu(doc: Document, x: number, y: number, items: PopupMenuItem[]): void {
+  const menu = doc.createElement('div')
   menu.className = 'wiki-popup'
   menu.setAttribute('role', 'menu')
   menu.style.left = `${String(x)}px`
@@ -13,11 +18,11 @@ export function openPopupMenu(x: number, y: number, items: PopupMenuItem[]): voi
 
   const close = () => {
     menu.remove()
-    document.removeEventListener('mousedown', onOutside, true)
-    document.removeEventListener('keydown', onKey, true)
+    doc.removeEventListener('mousedown', onOutside, true)
+    doc.removeEventListener('keydown', onKey, true)
   }
   const onOutside = (e: Event) => {
-    if (!(e.target instanceof Node) || !menu.contains(e.target)) {
+    if (!isNode(e.target) || !menu.contains(e.target)) {
       close()
     }
   }
@@ -29,7 +34,7 @@ export function openPopupMenu(x: number, y: number, items: PopupMenuItem[]): voi
   }
 
   for (const item of items) {
-    const button = document.createElement('button')
+    const button = doc.createElement('button')
     button.type = 'button'
     button.className = 'wiki-popup__item'
     button.setAttribute('role', 'menuitem')
@@ -41,8 +46,8 @@ export function openPopupMenu(x: number, y: number, items: PopupMenuItem[]): voi
     menu.append(button)
   }
 
-  document.body.append(menu)
-  document.addEventListener('mousedown', onOutside, true)
-  document.addEventListener('keydown', onKey, true)
+  doc.body.append(menu)
+  doc.addEventListener('mousedown', onOutside, true)
+  doc.addEventListener('keydown', onKey, true)
   menu.querySelector('button')?.focus()
 }

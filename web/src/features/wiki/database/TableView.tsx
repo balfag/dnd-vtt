@@ -1,6 +1,7 @@
 import { memo, useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DbRecord, Property } from '../../../shared/api/wiki'
+import { isHTMLElement } from '../../../shared/dom'
 import { PopupMenu } from '../../workspace/PanelTab'
 import { InlineInput } from './values/InlineInput'
 import { ValueCell } from './values/ValueCell'
@@ -79,7 +80,7 @@ export function TableView(p: TableViewProps) {
 
   function onKeyDown(e: React.KeyboardEvent) {
     const el = e.target
-    if (!(el instanceof HTMLElement) || el.getAttribute('role') !== 'gridcell') return
+    if (!isHTMLElement(el) || el.getAttribute('role') !== 'gridcell') return
     const id = el.dataset.record
     const key = el.dataset.col
     if (id === undefined || key === undefined) return

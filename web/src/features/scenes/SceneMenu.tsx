@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { docOf, isNode } from '../../shared/dom'
 
 export type MenuAction = 'rename' | 'settings' | 'moveUp' | 'moveDown' | 'delete'
 
@@ -73,12 +74,13 @@ export function SceneMenu({
     }
     const rect = button.current?.getBoundingClientRect()
     if (rect === undefined) return
-    const right = window.innerWidth - rect.right
-    const room = window.innerHeight - rect.bottom
+    const win = docOf(button.current).defaultView ?? window
+    const right = win.innerWidth - rect.right
+    const room = win.innerHeight - rect.bottom
     setPlace(
       room >= menuHeight
         ? { right, top: rect.bottom + 4 }
-        : { right, bottom: window.innerHeight - rect.top + 4 },
+        : { right, bottom: win.innerHeight - rect.top + 4 },
     )
   }
 
@@ -92,30 +94,28 @@ export function SceneMenu({
     if (!open) return
     const outside = (e: PointerEvent) => {
       const target = e.target
-      if (
-        target instanceof Node &&
-        !menu.current?.contains(target) &&
-        !button.current?.contains(target)
-      ) {
+      if (isNode(target) && !menu.current?.contains(target) && !button.current?.contains(target)) {
         setPlace(null)
       }
     }
     const away = () => {
       setPlace(null)
     }
-    document.addEventListener('pointerdown', outside)
-    window.addEventListener('resize', away)
-    window.addEventListener('scroll', away, true)
+    const doc = docOf(button.current)
+    const win = doc.defaultView ?? window
+    doc.addEventListener('pointerdown', outside)
+    win.addEventListener('resize', away)
+    win.addEventListener('scroll', away, true)
     return () => {
-      document.removeEventListener('pointerdown', outside)
-      window.removeEventListener('resize', away)
-      window.removeEventListener('scroll', away, true)
+      doc.removeEventListener('pointerdown', outside)
+      win.removeEventListener('resize', away)
+      win.removeEventListener('scroll', away, true)
     }
   }, [open])
 
   function onKeyDown(e: React.KeyboardEvent) {
     const list = items()
-    const at = list.findIndex((el) => el === document.activeElement)
+    const at = list.findIndex((el) => el === docOf(menu.current).activeElement)
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
       const step = e.key === 'ArrowDown' ? 1 : -1

@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
+import { isElement } from '../../../shared/dom'
 
 export interface ShownImage {
   assetId: string
@@ -26,7 +27,7 @@ export function ImageAction({ container, onShow }: ImageActionProps) {
     const box = container.current
     if (box === null) return
     const over = (e: MouseEvent) => {
-      const img = e.target instanceof Element ? e.target.closest('img[data-asset-id]') : null
+      const img = isElement(e.target) ? e.target.closest('img[data-asset-id]') : null
       if (img === null) return
       const at = img.getBoundingClientRect()
       const parent = box.getBoundingClientRect()

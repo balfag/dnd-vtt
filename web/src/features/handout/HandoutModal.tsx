@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { isElement } from '../../shared/dom'
 import type { ChatMessage } from '../../shared/protocol'
 import { useHandoutQueue } from './useHandoutQueue'
 import './handout.css'
@@ -57,7 +58,7 @@ export function HandoutModal({ message, onClose }: HandoutModalProps) {
         <div
           className="handout-modal__content"
           onClick={(e) => {
-            const img = e.target instanceof Element ? e.target.closest('img[data-asset-id]') : null
+            const img = isElement(e.target) ? e.target.closest('img[data-asset-id]') : null
             const id = img?.getAttribute('data-asset-id')
             if (id !== null && id !== undefined) {
               window.open(`/assets/${id}`, '_blank', 'noopener')
