@@ -212,13 +212,17 @@ sfu.leave = leave;
 
 // Sum of RTP payload bytes (not counting headers) over all streams.
 sfu.getTotals = async () => {
-  let sent = 0, recv = 0;
+  let sent = 0, recv = 0, nack = 0, pli = 0, freeze = 0, decoded = 0, lost = 0;
   const rep = await pc.getStats();
   rep.forEach((r) => {
     if (r.type === "outbound-rtp") sent += r.bytesSent || 0;
-    if (r.type === "inbound-rtp") recv += r.bytesReceived || 0;
+    if (r.type === "inbound-rtp") {
+      recv += r.bytesReceived || 0;
+      nack += r.nackCount || 0; pli += r.pliCount || 0; lost += r.packetsLost || 0;
+      if (r.kind === "video") { freeze += r.freezeCount || 0; decoded += r.framesDecoded || 0; }
+    }
   });
-  return { sent, recv, t: performance.now() };
+  return { sent, recv, nack, pli, freeze, decoded, lost, t: performance.now() };
 };
 
 if (qs.get("auto") === "1") join();
