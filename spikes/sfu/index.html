@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SFU spike</title>
+<style>
+  :root { color-scheme: dark; --bg:#14161a; --panel:#1e2127; --line:#2d323b; --text:#e6e8eb; --dim:#8b93a1; --accent:#e0a53a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); }
+  input, button { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.on { background:var(--accent); color:#1a1405; border-color:var(--accent); }
+  #state { margin-left:auto; color:var(--dim); font-variant-numeric:tabular-nums; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; padding:16px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .tile video { display:block; width:100%; aspect-ratio:16/9; background:#000; object-fit:cover; }
+  .bar { display:flex; align-items:center; gap:6px; padding:6px 8px; }
+  .bar .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .info { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .bar button { padding:2px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <input id="name" placeholder="Name" maxlength="24" aria-label="Name">
+  <button id="join">Join</button>
+  <button id="leave" disabled>Leave</button>
+  <span id="state">not connected</span>
+</header>
+<main id="grid"></main>
+<script>
+"use strict";
+const qs = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+const LAYERS = ["q", "h", "f"];
+const ENCODINGS = [
+  { rid: "q", scaleResolutionDownBy: 4, maxBitrate: 150000 },
+  { rid: "h", scaleResolutionDownBy: 2, maxBitrate: 300000 },
+  { rid: "f", scaleResolutionDownBy: 1, maxBitrate: 700000 },
+];
+
+let ws, pc, localStream, myId, joinClickAt = 0;
+let chain = Promise.resolve();
+const tiles = new Map(); // peer id -> {el, video, info, name, buttons, layer, announcedAt}
+// Numbers read by the measurement script.
+const sfu = window.sfu = { joinClickAt: 0, firstFrame: {}, switches: [], tiles };
+
+$("name").value = qs.get("name") || "user-" + Math.floor(Math.random() * 1000);
+$("join").onclick = join;
+$("leave").onclick = leave;
+
+function setState(s) { $("state").textContent = s; }
+
+function makeTile(id, name, local) {
+  const el = document.createElement("div");
+  el.className = "tile";
+  const video = document.createElement("video");
+  video.autoplay = true; video.playsInline = true; video.muted = !!local;
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  const nm = document.createElement("span");
+  nm.className = "name"; nm.textContent = name + (local ? " (you)" : "");
+  const info = document.createElement("span");
+  info.className = "info";
+  bar.append(nm, info);
+  const t = { el, video, info, layer: "h", buttons: {}, announcedAt: performance.now() };
+  if (!local) {
+    for (const l of LAYERS) {
+      const b = document.createElement("button");
+      b.textContent = l; b.title = "layer " + l;
+      b.onclick = () => setLayer(id, l);
+      t.buttons[l] = b; bar.append(b);
+    }
+    t.buttons.h.classList.add("on");
+    video.addEventListener("resize", () => {
+      info.textContent = video.videoWidth + "x" + video.videoHeight;
+      if (t.switchT0) {
+        sfu.switches.push({ peer: id, to: t.layer, ms: performance.now() - t.switchT0, width: video.videoWidth });
+        t.switchT0 = 0;
+      }
+    });
+    video.requestVideoFrameCallback?.(() => {
+      const now = performance.now();
+      sfu.firstFrame[id] = { sinceJoinClick: now - sfu.joinClickAt, sinceAnnounced: now - t.announcedAt };
+    });
+  }
+  el.append(video, bar);
+  $("grid").append(el);
+  tiles.set(id, t);
+  return t;
+}
+
+function setLayer(peerId, l) {
+  const t = tiles.get(peerId);
+  if (!t || !ws) return;
+  t.layer = l;
+  t.switchT0 = performance.now();
+  for (const k of LAYERS) t.buttons[k].classList.toggle("on", k === l);
+  ws.send(JSON.stringify({ type: "layer", peer: peerId, layer: l }));
+}
+sfu.setAll = (l) => { for (const id of tiles.keys()) if (id !== "local") setLayer(id, l); };
+
+async function getMedia() {
+  if (qs.get("synthetic") !== "1") {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 30 } },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+    } catch (e) { console.warn("getUserMedia failed, using synthetic stream:", e); }
+  }
+  // No devices (or insecure context): canvas video + oscillator audio.
+  const c = document.createElement("canvas");
+  c.width = 960; c.height = 540;
+  const g = c.getContext("2d");
+  let n = 0;
+  setInterval(() => {
+    n++;
+    g.fillStyle = "#223"; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = "#e0a53a"; g.fillRect((n * 7) % c.width, 200, 120, 120);
+    g.fillStyle = "#fff"; g.font = "48px sans-serif"; g.fillText($("name").value + " " + n, 40, 80);
+  }, 33);
+  const stream = c.captureStream(30);
+  const ac = new AudioContext();
+  const osc = ac.createOscillator();
+  const dest = ac.createMediaStreamDestination();
+  osc.frequency.value = 220 + Math.random() * 400;
+  osc.connect(dest); osc.start();
+  ac.resume?.();
+  dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+  return stream;
+}
+
+async function join() {
+  $("join").disabled = true;
+  sfu.joinClickAt = joinClickAt = performance.now();
+  localStream = await getMedia();
+  const lt = makeTile("local", $("name").value, true);
+  lt.video.srcObject = localStream;
+
+  pc = new RTCPeerConnection({ iceServers: [] });
+  pc.onconnectionstatechange = () => setState(pc.connectionState);
+  pc.onicecandidate = (e) => { if (e.candidate) ws.send(JSON.stringify({ type: "candidate", candidate: e.candidate })); };
+  pc.ontrack = (e) => {
+    const id = e.streams[0].id;
+    const t = tiles.get(id) || makeTile(id, id, false);
+    if (t.video.srcObject !== e.streams[0]) t.video.srcObject = e.streams[0];
+  };
+  const v = localStream.getVideoTracks()[0], a = localStream.getAudioTracks()[0];
+  pc.addTransceiver(v, { direction: "sendonly", streams: [localStream], sendEncodings: ENCODINGS });
+  pc.addTransceiver(a, { direction: "sendonly", streams: [localStream] });
+
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws");
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", name: $("name").value }));
+  ws.onclose = () => setState("signalling closed");
+  // Messages are handled one at a time so SDP/candidate order is kept.
+  ws.onmessage = (e) => { chain = chain.then(() => onMessage(JSON.parse(e.data))).catch(console.error); };
+  $("leave").disabled = false;
+}
+
+async function onMessage(m) {
+  switch (m.type) {
+    case "joined": {
+      myId = m.id;
+      for (const p of m.peers || []) if (!tiles.has(p.id)) setName(makeTile(p.id, p.name, false), p.name);
+      await pc.setLocalDescription(await pc.createOffer());
+      ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription.sdp }));
+      break;
+    }
+    case "peer-joined":
+      if (!tiles.has(m.id)) setName(makeTile(m.id, m.name, false), m.name);
+      break;
+    case "peer-left": {
+      const t = tiles.get(m.id);
+      if (t) { t.el.remove(); tiles.delete(m.id); }
+      break;
+    }
+    case "answer":
+      await pc.setRemoteDescription({ type: "answer", sdp: m.sdp });
+      break;
+    case "offer":
+      await pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
+      await pc.setLocalDescription(await pc.createAnswer());
+      ws.send(JSON.stringify({ type: "answer", sdp: pc.localDescription.sdp }));
+      break;
+    case "candidate":
+      await pc.addIceCandidate(m.candidate);
+      break;
+    case "layer-switched":
+      break;
+  }
+}
+
+function setName(t, name) { t.el.querySelector(".name").textContent = name; }
+
+function leave() {
+  try { ws?.send(JSON.stringify({ type: "leave" })); ws?.close(); } catch {}
+  pc?.close();
+  localStream?.getTracks().forEach((t) => t.stop());
+  $("grid").replaceChildren();
+  tiles.clear();
+  ws = pc = null;
+  $("join").disabled = false;
+  $("leave").disabled = true;
+  setState("not connected");
+}
+sfu.leave = leave;
+
+// Sum of RTP payload bytes (not counting headers) over all streams.
+sfu.getTotals = async () => {
+  let sent = 0, recv = 0, nack = 0, pli = 0, freeze = 0, decoded = 0, lost = 0;
+  const rep = await pc.getStats();
+  rep.forEach((r) => {
+    if (r.type === "outbound-rtp") sent += r.bytesSent || 0;
+    if (r.type === "inbound-rtp") {
+      recv += r.bytesReceived || 0;
+      nack += r.nackCount || 0; pli += r.pliCount || 0; lost += r.packetsLost || 0;
+      if (r.kind === "video") { freeze += r.freezeCount || 0; decoded += r.framesDecoded || 0; }
+    }
+  });
+  return { sent, recv, nack, pli, freeze, decoded, lost, t: performance.now() };
+};
+
+if (qs.get("auto") === "1") join();
+</script>
+</body>
+</html>
