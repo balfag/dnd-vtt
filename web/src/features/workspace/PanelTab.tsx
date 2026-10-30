@@ -1,7 +1,8 @@
 import type { IDockviewPanelHeaderProps } from 'dockview-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { placeMenu } from './menuPlacement'
 import { findPanel, paramsOf, useWorkspace } from './panels'
 
 export interface MenuItem {
@@ -59,10 +60,24 @@ export function PopupMenu({ doc, at, label, items, onClose }: PopupMenuProps) {
     }
   }
 
-  const style: React.CSSProperties =
-    at.align === 'end'
-      ? { top: at.y, right: Math.max(0, doc.documentElement.clientWidth - at.x) }
-      : { top: at.y, left: at.x }
+  const [pos, setPos] = useState<{ left: number; top: number }>(() =>
+    placeMenu(at, at.align, { width: 0, height: 0 }, { width: Infinity, height: Infinity }),
+  )
+  // Measure before paint and move the menu into the window; the alignment stays the first intent.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el === null) return
+    const rect = el.getBoundingClientRect()
+    setPos(
+      placeMenu(
+        at,
+        at.align,
+        { width: rect.width, height: rect.height },
+        { width: doc.documentElement.clientWidth, height: doc.documentElement.clientHeight },
+      ),
+    )
+  }, [doc, at.x, at.y, at.align]) // eslint-disable-line react-hooks/exhaustive-deps -- at is rebuilt on every render
+  const style: React.CSSProperties = { left: pos.left, top: pos.top }
   return createPortal(
     <div
       ref={ref}
