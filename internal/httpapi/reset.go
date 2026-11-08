@@ -28,7 +28,7 @@ func (a *api) createPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 	a.d.Logger.Info("password reset issued", "accountId", accountID)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"link":      publicURL(r, "/reset/"+token),
+		"link":      a.publicURL(r, "/reset/"+token),
 		"expiresAt": expiresAt.UnixMilli(),
 	})
 }

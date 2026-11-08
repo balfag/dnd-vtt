@@ -19,7 +19,7 @@ func TestLoad(t *testing.T) {
 		args    []string
 		env     map[string]string
 		wantErr bool
-		want    Config // DataDir is checked separately
+		want    Config // DataDir is checked separately; TLS "" means "auto"
 	}{
 		{
 			name: "defaults",
@@ -43,6 +43,16 @@ func TestLoad(t *testing.T) {
 			args: []string{"-dev", "-log-level=warn"},
 			want: Config{HTTPAddr: ":7777", Dev: true, LogLevel: slog.LevelWarn},
 		},
+		{name: "tls flag", args: []string{"-tls=off"}, want: Config{HTTPAddr: ":7777", LogLevel: slog.LevelInfo, TLS: "off"}},
+		{name: "tls env", env: map[string]string{"DNDVTT_TLS": "off"}, want: Config{HTTPAddr: ":7777", LogLevel: slog.LevelInfo, TLS: "off"}},
+		{
+			name: "tls flag overrides env",
+			args: []string{"-tls=auto"},
+			env:  map[string]string{"DNDVTT_TLS": "off"},
+			want: Config{HTTPAddr: ":7777", LogLevel: slog.LevelInfo},
+		},
+		{name: "bad tls flag", args: []string{"-tls=x"}, wantErr: true},
+		{name: "bad tls env", env: map[string]string{"DNDVTT_TLS": "on"}, wantErr: true},
 		{name: "bad DNDVTT_DEV", env: map[string]string{"DNDVTT_DEV": "maybe"}, wantErr: true},
 		{name: "bad log level", args: []string{"-log-level=loud"}, wantErr: true},
 		{name: "empty http addr", args: []string{"-http-addr="}, wantErr: true},
@@ -58,6 +68,13 @@ func TestLoad(t *testing.T) {
 			}
 			if tt.wantErr {
 				return
+			}
+			wantTLS := tt.want.TLS
+			if wantTLS == "" {
+				wantTLS = "auto"
+			}
+			if got.TLS != wantTLS {
+				t.Errorf("TLS = %q, want %q", got.TLS, wantTLS)
 			}
 			if got.HTTPAddr != tt.want.HTTPAddr || got.Dev != tt.want.Dev || got.LogLevel != tt.want.LogLevel {
 				t.Errorf("Load = %+v, want %+v", got, tt.want)

@@ -22,6 +22,7 @@ import (
 	"github.com/balfag/dnd-vtt/internal/dice"
 	"github.com/balfag/dnd-vtt/internal/game"
 	"github.com/balfag/dnd-vtt/internal/httpapi"
+	"github.com/balfag/dnd-vtt/internal/lan"
 	"github.com/balfag/dnd-vtt/internal/vtt"
 	"github.com/balfag/dnd-vtt/internal/wiki"
 	"github.com/balfag/dnd-vtt/internal/ws"
@@ -96,16 +97,18 @@ func (a *App) Run(ctx context.Context, ln net.Listener) error {
 	// No Read/WriteTimeout: long-lived WebSocket connections will live here.
 	srv := &http.Server{
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Logger:  a.logger,
-			Version: a.version,
-			SPA:     web.Dist(),
-			Auth:    a.auth,
-			Game:    a.game,
-			Hub:     a.hub,
-			Assets:  a.assets,
-			VTT:     a.vtt,
-			Wiki:    a.wiki,
-			Chat:    a.chat,
+			Logger:   a.logger,
+			Version:  a.version,
+			SPA:      web.Dist(),
+			Auth:     a.auth,
+			Game:     a.game,
+			Hub:      a.hub,
+			Assets:   a.assets,
+			VTT:      a.vtt,
+			Wiki:     a.wiki,
+			Chat:     a.chat,
+			TLS:      a.cfg.TLS == "auto",
+			LANHosts: lan.Hosts,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

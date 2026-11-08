@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"errors"
+	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/balfag/dnd-vtt/internal/game"
 )
@@ -48,10 +50,19 @@ func newCampaignJSON(c game.Campaign) campaignJSON {
 	return out
 }
 
-// publicURL builds an absolute link to path: the scheme and host the GM used
-// for this request. The external address (port forwarding or tunnel) is
-// decided by spike #8 and will replace this.
-func publicURL(r *http.Request, path string) string {
+// publicURL builds an absolute link to path. When the GM works through
+// loopback and the server serves HTTPS, players cannot use "localhost", so the
+// link gets the first LAN address and the listener port (ADR-0015). Otherwise
+// it is the scheme and host the GM used for this request. The external address
+// (port forwarding or tunnel) is decided by spike #8 and will replace this.
+func (a *api) publicURL(r *http.Request, path string) string {
+	if a.d.TLS && a.d.LANHosts != nil && isLoopback(r) {
+		if hosts, err := a.d.LANHosts(); err == nil && len(hosts) > 0 {
+			if port, ok := localPort(r); ok {
+				return "https://" + net.JoinHostPort(hosts[0], strconv.Itoa(port)) + path
+			}
+		}
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -60,8 +71,8 @@ func publicURL(r *http.Request, path string) string {
 }
 
 // gameLinkURL builds the link players open: /play/<token>.
-func gameLinkURL(r *http.Request, token string) string {
-	return publicURL(r, "/play/"+token)
+func (a *api) gameLinkURL(r *http.Request, token string) string {
+	return a.publicURL(r, "/play/"+token)
 }
 
 // gameError answers with the response matching a game.Service error.
@@ -150,7 +161,7 @@ func (a *api) startGameSession(w http.ResponseWriter, r *http.Request) {
 		ID:         gs.ID,
 		CampaignID: gs.CampaignID,
 		StartedAt:  gs.StartedAt.UnixMilli(),
-		Link:       gameLinkURL(r, token),
+		Link:       a.gameLinkURL(r, token),
 	})
 }
 
@@ -177,7 +188,7 @@ func (a *api) rotateLink(w http.ResponseWriter, r *http.Request) {
 		a.gameError(w, "rotate game link", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"link": gameLinkURL(r, token)})
+	writeJSON(w, http.StatusOK, map[string]string{"link": a.gameLinkURL(r, token)})
 }
 
 func (a *api) listPlayers(w http.ResponseWriter, r *http.Request) {
