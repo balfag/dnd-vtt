@@ -1,0 +1,38 @@
+/* The safety screen: the address the player is connecting to is the hero. */
+.safety p,
+.safety li {
+  font-size: 17px;
+}
+
+.safety .safety__address {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: var(--board);
+  border-left: 3px solid var(--brass);
+  border-radius: 6px;
+  color: var(--chalk);
+  font: 500 24px/1.25 var(--sans);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.safety__never {
+  max-width: 70ch;
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+
+.safety .safety__note {
+  color: var(--fog);
+  font-size: 15px;
+}
+
+.safety .safety__note a {
+  color: var(--fog);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.safety button {
+  margin-bottom: 16px;
+}

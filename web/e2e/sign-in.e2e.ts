@@ -1,5 +1,5 @@
 import ru from '../src/i18n/ru.json' with { type: 'json' }
-import { expect, test, registerPlayer, setupGM } from './helpers'
+import { expect, test, registerPlayer, setupGM, startGame } from './helpers'
 
 test('gm sets up, a player registers by the game link and the link can be replaced', async ({
   browser,
@@ -46,4 +46,35 @@ test('gm sets up, a player registers by the game link and the link can be replac
   await gmContext.close()
   await playerContext.close()
   await stranger.context().close()
+})
+
+test('safety screen comes before the sign-in form every time', async ({ browser }) => {
+  const { context: gmContext, page: gm } = await setupGM(browser)
+  const link = await startGame(gm, 'E2E safety')
+  const host = new URL(link).host
+
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  const signInTab = page.getByRole('tab', { name: ru.play.tabSignIn })
+  await page.goto(link)
+  await expect(page.getByRole('heading', { name: ru.play.safety.title })).toBeVisible()
+  await expect(page.getByText(host, { exact: true })).toBeVisible()
+  await expect(page.getByText(ru.play.safety.neverDownload)).toBeVisible()
+  await expect(page.getByText(ru.play.safety.neverPasswords)).toBeVisible()
+  await expect(
+    page.getByText('https://github.com/balfag/dnd-vtt#безопасность-для-игроков'),
+  ).toBeVisible()
+  await expect(signInTab).toHaveCount(0)
+  await expect(page.getByRole('button', { name: ru.play.safety.accept })).toBeFocused()
+
+  await page.getByRole('button', { name: ru.play.safety.accept }).click()
+  await expect(signInTab).toBeVisible()
+  await expect(signInTab).toBeFocused()
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: ru.play.safety.title })).toBeVisible()
+  await expect(signInTab).toHaveCount(0)
+
+  await context.close()
+  await gmContext.close()
 })

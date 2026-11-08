@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CampaignPlayer, PasswordResetLink } from '../../shared/api/campaigns'
+import { withHost } from '../../shared/api/net'
 import { Button } from '../../ui/Button'
 import { CopyField } from '../../ui/CopyField'
 import { Dialog } from '../../ui/Dialog'
@@ -9,6 +10,8 @@ import { formatMoment } from './format'
 
 interface ParticipantsProps {
   players: CampaignPlayer[]
+  /** lanHost is the address the GM chose for the links; null keeps the host the server gave. */
+  lanHost: string | null
   /** onReset asks the server for a reset link; the link lives only in the open dialog. */
   onReset: (p: CampaignPlayer) => Promise<PasswordResetLink>
   onRemove: (p: CampaignPlayer) => Promise<void>
@@ -23,7 +26,14 @@ interface ResetDialog {
 }
 
 /** Participants lists who plays in the active game and who is online right now. */
-export function Participants({ players, onReset, onRemove, fail, notify }: ParticipantsProps) {
+export function Participants({
+  players,
+  lanHost,
+  onReset,
+  onRemove,
+  fail,
+  notify,
+}: ParticipantsProps) {
   const { t, i18n } = useTranslation()
   const [reset, setReset] = useState<ResetDialog | null>(null)
   const [removing, setRemoving] = useState<CampaignPlayer | null>(null)
@@ -128,7 +138,7 @@ export function Participants({ players, onReset, onRemove, fail, notify }: Parti
             <CopyField
               id="reset-link"
               label={t('participants.resetLink')}
-              value={reset.link.link}
+              value={lanHost === null ? reset.link.link : withHost(reset.link.link, lanHost)}
               primary
               onCopied={() => {
                 notify(t('ui.copy.done'))
