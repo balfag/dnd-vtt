@@ -74,6 +74,7 @@ type testClient struct {
 	mu        sync.Mutex
 	remoteSet bool
 	pendingC  []webrtc.ICECandidateInit
+	order     []string              // types of the signals the SFU sent, in order
 	tracks    map[string]*recvTrack // "<streamID>/<track id>"
 	closeOnce sync.Once
 }
@@ -107,7 +108,12 @@ func newTestClient(t *testing.T, room *Room, id string, simulcast bool) *testCli
 		stop:     make(chan struct{}),
 		tracks:   map[string]*recvTrack{},
 	}
-	peer, err := room.Join(id, func(s Signal) { c.signals <- s }, func() { c.failed.Store(true) })
+	peer, err := room.Join(id, func(s Signal) {
+		c.mu.Lock()
+		c.order = append(c.order, s.Type)
+		c.mu.Unlock()
+		c.signals <- s
+	}, func() { c.failed.Store(true) })
 	if err != nil {
 		t.Fatalf("join %s: %v", id, err)
 	}
@@ -196,19 +202,19 @@ func (c *testClient) connect() {
 	if err := c.pc.SetLocalDescription(offer); err != nil {
 		t.Fatal(err)
 	}
-	answer, err := c.peer.HandleOffer(offer.SDP)
-	if err != nil {
+	if err := c.peer.HandleOffer(offer.SDP); err != nil {
 		t.Fatalf("%s: HandleOffer: %v", c.id, err)
 	}
-	if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
-		t.Fatal(err)
+	select {
+	case <-c.answered:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s: no answer from the SFU", c.id)
 	}
 	c.mu.Lock()
 	c.remoteSet = true
 	pending := c.pendingC
 	c.pendingC = nil
 	c.mu.Unlock()
-	close(c.answered)
 	for _, ci := range pending {
 		if err := c.peer.AddICE(ci); err != nil {
 			t.Fatal(err)
@@ -216,20 +222,25 @@ func (c *testClient) connect() {
 	}
 }
 
-// worker handles the SFU's signals strictly in order, after the first answer.
+// worker handles the SFU's signals strictly in order, the first answer included.
 func (c *testClient) worker() {
 	defer c.wg.Done()
-	select {
-	case <-c.answered:
-	case <-c.stop:
-		return
-	}
+	var early []webrtc.ICECandidateInit
 	for {
 		select {
 		case <-c.stop:
 			return
 		case s := <-c.signals:
 			switch s.Type {
+			case "answer":
+				if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: s.SDP}); err != nil {
+					c.t.Errorf("%s: set sfu answer: %v", c.id, err)
+				}
+				close(c.answered)
+				for _, ci := range early {
+					_ = c.pc.AddICECandidate(ci)
+				}
+				early = nil
 			case "offer":
 				if err := c.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: s.SDP}); err != nil {
 					c.t.Errorf("%s: set sfu offer: %v", c.id, err)
@@ -247,8 +258,14 @@ func (c *testClient) worker() {
 					c.t.Errorf("%s: HandleAnswer: %v", c.id, err)
 				}
 			case "ice":
-				if s.Candidate != nil {
+				if s.Candidate == nil {
+					continue
+				}
+				select {
+				case <-c.answered:
 					_ = c.pc.AddICECandidate(*s.Candidate)
+				default:
+					early = append(early, *s.Candidate) // gathered before the answer was sent
 				}
 			}
 		}

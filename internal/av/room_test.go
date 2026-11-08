@@ -219,7 +219,7 @@ func TestErrors(t *testing.T) {
 	if _, err := room.Join("A", func(Signal) {}, nil); !errors.Is(err, ErrAlreadyJoined) {
 		t.Fatalf("second Join: %v, want ErrAlreadyJoined", err)
 	}
-	if _, err := a.peer.HandleOffer("v=0"); !errors.Is(err, ErrBadState) {
+	if err := a.peer.HandleOffer("v=0"); !errors.Is(err, ErrBadState) {
 		t.Fatalf("second HandleOffer: %v, want ErrBadState", err)
 	}
 	if err := a.peer.HandleAnswer("v=0"); !errors.Is(err, ErrBadState) {
@@ -230,12 +230,12 @@ func TestErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.HandleOffer("мусор"); err == nil {
+	if err := p.HandleOffer("мусор"); err == nil {
 		t.Fatal("HandleOffer accepted garbage")
 	}
 
 	room.Leave("A")
-	if _, err := a.peer.HandleOffer("v=0"); !errors.Is(err, ErrRoomClosed) {
+	if err := a.peer.HandleOffer("v=0"); !errors.Is(err, ErrRoomClosed) {
 		t.Fatalf("HandleOffer after Leave: %v, want ErrRoomClosed", err)
 	}
 	if err := a.peer.HandleAnswer("v=0"); !errors.Is(err, ErrRoomClosed) {
@@ -269,6 +269,26 @@ func TestSenderWithoutSimulcast(t *testing.T) {
 	for _, p := range video.packets() {
 		if p.layer != 'h' {
 			t.Fatalf("got layer %q, want h (the only one)", p.layer)
+		}
+	}
+}
+
+func TestAnswerGoesFirst(t *testing.T) {
+	e := newTestEngine(t)
+	room := e.NewRoom()
+	join(t, room, "A", true)
+	b := join(t, room, "B", true)
+	c := join(t, room, "C", true)
+	// Let the renegotiation finish before the cleanup tears the clients down.
+	waitTrack(t, c, "B", "audio", 1)
+	waitTrack(t, b, "C", "audio", 1)
+
+	for _, cl := range []*testClient{b, c} {
+		cl.mu.Lock()
+		order := append([]string(nil), cl.order...)
+		cl.mu.Unlock()
+		if len(order) == 0 || order[0] != "answer" {
+			t.Fatalf("%s: signals %v, want the answer first", cl.id, order)
 		}
 	}
 }

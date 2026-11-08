@@ -13,8 +13,8 @@ import (
 
 // Signal is a message the SFU sends to one participant's client.
 type Signal struct {
-	Type      string                   // "offer" or "ice"
-	SDP       string                   // for "offer"; the answer to the client's offer is returned by HandleOffer
+	Type      string                   // "answer", "offer" or "ice"
+	SDP       string                   // for "answer" and "offer"
 	Candidate *webrtc.ICECandidateInit // for "ice"; nil means end of candidates
 }
 
@@ -234,39 +234,41 @@ func (p *Peer) isClosed() bool {
 	return p.closed
 }
 
-// HandleOffer applies the client's first (publishing) offer and returns the
-// answer SDP; afterwards the peer is subscribed to everybody and everybody to
-// it, and the SFU sends its own offers through Signaler. Second call:
-// ErrBadState. Invalid SDP: the pion error, wrapped.
-func (p *Peer) HandleOffer(sdp string) (answer string, err error) {
+// HandleOffer applies the client's first (publishing) offer and sends the
+// answer through Signaler (Type "answer") before anything else can be sent;
+// then the peer is subscribed to everybody and everybody to it, and the SFU
+// sends its own offers through Signaler. Second call: ErrBadState. Invalid
+// SDP: the pion error, wrapped.
+func (p *Peer) HandleOffer(sdp string) error {
 	p.opMu.Lock()
 	defer p.opMu.Unlock()
 	p.mu.RLock()
 	closed, got := p.closed, p.gotOffer
 	p.mu.RUnlock()
 	if closed {
-		return "", ErrRoomClosed
+		return ErrRoomClosed
 	}
 	if got {
-		return "", ErrBadState
+		return ErrBadState
 	}
 	p.log.Debug("av: client offer", "sdp", sdp)
 	if err := p.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}); err != nil {
-		return "", fmt.Errorf("av: set offer: %w", err)
+		return fmt.Errorf("av: set offer: %w", err)
 	}
 	a, err := p.pc.CreateAnswer(nil)
 	if err == nil {
 		err = p.pc.SetLocalDescription(a)
 	}
 	if err != nil {
-		return "", fmt.Errorf("av: create answer: %w", err)
+		return fmt.Errorf("av: create answer: %w", err)
 	}
 	p.mu.Lock()
 	p.gotOffer = true
 	p.mu.Unlock()
 	p.log.Debug("av: answer", "sdp", a.SDP)
+	p.send(Signal{Type: "answer", SDP: a.SDP})
 	p.room.attach(p)
-	return a.SDP, nil
+	return nil
 }
 
 // HandleAnswer applies the client's answer to the last SFU offer.
