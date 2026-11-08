@@ -164,8 +164,8 @@ func (r *Room) Leave(id string) {
 		delete(o.subs, id)
 		o.mu.Unlock()
 		if s != nil {
-			_ = o.pc.RemoveTrack(s.vsender)
-			_ = o.pc.RemoveTrack(s.asender)
+			_ = s.vtr.Stop()
+			_ = s.atr.Stop()
 			o.negotiate()
 		}
 	}
@@ -483,17 +483,21 @@ func subscribe(from, to *Peer) error {
 	if err != nil {
 		return err
 	}
-	vs, err := to.pc.AddTrack(vt)
+	// A new send-only transceiver per track: AddTrack could take over the
+	// receive-only one that carries the participant's own published media.
+	sendOnly := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}
+	vtr, err := to.pc.AddTransceiverFromTrack(vt, sendOnly)
 	if err != nil {
 		return err
 	}
-	as, err := to.pc.AddTrack(at)
+	atr, err := to.pc.AddTransceiverFromTrack(at, sendOnly)
 	if err != nil {
-		_ = to.pc.RemoveTrack(vs)
+		_ = vtr.Stop()
 		return err
 	}
+	vs, as := vtr.Sender(), atr.Sender()
 	s := &sub{
-		from: from, to: to, vsender: vs, asender: as,
+		from: from, to: to, vtr: vtr, atr: atr,
 		vw: vt, aw: at, blocked: &from.audioBlocked,
 		requestKeyframe: from.requestKeyframe,
 		countOut:        func(n int) { from.room.bytesOut.Add(int64(n)) },

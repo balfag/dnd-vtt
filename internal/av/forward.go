@@ -110,8 +110,7 @@ type rtpWriter interface {
 // without breaking the receiver's sequence numbers and timestamps.
 type sub struct {
 	from, to *Peer
-	vsender  *webrtc.RTPSender
-	asender  *webrtc.RTPSender
+	vtr, atr *webrtc.RTPTransceiver
 
 	vw, aw          rtpWriter
 	blocked         *atomic.Bool // the sender's audio block flag
@@ -210,7 +209,7 @@ func (s *sub) forwardVideo(rid Layer, p *rtp.Packet) {
 		}
 		if !s.lastAt.IsZero() {
 			s.seqOff = s.lastSeq + 1 - p.SequenceNumber
-			elapsed := uint32(time.Since(s.lastAt).Milliseconds()) * 90
+			elapsed := uint32(time.Since(s.lastAt).Milliseconds()) * 90 //nolint:gosec // RTP timestamps wrap modulo 2^32
 			if elapsed == 0 {
 				elapsed = 3000
 			}

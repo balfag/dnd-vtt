@@ -71,17 +71,11 @@ func NewEngine(cfg Config, logger *slog.Logger) (*Engine, error) {
 		return nil, fmt.Errorf("av: interceptors: %w", err)
 	}
 
-	udp, err := net.ListenUDP("udp4", &net.UDPAddr{Port: cfg.MediaPort})
+	udp, tcp, err := listenBoth(cfg.MediaPort)
 	if err != nil {
-		return nil, fmt.Errorf("av: listen udp: %w", err)
+		return nil, err
 	}
 	port := udp.LocalAddr().(*net.UDPAddr).Port
-	// TCP is bound after UDP so that port 0 gives the same number for both.
-	tcp, err := net.ListenTCP("tcp4", &net.TCPAddr{Port: port})
-	if err != nil {
-		_ = udp.Close()
-		return nil, fmt.Errorf("av: listen tcp: %w", err)
-	}
 	udpMux := webrtc.NewICEUDPMux(nil, udp)
 	tcpMux := webrtc.NewICETCPMux(nil, tcp, 8)
 
@@ -138,4 +132,29 @@ func (e *Engine) NewRoom() *Room {
 	}
 	e.mu.Unlock()
 	return r
+}
+
+// listenBoth binds UDP and then TCP on the same port number. With port 0 the
+// UDP port is picked by the system and the whole step is retried when that
+// number is taken for TCP.
+func listenBoth(port int) (*net.UDPConn, *net.TCPListener, error) {
+	attempts := 1
+	if port == 0 {
+		attempts = 20
+	}
+	var lastErr error
+	for range attempts {
+		udp, err := net.ListenUDP("udp4", &net.UDPAddr{Port: port})
+		if err != nil {
+			return nil, nil, fmt.Errorf("av: listen udp: %w", err)
+		}
+		// TCP is bound after UDP so that port 0 gives the same number for both.
+		tcp, err := net.ListenTCP("tcp4", &net.TCPAddr{Port: udp.LocalAddr().(*net.UDPAddr).Port})
+		if err == nil {
+			return udp, tcp, nil
+		}
+		_ = udp.Close()
+		lastErr = fmt.Errorf("av: listen tcp: %w", err)
+	}
+	return nil, nil, lastErr
 }
