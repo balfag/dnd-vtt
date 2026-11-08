@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { navigate } from '../../app/router'
 import type { Campaign, CampaignPlayer, PasswordResetLink } from '../../shared/api/campaigns'
+import { withHost } from '../../shared/api/net'
 import { Button } from '../../ui/Button'
 import { CopyField } from '../../ui/CopyField'
 import { Dialog } from '../../ui/Dialog'
 import { ErrorNote } from '../../ui/ErrorNote'
 import { formatMoment } from './format'
 import { Participants } from './ParticipantList'
+import { useLanHost } from './useLanHost'
 
 interface ActiveGameProps {
   campaign: Campaign
@@ -40,6 +42,7 @@ export function ActiveGame({
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const lan = useLanHost(link)
   const startedAt = campaign.activeGameSession?.startedAt ?? 0
 
   async function run(action: () => Promise<void>) {
@@ -67,14 +70,37 @@ export function ActiveGame({
       {link === null ? (
         <p className="active-game__hidden">{t('game.linkHidden')}</p>
       ) : (
-        <CopyField
-          id="game-link"
-          label={t('game.linkLabel')}
-          value={link}
-          onCopied={() => {
-            notify(t('ui.copy.done'))
-          }}
-        />
+        <>
+          {lan.host !== null && (
+            <div>
+              <label className="field__label" htmlFor="lan-host">
+                {t('game.lanHost')}
+              </label>
+              <select
+                id="lan-host"
+                className="field__input"
+                value={lan.host}
+                onChange={(e) => {
+                  lan.setHost(e.target.value)
+                }}
+              >
+                {lan.hosts.map((h) => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <CopyField
+            id="game-link"
+            label={t('game.linkLabel')}
+            value={lan.host === null ? link : withHost(link, lan.host)}
+            onCopied={() => {
+              notify(t('ui.copy.done'))
+            }}
+          />
+        </>
       )}
 
       <div className="active-game__buttons">
@@ -111,6 +137,7 @@ export function ActiveGame({
 
       <Participants
         players={players}
+        lanHost={lan.host}
         onReset={onResetLink}
         onRemove={onRemove}
         fail={fail}

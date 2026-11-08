@@ -35,7 +35,20 @@
     "submitRegister": "Create an account and join",
     "forgot": "Forgot the password? Ask the GM for a reset link.",
     "linkDeadTitle": "This link no longer works",
-    "linkDead": "The game has ended or the GM changed the link. Ask the GM for a new one."
+    "linkDead": "The game has ended or the GM changed the link. Ask the GM for a new one.",
+    "safety": {
+      "title": "Before you take a seat",
+      "connecting": "You are connecting to the GM's computer at",
+      "never": "This app never:",
+      "neverDownload": "asks you to download or install a file;",
+      "neverPasswords": "asks for passwords to other sites or services.",
+      "passwordHere": "The password here is only for your account with this GM.",
+      "trust": "Open links only from a GM you know.",
+      "certificate": "On your first visit the browser warns once about the certificate: the GM uses their own certificate, this is expected. There should be no other warnings.",
+      "missing": "If a link ever opens the sign-in form without this screen, the app has been modified. Close the page and tell the GM.",
+      "readMore": "How it works:",
+      "accept": "Got it, to the table"
+    }
   },
   "reset": {
     "title": "New password",
@@ -94,7 +107,8 @@
     "endConfirm": "End the game? Players leave the table and their links stop working.",
     "started": "Game started",
     "rotated": "Link changed",
-    "ended": "Game ended"
+    "ended": "Game ended",
+    "lanHost": "Address for players"
   },
   "participants": {
     "title": "Participants",

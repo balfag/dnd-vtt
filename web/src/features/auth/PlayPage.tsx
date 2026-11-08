@@ -17,6 +17,7 @@ import { ErrorNote } from '../../ui/ErrorNote'
 import { Field } from '../../ui/Field'
 import { panelId, tabId } from '../../ui/tabIds'
 import { Tabs } from '../../ui/Tabs'
+import { SafetyNotice } from './SafetyNotice'
 
 type Link =
   | { status: 'loading' }
@@ -28,6 +29,8 @@ type Link =
 export function PlayPage({ token }: { token: string }) {
   const { t } = useTranslation()
   const [link, setLink] = useState<Link>({ status: 'loading' })
+  // Not stored anywhere: every opening of the link shows the safety screen.
+  const [accepted, setAccepted] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +49,10 @@ export function PlayPage({ token }: { token: string }) {
     }
   }, [token])
 
+  useEffect(() => {
+    if (accepted) document.getElementById(tabId('signIn'))?.focus()
+  }, [accepted])
+
   if (link.status === 'loading') {
     return <main className="auth" aria-busy="true" />
   }
@@ -60,6 +67,17 @@ export function PlayPage({ token }: { token: string }) {
     return (
       <AuthLayout title={t('play.title')}>
         <ErrorNote>{t(link.key)}</ErrorNote>
+      </AuthLayout>
+    )
+  }
+  if (!accepted) {
+    return (
+      <AuthLayout context={link.campaignName} title={t('play.safety.title')}>
+        <SafetyNotice
+          onAccept={() => {
+            setAccepted(true)
+          }}
+        />
       </AuthLayout>
     )
   }
