@@ -43,7 +43,17 @@ export async function startServer(binary: string): Promise<E2EServer> {
   const dataDir = await mkdtemp(join(tmpdir(), 'dndvtt-e2e-'))
   const child = spawn(
     binary,
-    ['-dev', '-http-addr', '127.0.0.1:0', '-data-dir', dataDir, '-log-level', 'warn', '-tls', 'off'],
+    [
+      '-dev',
+      '-http-addr',
+      '127.0.0.1:0',
+      '-data-dir',
+      dataDir,
+      '-log-level',
+      'warn',
+      '-tls',
+      'off',
+    ],
     { stdio: ['ignore', 'pipe', 'pipe'] },
   )
 
