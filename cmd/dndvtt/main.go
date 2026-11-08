@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,9 +13,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/balfag/dnd-vtt/internal/app"
 	"github.com/balfag/dnd-vtt/internal/config"
+	"github.com/balfag/dnd-vtt/internal/lan"
 	"github.com/balfag/dnd-vtt/internal/store"
 )
 
@@ -72,6 +75,22 @@ func run() int {
 	if err != nil {
 		logger.Error("listen", "addr", cfg.HTTPAddr, "err", err)
 		return 1
+	}
+
+	if cfg.TLS == "auto" {
+		hosts, err := lan.Hosts()
+		if err != nil {
+			logger.Warn("list lan addresses", "err", err)
+			hosts = nil
+		}
+		cert, created, err := lan.LoadOrCreateCert(filepath.Join(cfg.DataDir, "tls"), hosts, time.Now())
+		if err != nil {
+			logger.Error("tls certificate", "err", err)
+			_ = ln.Close()
+			return 1
+		}
+		logger.Info("tls certificate", "created", created, "hosts", hosts)
+		ln = lan.NewListener(ln, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12})
 	}
 
 	a, err := app.New(cfg, logger, version, st.DB())

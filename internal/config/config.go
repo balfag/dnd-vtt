@@ -17,6 +17,7 @@ type Config struct {
 	DataDir  string     // data directory (absolute after Load)
 	Dev      bool       // development mode
 	LogLevel slog.Level // minimum log level
+	TLS      string     // "auto" (HTTPS and HTTP on one port) or "off" (HTTP only)
 
 	OpenBrowser bool // open the GM sign-in link in the default browser on start
 }
@@ -56,11 +57,17 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		logLevelDefault = v
 	}
 
+	tlsDefault := "auto"
+	if v := getenv("DNDVTT_TLS"); v != "" {
+		tlsDefault = v
+	}
+
 	fs := flag.NewFlagSet("dndvtt", flag.ContinueOnError)
 	httpAddr := fs.String("http-addr", httpAddrDefault, "HTTP listen address")
 	dataDir := fs.String("data-dir", getenv("DNDVTT_DATA_DIR"), "data directory")
 	dev := fs.Bool("dev", devDefault, "development mode")
 	logLevel := fs.String("log-level", logLevelDefault, "log level: debug, info, warn, error")
+	tlsMode := fs.String("tls", tlsDefault, "LAN HTTPS: auto, off")
 	// The default depends on the final -dev value, so it is resolved after
 	// parsing; only fs.Visit can tell an explicit -open-browser=false apart
 	// from an absent flag.
@@ -93,6 +100,10 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("invalid log level %q: %w", *logLevel, err)
 	}
 
+	if *tlsMode != "auto" && *tlsMode != "off" {
+		return Config{}, fmt.Errorf("invalid tls mode %q", *tlsMode)
+	}
+
 	dir := *dataDir
 	if dir == "" {
 		if *dev {
@@ -118,6 +129,7 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		DataDir:     abs,
 		Dev:         *dev,
 		LogLevel:    level,
+		TLS:         *tlsMode,
 		OpenBrowser: openBrowserValue,
 	}, nil
 }
