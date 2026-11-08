@@ -42,6 +42,7 @@ type apiFixture struct {
 	db    *sql.DB
 	clock time.Time
 	logs  *bytes.Buffer
+	deps  Deps // the dependencies f.h was built from
 }
 
 func newAPIFixture(t *testing.T) *apiFixture {
@@ -73,7 +74,7 @@ func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 	f.vtt = vtt.NewService(f.db, vtt.Options{Now: now})
 	f.chat = chat.NewService(f.db, chat.Options{Now: now})
 	logger := slog.New(slog.NewTextHandler(f.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	f.h = NewRouter(Deps{
+	f.deps = Deps{
 		Logger:  logger,
 		Version: "test",
 		SPA:     fstest.MapFS{},
@@ -85,7 +86,8 @@ func newAPIFixtureWithAssets(t *testing.T, opts asset.Options) *apiFixture {
 		Wiki:    wiki.NewService(f.db, wiki.Options{Now: now}),
 		Chat:    f.chat,
 		Now:     now,
-	})
+	}
+	f.h = NewRouter(f.deps)
 	return f
 }
 

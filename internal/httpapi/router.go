@@ -36,6 +36,9 @@ type Deps struct {
 	Wiki    *wiki.Service
 	Chat    *chat.Service
 	Now     func() time.Time // nil means time.Now; used by the rate limiter
+
+	TLS      bool                     // true when the listener serves HTTPS (TLS == "auto")
+	LANHosts func() ([]string, error) // lan.Hosts in production; nil means no hosts
 }
 
 // api holds the state shared by the handlers.
@@ -104,6 +107,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/wiki/trash/{id}/restore", a.restoreWikiTrash)
 	mux.HandleFunc("DELETE /api/wiki/trash/{id}", a.purgeWikiTrash)
 
+	mux.HandleFunc("GET /api/net/addresses", a.getNetAddresses)
 	mux.HandleFunc("GET /api/campaigns", a.listCampaigns)
 	mux.HandleFunc("POST /api/campaigns", a.createCampaign)
 	mux.HandleFunc("PATCH /api/campaigns/{id}", a.renameCampaign)
@@ -116,7 +120,11 @@ func NewRouter(d Deps) http.Handler {
 	// pattern avoids a conflict with "GET /".
 	mux.Handle("GET /api/", http.NotFoundHandler())
 	mux.Handle("GET /", spaHandler(d.SPA))
-	return securityHeaders(checkOrigin(mux))
+	handler := checkOrigin(mux)
+	if d.TLS {
+		handler = requireHTTPS(handler)
+	}
+	return securityHeaders(handler)
 }
 
 // checkOrigin rejects state-changing requests whose Origin header does not

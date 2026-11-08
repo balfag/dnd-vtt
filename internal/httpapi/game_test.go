@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -194,6 +195,48 @@ func TestGameLinkUsesRequestScheme(t *testing.T) {
 	decodeBody(t, rec, &g)
 	if !strings.HasPrefix(g.Link, "https://example.com/play/") {
 		t.Errorf("link = %q, want https://example.com/play/…", g.Link)
+	}
+}
+
+func TestGameLinkUsesLANAddress(t *testing.T) {
+	f := netFixture(t, true, func() ([]string, error) { return []string{"192.168.1.5", "10.0.0.3"}, nil })
+	gm := f.gmCookie()
+	campaignID := f.createCampaign(gm, "Camp")
+
+	rec := f.do(http.MethodPost, "/api/campaigns/"+campaignID+"/game-sessions", "", withCookie(gm), withLocalPort(7777))
+	var g startedGameJSON
+	decodeBody(t, rec, &g)
+	if !strings.HasPrefix(g.Link, "https://192.168.1.5:7777/play/") {
+		t.Errorf("link = %q, want https://192.168.1.5:7777/play/…", g.Link)
+	}
+
+	// A request from another machine keeps its own scheme and host.
+	remoteGM := f.do(http.MethodPost, "/api/campaigns/"+campaignID+"/game-sessions", "", withCookie(gm), withLocalPort(7777), remote, withTLS)
+	if remoteGM.Code == http.StatusCreated {
+		decodeBody(t, remoteGM, &g)
+		if !strings.HasPrefix(g.Link, "https://example.com/play/") {
+			t.Errorf("remote link = %q, want https://example.com/play/…", g.Link)
+		}
+	}
+}
+
+func TestGameLinkWithoutLANAddresses(t *testing.T) {
+	for name, hosts := range map[string]func() ([]string, error){
+		"none":  func() ([]string, error) { return nil, nil },
+		"error": func() ([]string, error) { return nil, errors.New("boom") },
+		"nil":   nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := netFixture(t, true, hosts)
+			gm := f.gmCookie()
+			campaignID := f.createCampaign(gm, "Camp")
+			rec := f.do(http.MethodPost, "/api/campaigns/"+campaignID+"/game-sessions", "", withCookie(gm), withLocalPort(7777))
+			var g startedGameJSON
+			decodeBody(t, rec, &g)
+			if !strings.HasPrefix(g.Link, "http://example.com/play/") {
+				t.Errorf("link = %q, want http://example.com/play/…", g.Link)
+			}
+		})
 	}
 }
 
