@@ -115,3 +115,42 @@ func TestListenerCloseUnblocksAccept(t *testing.T) {
 		t.Errorf("Accept after Close = %v, want net.ErrClosed", err)
 	}
 }
+
+type tempErr struct{}
+
+func (tempErr) Error() string   { return "temporary" }
+func (tempErr) Temporary() bool { return true }
+
+// flakyListener fails with a temporary error n times, then returns conn.
+type flakyListener struct {
+	net.Listener
+	fails int
+	conn  net.Conn
+}
+
+func (f *flakyListener) Accept() (net.Conn, error) {
+	if f.fails > 0 {
+		f.fails--
+		return nil, tempErr{}
+	}
+	return f.conn, nil
+}
+
+func (f *flakyListener) Close() error { return nil }
+
+func TestAcceptRetriesTemporaryErrors(t *testing.T) {
+	server, client := net.Pipe()
+	defer func() { _ = client.Close() }()
+	ln := NewListener(&flakyListener{fails: 2, conn: server}, &tls.Config{MinVersion: tls.VersionTLS12})
+	defer func() { _ = ln.Close() }()
+	go func() { _, _ = client.Write([]byte("G")) }()
+	conn, err := ln.Accept()
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	buf := make([]byte, 1)
+	if _, err := io.ReadFull(conn, buf); err != nil || buf[0] != 'G' {
+		t.Fatalf("read = %q, %v", buf, err)
+	}
+}

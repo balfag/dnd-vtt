@@ -3,6 +3,7 @@ package lan
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -13,6 +14,12 @@ const tlsRecordHandshake = 0x16
 
 // peekTimeout is how long a new connection may stay silent before it is closed.
 var peekTimeout = 10 * time.Second
+
+// Backoff bounds for temporary Accept errors, as in net/http.
+const (
+	acceptDelayMin = 5 * time.Millisecond
+	acceptDelayMax = time.Second
+)
 
 // NewListener wraps ln: each accepted connection whose first byte is 0x16
 // (TLS handshake record) is returned as tls.Server(conn, cfg); any other
@@ -53,13 +60,29 @@ type peekedConn struct {
 func (c *peekedConn) Read(p []byte) (int, error) { return c.r.Read(p) }
 
 func (l *muxListener) acceptLoop() {
+	var delay time.Duration
 	for {
 		conn, err := l.Listener.Accept()
 		if err != nil {
+			//nolint:staticcheck // same rule as net/http
+			if ne, ok := err.(interface{ Temporary() bool }); ok && ne.Temporary() && !errors.Is(err, net.ErrClosed) {
+				if delay == 0 {
+					delay = acceptDelayMin
+				} else if delay *= 2; delay > acceptDelayMax {
+					delay = acceptDelayMax
+				}
+				select {
+				case <-time.After(delay):
+					continue
+				case <-l.done:
+					return
+				}
+			}
 			l.err = err
 			close(l.failed)
 			return
 		}
+		delay = 0
 		go l.sniff(conn)
 	}
 }
