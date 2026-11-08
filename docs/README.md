@@ -43,6 +43,7 @@
 - [0012](adr/0012-pixijs-scene-canvas.md): холст сцены на PixiJS
 - [0013](adr/0013-playwright-e2e.md): Playwright для e2e-тестов
 - [0014](adr/0014-workspace-dockview.md): рабочая область на dockview
+- [0015](adr/0015-lan-https-self-signed.md): HTTPS в локальной сети на самоподписанном сертификате
 
 ## Процесс
 - [roles.md](process/roles.md): владелец, архитектор, исполнитель; статусы задач
