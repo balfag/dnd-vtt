@@ -1,6 +1,6 @@
 # Система 2: голос и видео
 
-> Статус: `review`. Майлстоун: M2. Решения: [ADR-0002](../adr/0002-embedded-sfu-pion.md) (SFU на pion), [ADR-0015](../adr/0015-lan-https-self-signed.md) (HTTPS в LAN). Протокол — «Сообщения M2» в [protocol.md](../architecture/protocol.md). Основа — [spike #7](../../spikes/sfu/REPORT.md).
+> Статус: `accepted`. Майлстоун: M2. Решения: [ADR-0002](../adr/0002-embedded-sfu-pion.md) (SFU на pion), [ADR-0015](../adr/0015-lan-https-self-signed.md) (HTTPS в LAN). Протокол — «Сообщения M2» в [protocol.md](../architecture/protocol.md). Основа — [spike #7](../../spikes/sfu/REPORT.md).
 
 ## Цель
 
